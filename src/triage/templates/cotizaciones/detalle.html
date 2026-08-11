@@ -12,8 +12,40 @@
 </div>
 
 <section class="tarjeta">
+  <div class="barra">
+    <div>
+      <h2>Documentos</h2>
+      <p class="ayuda">Sube una foto o PDF y revisa lo que Triage entendió antes de continuar.</p>
+    </div>
+    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/documentos/nuevo">Agregar documento</a>
+  </div>
+
+  {% if documentos %}
+    {% for documento in documentos %}
+      <div class="tarjeta">
+        <div class="barra">
+          <div>
+            <div class="referencia">{{ documento.memorandum or documento.nombre_original }}</div>
+            <span class="estado">{{ documento.estado | replace("_", " ") | title }}</span>
+            {% if documento.memorandum %}
+              <p class="ayuda">Archivo: {{ documento.nombre_original }}</p>
+            {% endif %}
+          </div>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}">Revisar</a>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="vacio">
+      <strong>Aún no hay documentos.</strong>
+      <p class="ayuda">Agrega uno para iniciar la lectura.</p>
+    </div>
+  {% endif %}
+</section>
+
+<section class="tarjeta">
   <h2>Estado de trabajo</h2>
-  <p class="ayuda">Por ahora esta pantalla sólo demuestra que la cotización se guarda y puede retomarse.</p>
+  <p class="ayuda">El estado sigue siendo una decisión explícita del equipo.</p>
   <div class="grupo-botones">
     {% for estado in estados %}
       <form method="post" action="/cotizaciones/{{ cotizacion.id }}/estado">
@@ -28,7 +60,7 @@
 </section>
 
 <section class="tarjeta">
-  <h2>Siguiente etapa</h2>
-  <p>Aquí incorporaremos la carga de documentos, lectura con OpenAI y revisión de partidas. Aún no hay decisiones fiscales ni comerciales automáticas.</p>
+  <h2>Después</h2>
+  <p>Cuando los documentos y partidas estén revisados incorporaremos normalización de producto, histórico de precios y proveedores. Todavía no se ejecutan decisiones fiscales ni comerciales automáticas.</p>
 </section>
 {% endblock %}

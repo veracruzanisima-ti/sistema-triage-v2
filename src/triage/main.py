@@ -13,6 +13,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from triage.base_datos import crear_fabrica_sesiones, crear_motor
 from triage.config import Configuracion, obtener_configuracion
 from triage.cotizaciones.rutas import router as router_cotizaciones
+from triage.documentos.rutas import router as router_documentos
+from triage.lectores.base import LectorDocumento
+from triage.lectores.openai import LectorOpenAI
 from triage.usuarios.rutas import router as router_usuarios
 from triage.usuarios.seguridad import AccesoRequerido
 from triage.usuarios.servicio import crear_admin_inicial_si_corresponde, hay_usuarios_activos
@@ -24,12 +27,19 @@ def crear_app(
     configuracion: Configuracion | None = None,
     *,
     motor: Engine | None = None,
+    lector_documentos: LectorDocumento | None = None,
 ) -> FastAPI:
     """Construye la aplicación permitiendo inyectar infraestructura en pruebas."""
 
     configuracion = configuracion or obtener_configuracion()
     motor_base_datos = motor or crear_motor(configuracion.database_url)
     fabrica_sesiones = crear_fabrica_sesiones(motor_base_datos)
+    lector = lector_documentos
+    if lector is None and configuracion.openai_api_key.strip():
+        lector = LectorOpenAI(
+            api_key=configuracion.openai_api_key,
+            modelo=configuracion.openai_model,
+        )
 
     @asynccontextmanager
     async def ciclo_vida(_aplicacion: FastAPI) -> AsyncIterator[None]:
@@ -61,11 +71,13 @@ def crear_app(
     aplicacion.state.configuracion = configuracion
     aplicacion.state.motor = motor_base_datos
     aplicacion.state.fabrica_sesiones = fabrica_sesiones
+    aplicacion.state.lector_documentos = lector
     aplicacion.state.plantillas = Jinja2Templates(
         directory=str(BASE_DIR / "templates")
     )
     aplicacion.include_router(router_usuarios)
     aplicacion.include_router(router_cotizaciones)
+    aplicacion.include_router(router_documentos)
 
     @aplicacion.exception_handler(AccesoRequerido)
     async def manejar_acceso_requerido(

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block titulo %}Revisar documento · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Revisar documento</h1>
+    <p class="ayuda">{{ documento.nombre_original }}</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a la cotización</a>
+</div>
+
+{% if documento.estado == estado_error %}
+  <section class="tarjeta">
+    <h2>No se pudo leer el archivo</h2>
+    <p class="error">{{ documento.error_lector or "El lector no pudo interpretar este documento." }}</p>
+    <p>No se modificó ninguna partida de la cotización. Puedes volver y cargar el archivo nuevamente.</p>
+    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/documentos/nuevo">Cargar otro archivo</a>
+  </section>
+{% else %}
+  {% if documento.estado == "REVISADO" %}
+    <p class="exito">Revisión guardada. Estos son los datos actualmente aprobados por una persona.</p>
+  {% endif %}
+
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/revision">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="partidas_total" value="{{ partidas|length + 2 }}">
+
+    <section class="tarjeta">
+      <h2>Lo que entendí</h2>
+      <p class="ayuda">Corrige cualquier dato que no coincida con el documento. Los campos vacíos pueden quedarse vacíos.</p>
+
+      <div class="rejilla">
+        <div class="campo">
+          <label for="tipo_documento">Tipo de documento</label>
+          <input id="tipo_documento" name="tipo_documento" value="{{ documento.tipo_documento or '' }}">
+        </div>
+        <div class="campo">
+          <label for="memorandum">Memorándum / referencia</label>
+          <input id="memorandum" name="memorandum" value="{{ documento.memorandum or '' }}">
+        </div>
+        <div class="campo">
+          <label for="folios">Folio(s)</label>
+          <input id="folios" name="folios" value="{{ documento.folios | join(', ') }}">
+          <p class="ayuda">Si hay varios, sepáralos con coma.</p>
+        </div>
+        <div class="campo">
+          <label for="fecha_documento">Fecha</label>
+          <input id="fecha_documento" name="fecha_documento" value="{{ documento.fecha_documento or '' }}">
+        </div>
+        <div class="campo">
+          <label for="municipio">Municipio</label>
+          <input id="municipio" name="municipio" value="{{ documento.municipio or '' }}">
+        </div>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Partidas</h2>
+      <p class="ayuda">Puedes corregir las partidas detectadas. Al final dejamos dos renglones vacíos por si faltó alguna.</p>
+
+      {% for partida in partidas %}
+        {% set i = loop.index0 %}
+        <article class="partida">
+          <h3>Partida {{ loop.index }}</h3>
+          <div class="rejilla">
+            <div class="campo campo-ancho">
+              <label for="partida_{{ i }}_producto">Producto solicitado</label>
+              <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto" value="{{ partida.producto_solicitado or '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_marca">Marca solicitada</label>
+              <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca" value="{{ partida.marca_solicitada or '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_concentracion">Concentración</label>
+              <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion" value="{{ partida.concentracion or '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
+              <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma" value="{{ partida.forma_farmaceutica_dispositivo or '' }}">
+            </div>
+            <div class="campo campo-ancho">
+              <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
+              <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion" value="{{ partida.presentacion_solicitada or '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_cantidad">Cantidad</label>
+              <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" inputmode="decimal" value="{{ partida.cantidad if partida.cantidad is not none else '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_unidad">Unidad de medida</label>
+              <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad" value="{{ partida.unidad_medida or '' }}">
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+
+      {% for extra in range(2) %}
+        {% set i = partidas|length + extra %}
+        <article class="partida partida-vacia">
+          <h3>Agregar partida</h3>
+          <div class="rejilla">
+            <div class="campo campo-ancho">
+              <label for="partida_{{ i }}_producto">Producto solicitado</label>
+              <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_marca">Marca solicitada</label>
+              <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_concentracion">Concentración</label>
+              <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
+              <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma">
+            </div>
+            <div class="campo campo-ancho">
+              <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
+              <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_cantidad">Cantidad</label>
+              <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" inputmode="decimal">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_unidad">Unidad de medida</label>
+              <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad">
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+
+    <section class="tarjeta">
+      <h2>¿El archivo parece incompleto por sí solo?</h2>
+      <label class="opcion">
+        <input type="checkbox" name="parece_fragmento" value="1" {% if documento.parece_fragmento %}checked{% endif %}>
+        Sí, parece ser sólo una parte de un documento mayor.
+      </label>
+      {% if documento.senales_fragmento %}
+        <details>
+          <summary>Ver por qué el lector lo sugirió</summary>
+          <ul>
+            {% for senal in documento.senales_fragmento %}
+              <li>{{ senal }}</li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+      <p class="ayuda">Esto no une el archivo con ningún otro. La relación entre documentos se decidirá manualmente en una etapa posterior.</p>
+    </section>
+
+    <div class="grupo-botones">
+      <button class="boton" type="submit">Guardar revisión</button>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver sin guardar</a>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}
