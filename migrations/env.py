@@ -5,7 +5,6 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from triage.base_datos import Base
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
 
