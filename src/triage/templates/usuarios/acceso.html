@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block titulo %}Acceso · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<section class="tarjeta acceso">
+  <h1>Acceso al Sistema Triage</h1>
+  <p class="ayuda">Uso interno de Veracruzanísima. Ingresa con una cuenta autorizada.</p>
+
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/acceso">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div class="campo">
+      <label for="correo">Correo</label>
+      <input id="correo" name="correo" type="email" autocomplete="username" required autofocus>
+    </div>
+
+    <div class="campo">
+      <label for="contrasena">Contraseña</label>
+      <input id="contrasena" name="contrasena" type="password" autocomplete="current-password" required>
+    </div>
+
+    <button class="boton" type="submit">Entrar</button>
+  </form>
+</section>
+{% endblock %}

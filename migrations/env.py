@@ -5,9 +5,10 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from triage.base_datos import normalizar_database_url
+from triage.base_datos import Base, normalizar_database_url
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
+from triage.usuarios.modelos import Usuario
 
 config = context.config
 if config.config_file_name is not None:
@@ -15,7 +16,8 @@ if config.config_file_name is not None:
 
 url_base_datos = normalizar_database_url(obtener_configuracion().database_url)
 config.set_main_option("sqlalchemy.url", url_base_datos.replace("%", "%%"))
-target_metadata = Cotizacion.metadata
+_MODELOS_REGISTRADOS = (Cotizacion, Usuario)
+target_metadata = Base.metadata
 
 
 def ejecutar_migraciones_offline() -> None:

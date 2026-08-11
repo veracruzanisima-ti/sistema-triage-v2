@@ -17,6 +17,7 @@
   <div class="grupo-botones">
     {% for estado in estados %}
       <form method="post" action="/cotizaciones/{{ cotizacion.id }}/estado">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="estado" value="{{ estado.value }}">
         <button class="boton {% if cotizacion.estado != estado.value %}boton-secundario{% endif %}" type="submit">
           {{ estado.value | replace("_", " ") | title }}
