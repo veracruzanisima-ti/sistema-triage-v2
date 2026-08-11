@@ -1,8 +1,8 @@
 """Operaciones de usuarios internos sin depender de la interfaz web."""
 
+from pwdlib import PasswordHash
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from pwdlib import PasswordHash
 
 from triage.config import Configuracion
 from triage.usuarios.modelos import Usuario
