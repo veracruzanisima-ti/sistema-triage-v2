@@ -51,8 +51,8 @@ class Documento(Base):
     folios: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     fecha_documento: Mapped[str | None] = mapped_column(String(80), nullable=True)
     municipio: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    posible_continuacion: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    senales_continuacion: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    parece_fragmento: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    senales_fragmento: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     modelo_lector: Mapped[str | None] = mapped_column(String(120), nullable=True)
     error_lector: Mapped[str | None] = mapped_column(Text, nullable=True)
     recibido_en: Mapped[datetime] = mapped_column(
