@@ -11,13 +11,23 @@ class Base(DeclarativeBase):
     """Base declarativa común para los modelos persistentes de Triage."""
 
 
-def crear_motor(database_url: str) -> Engine:
-    """Crea el motor SQL sin esconder una base efímera si falta configuración."""
+def normalizar_database_url(database_url: str) -> str:
+    """Adapta URLs PostgreSQL comunes al driver Psycopg 3 usado por el proyecto."""
 
     url = database_url.strip()
     if not url:
         raise ValueError("DATABASE_URL no puede estar vacía")
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgres://")
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+    return url
 
+
+def crear_motor(database_url: str) -> Engine:
+    """Crea el motor SQL sin esconder una base efímera si falta configuración."""
+
+    url = normalizar_database_url(database_url)
     argumentos_conexion = (
         {"check_same_thread": False} if url.lower().startswith("sqlite") else {}
     )
