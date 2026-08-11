@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block titulo %}Agregar documento · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Agregar documento</h1>
+    <p class="ayuda">{{ cotizacion.referencia or "Cotización sin referencia" }}</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver</a>
+</div>
+
+<section class="tarjeta">
+  <h2>Sube una foto o PDF</h2>
+  <p>El sistema leerá el archivo y después te mostrará lo que entendió para que puedas corregirlo antes de guardar la revisión.</p>
+  <p class="aviso">Este entorno sigue siendo de prueba. Usa documentos ficticios; todavía no debemos cargar información sensible real.</p>
+
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="campo">
+      <label for="archivo">Archivo</label>
+      <input id="archivo" name="archivo" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required>
+      <p class="ayuda">Formatos: PDF, JPG, PNG o WEBP. Un archivo por vez en esta primera versión.</p>
+    </div>
+    <button class="boton" type="submit">Leer documento</button>
+  </form>
+</section>
+{% endblock %}
