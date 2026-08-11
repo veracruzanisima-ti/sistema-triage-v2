@@ -18,12 +18,16 @@ def test_blueprint_preview_no_guarda_secretos_en_texto():
     assert variables["APP_SECRET_KEY"]["generateValue"] is True
 
     for clave in (
+        "OPENAI_API_KEY",
         "BOOTSTRAP_ADMIN_EMAIL",
         "BOOTSTRAP_ADMIN_NAME",
         "BOOTSTRAP_ADMIN_PASSWORD",
     ):
         assert variables[clave]["sync"] is False
         assert "value" not in variables[clave]
+
+    assert variables["OPENAI_MODEL"]["value"] == "gpt-5"
+    assert int(variables["MAX_DOCUMENTO_BYTES"]["value"]) > 0
 
 
 def test_blueprint_conecta_postgres_sin_exponerlo_publicamente():
