@@ -1,8 +1,17 @@
 """Pruebas del flujo subir -> leer -> revisar -> guardar."""
 
+import re
+
 from fastapi.testclient import TestClient
 
-from tests.conftest import extraer_csrf
+
+def _extraer_csrf(html: str) -> str:
+    """Obtiene el token CSRF de un formulario renderizado para estas pruebas."""
+
+    coincidencia = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    if coincidencia is None:
+        raise AssertionError("no se encontró token CSRF en el formulario")
+    return coincidencia.group(1)
 
 
 def _crear_cotizacion(cliente: TestClient) -> str:
@@ -11,7 +20,7 @@ def _crear_cotizacion(cliente: TestClient) -> str:
         "/cotizaciones",
         data={
             "referencia": "COTIZACION-DE-PRUEBA",
-            "csrf_token": extraer_csrf(formulario.text),
+            "csrf_token": _extraer_csrf(formulario.text),
         },
         follow_redirects=False,
     )
@@ -25,7 +34,7 @@ def test_subir_documento_muestra_lectura_estructurada(cliente: TestClient):
 
     respuesta = cliente.post(
         f"/cotizaciones/{cotizacion_id}/documentos",
-        data={"csrf_token": extraer_csrf(formulario.text)},
+        data={"csrf_token": _extraer_csrf(formulario.text)},
         files={"archivo": ("solicitud-prueba.jpg", b"imagen-ficticia", "image/jpeg")},
         follow_redirects=False,
     )
@@ -44,7 +53,7 @@ def test_revision_humana_corrige_y_persiste_partidas(cliente: TestClient):
     formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
     subida = cliente.post(
         f"/cotizaciones/{cotizacion_id}/documentos",
-        data={"csrf_token": extraer_csrf(formulario.text)},
+        data={"csrf_token": _extraer_csrf(formulario.text)},
         files={"archivo": ("solicitud-prueba.pdf", b"pdf-ficticio", "application/pdf")},
         follow_redirects=False,
     )
@@ -54,7 +63,7 @@ def test_revision_humana_corrige_y_persiste_partidas(cliente: TestClient):
     guardado = cliente.post(
         revision_url + "/revision",
         data={
-            "csrf_token": extraer_csrf(revision.text),
+            "csrf_token": _extraer_csrf(revision.text),
             "partidas_total": "3",
             "tipo_documento": "Memorándum corregido",
             "memorandum": "MEMO/CORREGIDO/002/2026",
@@ -91,7 +100,7 @@ def test_archivo_no_permitido_se_rechaza_sin_crear_lectura(cliente: TestClient):
 
     respuesta = cliente.post(
         f"/cotizaciones/{cotizacion_id}/documentos",
-        data={"csrf_token": extraer_csrf(formulario.text)},
+        data={"csrf_token": _extraer_csrf(formulario.text)},
         files={"archivo": ("notas.txt", b"contenido", "text/plain")},
     )
 
@@ -104,7 +113,7 @@ def test_documento_aparece_en_detalle_de_cotizacion(cliente: TestClient):
     formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
     cliente.post(
         f"/cotizaciones/{cotizacion_id}/documentos",
-        data={"csrf_token": extraer_csrf(formulario.text)},
+        data={"csrf_token": _extraer_csrf(formulario.text)},
         files={"archivo": ("solicitud-prueba.jpg", b"imagen-ficticia", "image/jpeg")},
     )
 
