@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-
 from triage.main import app
 
 
