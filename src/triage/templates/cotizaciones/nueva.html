@@ -8,6 +8,7 @@
   <p>La referencia es opcional. Más adelante el lector documental podrá completarla.</p>
 
   <form method="post" action="/cotizaciones">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label for="referencia">Memorándum o referencia</label>
     <input id="referencia" name="referencia" type="text" maxlength="160" placeholder="Ej. DAIS/SSMA/944/2026">
     <p class="ayuda">Si todavía no sabes cuál es, déjalo vacío.</p>
