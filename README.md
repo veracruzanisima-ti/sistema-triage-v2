@@ -28,7 +28,10 @@ La búsqueda de proveedores, inteligencia comercial, histórico de precios, cál
 - FastAPI
 - Jinja2
 - HTMX, sólo cuando aporte una interacción concreta
-- PostgreSQL en producción (previsto; no conectado todavía)
+- SQLAlchemy 2.x
+- Alembic
+- PostgreSQL en producción
+- SQLite únicamente para desarrollo y pruebas
 - pytest
 - Docker
 - GitHub Actions
@@ -39,14 +42,36 @@ La búsqueda de proveedores, inteligencia comercial, histórico de precios, cál
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
+cp .env.example .env       # Windows: copy .env.example .env
+alembic upgrade head
 uvicorn triage.main:app --reload
 ```
 
 Abrir `http://127.0.0.1:8000`.
 
+El `.env.example` usa SQLite para que el desarrollo local sea sencillo. Un despliegue con `APP_ENV=production` rechaza SQLite y exige una base compartida mediante `DATABASE_URL`.
+
 ## Estado actual
 
-Esta rama contiene únicamente la base fundacional. No procesa todavía documentos reales ni ejecuta cotizaciones.
+La aplicación ya puede:
+
+- mostrar un listado de cotizaciones;
+- iniciar una cotización con referencia opcional;
+- guardar la cotización fuera de la sesión del navegador;
+- reabrirla después;
+- cambiar explícitamente su estado entre `EN_PROCESO`, `PENDIENTE_REVISION` y `FINALIZADA`.
+
+Todavía no procesa documentos reales, no integra OpenAI y no ejecuta decisiones fiscales o comerciales.
+
+## Migraciones
+
+Los cambios de estructura de la base se versionan con Alembic.
+
+```bash
+alembic upgrade head
+```
+
+No se debe usar `create_all()` para preparar una base de producción. Las pruebas sí lo utilizan sobre bases SQLite temporales y aisladas.
 
 ## Repositorio anterior
 

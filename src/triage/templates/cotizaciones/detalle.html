@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block titulo %}Cotización · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>{{ cotizacion.referencia or "Cotización sin referencia" }}</h1>
+    <span class="estado">{{ cotizacion.estado | replace("_", " ") | title }}</span>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
+</div>
+
+<section class="tarjeta">
+  <h2>Estado de trabajo</h2>
+  <p class="ayuda">Por ahora esta pantalla sólo demuestra que la cotización se guarda y puede retomarse.</p>
+  <div class="grupo-botones">
+    {% for estado in estados %}
+      <form method="post" action="/cotizaciones/{{ cotizacion.id }}/estado">
+        <input type="hidden" name="estado" value="{{ estado.value }}">
+        <button class="boton {% if cotizacion.estado != estado.value %}boton-secundario{% endif %}" type="submit">
+          {{ estado.value | replace("_", " ") | title }}
+        </button>
+      </form>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="tarjeta">
+  <h2>Siguiente etapa</h2>
+  <p>Aquí incorporaremos la carga de documentos, lectura con OpenAI y revisión de partidas. Aún no hay decisiones fiscales ni comerciales automáticas.</p>
+</section>
+{% endblock %}

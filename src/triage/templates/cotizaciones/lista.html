@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block titulo %}Cotizaciones · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Cotizaciones</h1>
+    <p class="ayuda">Cualquier integrante puede iniciar una cotización y retomarla después.</p>
+  </div>
+  <a class="boton" href="/cotizaciones/nueva">Nueva cotización</a>
+</div>
+
+{% if cotizaciones %}
+  {% for cotizacion in cotizaciones %}
+    <section class="tarjeta">
+      <div class="barra">
+        <div>
+          <div class="referencia">{{ cotizacion.referencia or "Sin referencia identificada" }}</div>
+          <span class="estado">{{ cotizacion.estado | replace("_", " ") | title }}</span>
+        </div>
+        <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Abrir</a>
+      </div>
+    </section>
+  {% endfor %}
+{% else %}
+  <section class="tarjeta vacio">
+    <h2>Todavía no hay cotizaciones</h2>
+    <p>Inicia la primera. Quedará guardada para poder continuarla en otra sesión.</p>
+    <a class="boton" href="/cotizaciones/nueva">Crear primera cotización</a>
+  </section>
+{% endif %}
+{% endblock %}

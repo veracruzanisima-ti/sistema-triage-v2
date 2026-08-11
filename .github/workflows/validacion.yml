@@ -24,5 +24,10 @@ jobs:
       - name: Revisar estilo y errores simples
         run: ruff check .
 
+      - name: Validar migración inicial
+        env:
+          DATABASE_URL: sqlite+pysqlite:///./ci_migracion.sqlite3
+        run: alembic upgrade head
+
       - name: Ejecutar pruebas
         run: pytest -q
