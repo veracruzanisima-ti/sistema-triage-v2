@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from triage.base_datos import Base
@@ -19,7 +20,7 @@ def test_crear_cotizacion_la_guarda_y_la_muestra(cliente):
     assert "DAIS/SSMA/944/2026" in listado.text
 
 
-def test_cotizacion_puede_finalizarse_explictamente(cliente):
+def test_cotizacion_puede_finalizarse_explicitamente(cliente):
     creada = cliente.post(
         "/cotizaciones",
         data={"referencia": "CASC 388/08/2026"},
@@ -61,12 +62,8 @@ def test_cotizacion_sobrevive_a_otra_instancia_de_la_app(tmp_path):
 
 
 def test_produccion_rechaza_sqlite_local():
-    try:
+    with pytest.raises(ValueError, match="base de datos compartida"):
         Configuracion(
             app_env="production",
             database_url="sqlite+pysqlite:///./no_permitida.sqlite3",
         )
-    except ValueError as error:
-        assert "base de datos compartida" in str(error)
-    else:
-        raise AssertionError("producción no debe aceptar SQLite local")
