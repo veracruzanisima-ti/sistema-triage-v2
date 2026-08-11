@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Configuración y secretos
+.env
+.env.*
+!.env.example
+
+# Bases de datos y datos operativos
+*.sqlite
+*.sqlite3
+*.db
+*.xlsx
+*.csv
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# IDE y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Cobertura y builds
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
