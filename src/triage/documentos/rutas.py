@@ -12,10 +12,10 @@ from triage.cotizaciones.servicio import obtener_cotizacion
 from triage.documentos.modelos import EstadoDocumento
 from triage.documentos.servicio import (
     ArchivoDocumentoInvalido,
+    guardar_revision,
     listar_partidas_documento,
     obtener_documento,
     procesar_documento,
-    guardar_revision,
     validar_archivo,
 )
 from triage.lectores.esquemas import LecturaDocumento, PartidaLeida
