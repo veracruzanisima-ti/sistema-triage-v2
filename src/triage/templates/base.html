@@ -19,21 +19,37 @@
     .tarjeta { background: #ffffff; border: 1px solid #dfe4ec; border-radius: 14px; padding: 20px; margin-bottom: 14px; }
     .boton { display: inline-block; border: 0; border-radius: 10px; padding: 11px 16px; background: #172033; color: white; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
     .boton-secundario { background: #e9edf5; color: #172033; }
+    .boton-texto { background: transparent; color: #485367; padding: 7px 9px; }
     .grupo-botones { display: flex; flex-wrap: wrap; gap: 10px; }
+    .usuario { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     label { display: block; margin-bottom: 8px; font-weight: 700; }
     input { width: 100%; max-width: 620px; padding: 12px; border: 1px solid #b8c0cf; border-radius: 9px; font: inherit; }
     .ayuda { color: #5e687a; font-size: .95rem; }
+    .error { color: #9f1d1d; background: #fff0f0; border: 1px solid #f0c5c5; border-radius: 9px; padding: 11px 13px; }
     .estado { display: inline-block; padding: 5px 9px; border-radius: 999px; background: #eef1f6; font-size: .86rem; font-weight: 700; }
     .referencia { font-size: 1.08rem; font-weight: 700; }
     .vacio { text-align: center; padding: 42px 20px; }
+    .acceso { width: min(460px, 100%); margin: 6vh auto 0; }
+    .campo { margin-bottom: 18px; }
     form { margin: 0; }
   </style>
 </head>
 <body>
   <header>
     <nav>
-      <a href="/cotizaciones">Sistema Triage</a>
-      <a href="/cotizaciones/nueva">Nueva cotización</a>
+      {% if usuario %}
+        <a href="/cotizaciones">Sistema Triage</a>
+        <div class="usuario">
+          <span>{{ usuario.nombre }}</span>
+          <a href="/cotizaciones/nueva">Nueva cotización</a>
+          <form method="post" action="/salir">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="boton boton-texto" type="submit">Salir</button>
+          </form>
+        </div>
+      {% else %}
+        <strong>Sistema Triage</strong>
+      {% endif %}
     </nav>
   </header>
   <main>
