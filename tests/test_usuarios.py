@@ -1,6 +1,9 @@
 import re
 
+import pytest
 from fastapi.testclient import TestClient
+
+from triage.config import Configuracion
 
 CORREO_PRUEBA = "raquel.pruebas@veracruzanisima.local"
 CONTRASENA_PRUEBA = "contrasena-prueba-segura"
@@ -35,16 +38,35 @@ def test_credenciales_incorrectas_no_revelan_el_motivo(cliente_sin_acceso: TestC
     assert "Correo o contraseña incorrectos" in respuesta.text
 
 
-def test_login_sin_csrf_es_rechazado(cliente_sin_acceso: TestClient):
+def test_login_con_csrf_incorrecto_es_rechazado(cliente_sin_acceso: TestClient):
+    cliente_sin_acceso.get("/acceso")
     respuesta = cliente_sin_acceso.post(
         "/acceso",
         data={
             "correo": CORREO_PRUEBA,
             "contrasena": CONTRASENA_PRUEBA,
+            "csrf_token": "token-incorrecto",
         },
     )
 
-    assert respuesta.status_code == 422
+    assert respuesta.status_code == 403
+
+
+def test_cookie_de_sesion_es_httponly_y_samesite(cliente_sin_acceso: TestClient):
+    formulario = cliente_sin_acceso.get("/acceso")
+    respuesta = cliente_sin_acceso.post(
+        "/acceso",
+        data={
+            "correo": CORREO_PRUEBA,
+            "contrasena": CONTRASENA_PRUEBA,
+            "csrf_token": _csrf(formulario.text),
+        },
+        follow_redirects=False,
+    )
+
+    cookie = respuesta.headers["set-cookie"].lower()
+    assert "httponly" in cookie
+    assert "samesite=lax" in cookie
 
 
 def test_salir_elimina_la_sesion(cliente: TestClient):
@@ -61,3 +83,12 @@ def test_salir_elimina_la_sesion(cliente: TestClient):
     protegida = cliente.get("/cotizaciones", follow_redirects=False)
     assert protegida.status_code == 303
     assert protegida.headers["location"] == "/acceso"
+
+
+def test_produccion_requiere_clave_de_sesion_propia():
+    with pytest.raises(ValueError, match="APP_SECRET_KEY"):
+        Configuracion(
+            app_env="production",
+            app_secret_key="demasiado-corta",
+            database_url="postgresql://usuario:clave@db.example/triage",
+        )
