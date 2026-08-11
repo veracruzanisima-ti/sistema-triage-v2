@@ -12,6 +12,7 @@ from triage.cotizaciones.servicio import (
     listar_cotizaciones,
     obtener_cotizacion,
 )
+from triage.documentos.servicio import listar_documentos_cotizacion
 from triage.usuarios.seguridad import (
     Sesion,
     UsuarioActual,
@@ -101,6 +102,7 @@ def detalle(
             usuario,
             cotizacion=cotizacion,
             estados=tuple(EstadoCotizacion),
+            documentos=listar_documentos_cotizacion(sesion, cotizacion.id),
         ),
     )
 
