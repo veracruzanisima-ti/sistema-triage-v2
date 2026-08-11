@@ -1,0 +1,28 @@
+name: Validación
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar proyecto
+        run: pip install -e ".[dev]"
+
+      - name: Revisar estilo y errores simples
+        run: ruff check .
+
+      - name: Ejecutar pruebas
+        run: pytest -q
