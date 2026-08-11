@@ -16,6 +16,12 @@ services:
         fromDatabase:
           name: sistema-triage-v2-preview-db
           property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5
+      - key: MAX_DOCUMENTO_BYTES
+        value: "15728640"
       - key: BOOTSTRAP_ADMIN_EMAIL
         sync: false
       - key: BOOTSTRAP_ADMIN_NAME
