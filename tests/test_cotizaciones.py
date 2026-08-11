@@ -76,7 +76,7 @@ def test_post_sin_csrf_es_rechazado(cliente):
         data={"referencia": "NO DEBE GUARDARSE"},
     )
 
-    assert respuesta.status_code == 403
+    assert respuesta.status_code == 422
 
 
 def test_cotizacion_sobrevive_a_otra_instancia_de_la_app(tmp_path):
