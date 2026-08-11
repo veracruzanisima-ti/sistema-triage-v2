@@ -81,7 +81,8 @@ def test_revision_humana_corrige_y_persiste_partidas(cliente: TestClient):
     assert "MEMO/CORREGIDO/002/2026" in comprobacion.text
     assert "PRODUCTO CORREGIDO" in comprobacion.text
     assert "SEGUNDA PARTIDA AGREGADA" in comprobacion.text
-    assert "checked" not in comprobacion.text.split('name="parece_fragmento"', 1)[1].split(">", 1)[0]
+    atributos_checkbox = comprobacion.text.split('name="parece_fragmento"', 1)[1].split(">", 1)[0]
+    assert "checked" not in atributos_checkbox
 
 
 def test_archivo_no_permitido_se_rechaza_sin_crear_lectura(cliente: TestClient):
