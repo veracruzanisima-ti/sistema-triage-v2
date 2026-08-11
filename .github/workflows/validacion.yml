@@ -24,7 +24,10 @@ jobs:
       - name: Revisar estilo y errores simples
         run: ruff check .
 
-      - name: Validar migración inicial
+      - name: Validar script de arranque del preview
+        run: bash -n scripts/iniciar_preview_render.sh
+
+      - name: Validar migraciones
         env:
           DATABASE_URL: sqlite+pysqlite:///./ci_migracion.sqlite3
         run: alembic upgrade head
