@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from triage.base_datos import normalizar_database_url
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
 
@@ -12,7 +13,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", obtener_configuracion().database_url)
+url_base_datos = normalizar_database_url(obtener_configuracion().database_url)
+config.set_main_option("sqlalchemy.url", url_base_datos.replace("%", "%%"))
 target_metadata = Cotizacion.metadata
 
 
