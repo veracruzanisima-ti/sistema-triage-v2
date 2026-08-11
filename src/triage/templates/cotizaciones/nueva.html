@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block titulo %}Nueva cotización · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<section class="tarjeta">
+  <h1>Nueva cotización</h1>
+  <p>La referencia es opcional. Más adelante el lector documental podrá completarla.</p>
+
+  <form method="post" action="/cotizaciones">
+    <label for="referencia">Memorándum o referencia</label>
+    <input id="referencia" name="referencia" type="text" maxlength="160" placeholder="Ej. DAIS/SSMA/944/2026">
+    <p class="ayuda">Si todavía no sabes cuál es, déjalo vacío.</p>
+    <div class="grupo-botones">
+      <button class="boton" type="submit">Iniciar cotización</button>
+      <a class="boton boton-secundario" href="/cotizaciones">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
