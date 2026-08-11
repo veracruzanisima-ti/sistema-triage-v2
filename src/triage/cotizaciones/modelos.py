@@ -1,6 +1,6 @@
 """Modelos persistentes del flujo básico de cotización."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
 
@@ -21,7 +21,7 @@ class EstadoCotizacion(StrEnum):
 def ahora_utc() -> datetime:
     """Genera marcas de tiempo comparables independientemente del despliegue."""
 
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Cotizacion(Base):
