@@ -2,7 +2,8 @@ import re
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import CONTRASENA_PRUEBA, CORREO_PRUEBA
+CORREO_PRUEBA = "raquel.pruebas@veracruzanisima.local"
+CONTRASENA_PRUEBA = "contrasena-prueba-segura"
 
 
 def _csrf(html: str) -> str:
