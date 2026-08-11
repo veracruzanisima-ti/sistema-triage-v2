@@ -32,7 +32,9 @@ class LectorPrueba:
             fecha_documento="11 de agosto de 2026",
             municipio="Municipio de prueba",
             parece_fragmento=True,
-            senales_fragmento=["La tabla visible comienza sin un encabezado administrativo completo."],
+            senales_fragmento=[
+                "La tabla visible comienza sin un encabezado administrativo completo."
+            ],
             partidas=[
                 PartidaLeida(
                     producto_solicitado="PRODUCTO DE PRUEBA",
