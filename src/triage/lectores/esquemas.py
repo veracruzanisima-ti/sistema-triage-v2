@@ -27,6 +27,6 @@ class LecturaDocumento(BaseModel):
     folios: list[str] = Field(default_factory=list)
     fecha_documento: str | None = None
     municipio: str | None = None
-    posible_continuacion: bool = False
-    senales_continuacion: list[str] = Field(default_factory=list)
+    parece_fragmento: bool = False
+    senales_fragmento: list[str] = Field(default_factory=list)
     partidas: list[PartidaLeida] = Field(default_factory=list)
