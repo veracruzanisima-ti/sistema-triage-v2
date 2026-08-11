@@ -19,6 +19,8 @@ class Configuracion(BaseSettings):
     app_secret_key: str = ""
     database_url: str = "sqlite+pysqlite:///./triage_dev.sqlite3"
     openai_api_key: str = ""
+    openai_model: str = "gpt-5"
+    max_documento_bytes: int = 15 * 1024 * 1024
     bootstrap_admin_email: str = ""
     bootstrap_admin_name: str = ""
     bootstrap_admin_password: str = ""
@@ -44,6 +46,10 @@ class Configuracion(BaseSettings):
 
         if self.session_max_age_seconds <= 0:
             raise ValueError("SESSION_MAX_AGE_SECONDS debe ser mayor que cero")
+        if self.max_documento_bytes <= 0:
+            raise ValueError("MAX_DOCUMENTO_BYTES debe ser mayor que cero")
+        if not self.openai_model.strip():
+            raise ValueError("OPENAI_MODEL no puede estar vacío")
 
         if self.es_produccion:
             if not self.database_url.strip():
