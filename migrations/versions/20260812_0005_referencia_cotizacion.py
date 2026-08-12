@@ -68,9 +68,33 @@ def upgrade() -> None:
             },
         )
 
+    exclusiones = conexion.execute(
+        sa.text(
+            """
+            SELECT id, motivo_exclusion
+            FROM partidas_documento
+            WHERE motivo_exclusion IS NOT NULL
+            """
+        )
+    ).mappings()
+    for fila in exclusiones:
+        motivo = str(fila["motivo_exclusion"])
+        partes = motivo.split(" · ", 2)
+        if motivo.startswith("POL-") and len(partes) == 3 and partes[1].startswith("R"):
+            conexion.execute(
+                sa.text(
+                    """
+                    UPDATE partidas_documento
+                    SET motivo_exclusion = :motivo
+                    WHERE id = :partida_id
+                    """
+                ),
+                {"motivo": partes[2], "partida_id": fila["id"]},
+            )
+
 
 def downgrade() -> None:
-    """Retira la distinción manual; conserva el texto actual de referencia."""
+    """Retira la distinción manual; conserva textos ya sincronizados o limpiados."""
 
     with op.batch_alter_table("cotizaciones") as batch_op:
         batch_op.drop_column("referencia_fijada_manual")
