@@ -44,9 +44,19 @@ def test_blueprint_conecta_postgres_sin_exponerlo_publicamente():
     }
 
 
-def test_preview_aplica_migraciones_antes_de_iniciar_servidor():
-    script = (RAIZ / "scripts" / "iniciar_preview_render.sh").read_text(
+def test_preview_separa_migraciones_del_arranque_de_instancia():
+    configuracion = yaml.safe_load((RAIZ / "render.yaml").read_text(encoding="utf-8"))
+    servicio = configuracion["services"][0]
+    build = (RAIZ / "scripts" / "construir_preview_render.sh").read_text(
+        encoding="utf-8"
+    )
+    start = (RAIZ / "scripts" / "iniciar_preview_render.sh").read_text(
         encoding="utf-8"
     )
 
-    assert script.index("alembic upgrade head") < script.index("uvicorn triage.main:app")
+    assert servicio["buildCommand"] == "bash scripts/construir_preview_render.sh"
+    assert servicio["startCommand"] == "bash scripts/iniciar_preview_render.sh"
+    assert "alembic upgrade head" in build
+    assert "uvicorn triage.main:app" not in build
+    assert "alembic upgrade head" not in start
+    assert "uvicorn triage.main:app" in start
