@@ -115,6 +115,18 @@ def _partida_desde_formulario(formulario: FormData, indice: int) -> PartidaLeida
     return PartidaLeida(**valores)
 
 
+def _decision_inclusion_desde_formulario(
+    formulario: FormData,
+    indice: int,
+) -> tuple[bool, str | None]:
+    prefijo = f"partida_{indice}_"
+    incluida = str(formulario.get(prefijo + "incluir") or "1") != "0"
+    if incluida:
+        return True, None
+    motivo = _limpiar_texto(formulario.get(prefijo + "motivo_exclusion"))
+    return False, motivo or "Excluida manualmente durante la revisión."
+
+
 def _render_subida(
     request: Request,
     usuario,
@@ -142,7 +154,11 @@ def _render_revision(
     codigo: int = 200,
 ):
     alertas_por_partida = [evaluar_partida(partida) for partida in partidas]
-    partidas_con_alerta = sum(bool(alertas) for alertas in alertas_por_partida)
+    partidas_con_alerta = sum(
+        bool(alertas) and partida.incluida_cotizacion
+        for partida, alertas in zip(partidas, alertas_por_partida, strict=True)
+    )
+    partidas_excluidas = sum(not partida.incluida_cotizacion for partida in partidas)
     return _plantillas(request).TemplateResponse(
         request=request,
         name="documentos/revisar.html",
@@ -157,6 +173,7 @@ def _render_revision(
             cantidad_visible=_cantidad_visible,
             alertas_por_partida=alertas_por_partida,
             partidas_con_alerta=partidas_con_alerta,
+            partidas_excluidas=partidas_excluidas,
         ),
         status_code=codigo,
     )
@@ -209,6 +226,14 @@ async def subir_y_procesar(
 
     try:
         validar_archivo(contenido=contenido, mime_type=mime_type, max_bytes=max_bytes)
+        documento = procesar_documento(
+            sesion,
+            cotizacion_id=cotizacion.id,
+            nombre_archivo=archivo.filename or "documento",
+            mime_type=mime_type,
+            contenido=contenido,
+            lector=lector,
+        )
     except ArchivoDocumentoInvalido as error:
         return _render_subida(
             request,
@@ -218,14 +243,6 @@ async def subir_y_procesar(
             codigo=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
-    documento = procesar_documento(
-        sesion,
-        cotizacion_id=cotizacion.id,
-        nombre_archivo=archivo.filename or "documento",
-        mime_type=mime_type,
-        contenido=contenido,
-        lector=lector,
-    )
     return RedirectResponse(
         url=f"/cotizaciones/{cotizacion.id}/documentos/{documento.id}",
         status_code=status.HTTP_303_SEE_OTHER,
@@ -244,8 +261,9 @@ async def subir_y_procesar_cola(
     usuario: UsuarioActual,
     csrf_token: Annotated[str, Form()],
     archivo: Annotated[UploadFile, File()],
+    clave_idempotencia: Annotated[str | None, Form()] = None,
 ):
-    """Procesa un elemento de la cola y devuelve un resultado pequeño para la interfaz."""
+    """Procesa un elemento de la cola y permite reintentar sin duplicar el documento."""
 
     validar_token_csrf(request, csrf_token)
     cotizacion = _cotizacion_o_404(sesion, cotizacion_id)
@@ -267,20 +285,21 @@ async def subir_y_procesar_cola(
 
     try:
         validar_archivo(contenido=contenido, mime_type=mime_type, max_bytes=max_bytes)
+        documento = procesar_documento(
+            sesion,
+            cotizacion_id=cotizacion.id,
+            nombre_archivo=nombre_archivo,
+            mime_type=mime_type,
+            contenido=contenido,
+            lector=lector,
+            clave_idempotencia=clave_idempotencia,
+        )
     except ArchivoDocumentoInvalido as error:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={"ok": False, "error": str(error)},
         )
 
-    documento = procesar_documento(
-        sesion,
-        cotizacion_id=cotizacion.id,
-        nombre_archivo=nombre_archivo,
-        mime_type=mime_type,
-        contenido=contenido,
-        lector=lector,
-    )
     revision_url = f"/cotizaciones/{cotizacion.id}/documentos/{documento.id}"
     lectura_correcta = documento.estado != EstadoDocumento.ERROR.value
     return JSONResponse(
@@ -325,7 +344,7 @@ async def guardar(
     sesion: Sesion,
     usuario: UsuarioActual,
 ):
-    """Persiste las correcciones humanas sin ejecutar todavía reglas comerciales."""
+    """Persiste correcciones y decisiones humanas sin aplicar rechazos automáticos."""
 
     cotizacion = _cotizacion_o_404(sesion, cotizacion_id)
     documento = _documento_o_404(sesion, cotizacion_id, documento_id)
@@ -337,11 +356,18 @@ async def guardar(
         total = int(str(formulario.get("partidas_total") or "0"))
         if total < 0 or total > 100:
             raise ValueError("Cantidad de renglones fuera del límite permitido")
-        partidas = [
-            partida
-            for indice in range(total)
-            if (partida := _partida_desde_formulario(formulario, indice)) is not None
-        ]
+
+        partidas: list[PartidaLeida] = []
+        decisiones_inclusion: list[tuple[bool, str | None]] = []
+        for indice in range(total):
+            partida = _partida_desde_formulario(formulario, indice)
+            if partida is None:
+                continue
+            partidas.append(partida)
+            decisiones_inclusion.append(
+                _decision_inclusion_desde_formulario(formulario, indice)
+            )
+
         lectura = LecturaDocumento(
             tipo_documento=_limpiar_texto(formulario.get("tipo_documento")),
             memorandum=_limpiar_texto(formulario.get("memorandum")),
@@ -368,6 +394,7 @@ async def guardar(
         documento=documento,
         lectura_revisada=lectura,
         usuario_id=usuario.id,
+        decisiones_inclusion=decisiones_inclusion,
     )
     return RedirectResponse(
         url=f"/cotizaciones/{cotizacion.id}/documentos/{documento.id}",
