@@ -20,6 +20,7 @@ from triage.documentos.servicio import (
     validar_archivo,
 )
 from triage.lectores.esquemas import LecturaDocumento, PartidaLeida
+from triage.restricciones import evaluar_partida
 from triage.usuarios.seguridad import Sesion, UsuarioActual, obtener_token_csrf, validar_token_csrf
 
 router = APIRouter(tags=["documentos"])
@@ -140,6 +141,8 @@ def _render_revision(
     error: str | None = None,
     codigo: int = 200,
 ):
+    alertas_por_partida = [evaluar_partida(partida) for partida in partidas]
+    partidas_con_alerta = sum(bool(alertas) for alertas in alertas_por_partida)
     return _plantillas(request).TemplateResponse(
         request=request,
         name="documentos/revisar.html",
@@ -152,6 +155,8 @@ def _render_revision(
             error=error,
             estado_error=EstadoDocumento.ERROR.value,
             cantidad_visible=_cantidad_visible,
+            alertas_por_partida=alertas_por_partida,
+            partidas_con_alerta=partidas_con_alerta,
         ),
         status_code=codigo,
     )
