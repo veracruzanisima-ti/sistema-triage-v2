@@ -3,7 +3,7 @@ services:
     name: sistema-triage-v2-preview
     runtime: python
     plan: free
-    buildCommand: pip install -e .
+    buildCommand: bash scripts/construir_preview_render.sh
     startCommand: bash scripts/iniciar_preview_render.sh
     healthCheckPath: /health
     autoDeployTrigger: checksPass
