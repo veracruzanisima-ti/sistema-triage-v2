@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import FormData
 
 from triage.cotizaciones.servicio import obtener_cotizacion
@@ -149,7 +149,7 @@ def formulario_subida(
     sesion: Sesion,
     usuario: UsuarioActual,
 ):
-    """Muestra una carga deliberadamente pequeña: un archivo por vez."""
+    """Muestra la carga documental con alternativa tradicional sin JavaScript."""
 
     cotizacion = _cotizacion_o_404(sesion, cotizacion_id)
     return _render_subida(request, usuario, cotizacion)
@@ -205,6 +205,68 @@ async def subir_y_procesar(
     return RedirectResponse(
         url=f"/cotizaciones/{cotizacion.id}/documentos/{documento.id}",
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post(
+    "/cotizaciones/{cotizacion_id}/documentos/cola",
+    response_class=JSONResponse,
+    name="procesar_documento_cola",
+)
+async def subir_y_procesar_cola(
+    cotizacion_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+    archivo: Annotated[UploadFile, File()],
+):
+    """Procesa un elemento de la cola y devuelve un resultado pequeño para la interfaz."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = _cotizacion_o_404(sesion, cotizacion_id)
+    lector = request.app.state.lector_documentos
+    if lector is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "ok": False,
+                "error": "El lector documental todavía no está configurado en este entorno.",
+            },
+        )
+
+    max_bytes = request.app.state.configuracion.max_documento_bytes
+    contenido = await archivo.read(max_bytes + 1)
+    nombre_archivo = archivo.filename or "documento"
+    mime_type = archivo.content_type or ""
+    await archivo.close()
+
+    try:
+        validar_archivo(contenido=contenido, mime_type=mime_type, max_bytes=max_bytes)
+    except ArchivoDocumentoInvalido as error:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"ok": False, "error": str(error)},
+        )
+
+    documento = procesar_documento(
+        sesion,
+        cotizacion_id=cotizacion.id,
+        nombre_archivo=nombre_archivo,
+        mime_type=mime_type,
+        contenido=contenido,
+        lector=lector,
+    )
+    revision_url = f"/cotizaciones/{cotizacion.id}/documentos/{documento.id}"
+    lectura_correcta = documento.estado != EstadoDocumento.ERROR.value
+    return JSONResponse(
+        content={
+            "ok": lectura_correcta,
+            "documento_id": documento.id,
+            "estado": documento.estado,
+            "error": documento.error_lector if not lectura_correcta else None,
+            "revision_url": revision_url,
+        }
     )
 
 
