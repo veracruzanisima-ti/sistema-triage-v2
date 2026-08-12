@@ -12,6 +12,8 @@ Lee este archivo únicamente como fuente administrativa para preparar una cotiza
 
 Reglas obligatorias:
 - Extrae sólo información visible o explícita en el archivo.
+- Aunque el archivo diga borrador, copia, ejemplo, prueba o ficticio, extrae los campos visibles
+  solicitados. Esas leyendas no son motivo para devolver una estructura vacía.
 - No busques en Internet y no agregues conocimiento comercial externo.
 - No propongas marcas, sustitutos, proveedores, IVA, clasificación sanitaria ni cadena fría.
 - No extraigas ni devuelvas nombre del paciente, CURP, diagnóstico, domicilio particular,

@@ -81,6 +81,36 @@ def listar_partidas_documento(sesion: Session, documento_id: str) -> list[Partid
     return list(sesion.scalars(consulta))
 
 
+def lectura_tiene_datos_utiles(lectura: LecturaDocumento) -> bool:
+    """Evita tratar una respuesta estructurada completamente vacía como lectura válida."""
+
+    if any(
+        (
+            lectura.tipo_documento,
+            lectura.memorandum,
+            lectura.folios,
+            lectura.fecha_documento,
+            lectura.municipio,
+        )
+    ):
+        return True
+
+    campos_partida = (
+        "producto_solicitado",
+        "marca_solicitada",
+        "concentracion",
+        "forma_farmaceutica_dispositivo",
+        "presentacion_solicitada",
+        "cantidad",
+        "unidad_medida",
+    )
+    for partida in lectura.partidas:
+        if any(getattr(partida, campo) not in (None, "") for campo in campos_partida):
+            return True
+
+    return False
+
+
 def _reemplazar_partidas(
     sesion: Session,
     documento: Documento,
@@ -105,6 +135,18 @@ def _reemplazar_partidas(
                 unidad_medida=partida.unidad_medida,
             )
         )
+
+
+def _marcar_error_lectura(sesion: Session, documento: Documento, mensaje: str) -> Documento:
+    """Persiste un fallo del lector sin crear un borrador engañoso de partidas."""
+
+    documento.estado = EstadoDocumento.ERROR.value
+    documento.error_lector = mensaje[:1000]
+    _reemplazar_partidas(sesion, documento, [])
+    sesion.add(documento)
+    sesion.commit()
+    sesion.refresh(documento)
+    return documento
 
 
 def procesar_documento(
@@ -137,12 +179,15 @@ def procesar_documento(
             nombre_archivo=documento.nombre_original,
         )
     except ErrorLecturaDocumento as error:
-        documento.estado = EstadoDocumento.ERROR.value
-        documento.error_lector = str(error)[:1000]
-        sesion.add(documento)
-        sesion.commit()
-        sesion.refresh(documento)
-        return documento
+        return _marcar_error_lectura(sesion, documento, str(error))
+
+    if not lectura_tiene_datos_utiles(lectura):
+        return _marcar_error_lectura(
+            sesion,
+            documento,
+            "El lector respondió, pero no identificó información útil en el archivo. "
+            "Vuelve a intentarlo o revisa que el documento sea legible.",
+        )
 
     documento.tipo_documento = lectura.tipo_documento
     documento.memorandum = lectura.memorandum
