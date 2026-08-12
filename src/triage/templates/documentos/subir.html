@@ -76,6 +76,7 @@
     const renderizar = () => {
       contenedor.replaceChildren();
       vacia.hidden = cola.length > 0;
+      archivo.disabled = procesando;
 
       cola.forEach((item) => {
         const tarjeta = document.createElement("div");
@@ -120,7 +121,9 @@
       });
 
       leer.disabled = procesando || cola.length === 0;
-      leer.textContent = cola.length === 1 ? "Leer documento" : `Leer ${cola.length} documentos`;
+      if (cola.length === 0) leer.textContent = "Leer documentos";
+      else if (cola.length === 1) leer.textContent = "Leer documento";
+      else leer.textContent = `Leer ${cola.length} documentos`;
     };
 
     const agregarArchivos = (lista) => {
