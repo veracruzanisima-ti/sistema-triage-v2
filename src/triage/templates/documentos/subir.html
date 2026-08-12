@@ -58,12 +58,26 @@
     const textoIndicador = document.getElementById("texto-indicador");
     const cotizacionId = formulario.dataset.cotizacionId;
     const colaUrl = `${formulario.action}/cola`;
+    const codigosTransitorios = new Set([502, 503, 504]);
+    const esperasReintento = [0, 2000, 5000];
     let cola = [];
     let secuencia = 0;
     let procesando = false;
+    let colaPausada = false;
 
     archivo.multiple = true;
     archivo.required = false;
+
+    const esperar = (milisegundos) => new Promise((resolver) => {
+      window.setTimeout(resolver, milisegundos);
+    });
+
+    const nuevaClave = () => {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return `cola-${Date.now()}-${secuencia}`;
+    };
 
     const tamanoLegible = (bytes) => {
       if (bytes < 1024) return `${bytes} B`;
@@ -72,6 +86,7 @@
     };
 
     const textoEstado = (item) => item.estado || "Pendiente";
+    const esProcesable = (item) => ["pendiente", "pausado"].includes(item.claseEstado);
 
     const renderizar = () => {
       contenedor.replaceChildren();
@@ -107,10 +122,10 @@
         quitar.className = "archivo-quitar";
         quitar.type = "button";
         quitar.textContent = "×";
-        quitar.disabled = procesando;
+        quitar.disabled = procesando || item.claseEstado === "listo";
         quitar.setAttribute("aria-label", `Quitar ${item.archivo.name}`);
         quitar.addEventListener("click", () => {
-          if (procesando) return;
+          if (procesando || item.claseEstado === "listo") return;
           cola = cola.filter((actual) => actual.id !== item.id);
           renderizar();
         });
@@ -120,10 +135,17 @@
         contenedor.append(tarjeta);
       });
 
-      leer.disabled = procesando || cola.length === 0;
-      if (cola.length === 0) leer.textContent = "Leer documentos";
-      else if (cola.length === 1) leer.textContent = "Leer documento";
-      else leer.textContent = `Leer ${cola.length} documentos`;
+      const hayProcesables = cola.some(esProcesable);
+      leer.disabled = procesando || !hayProcesables;
+      if (colaPausada && hayProcesables) {
+        leer.textContent = "Reintentar pendientes";
+      } else if (cola.length === 0) {
+        leer.textContent = "Leer documentos";
+      } else if (cola.length === 1) {
+        leer.textContent = "Leer documento";
+      } else {
+        leer.textContent = `Leer ${cola.length} documentos`;
+      }
     };
 
     const agregarArchivos = (lista) => {
@@ -139,6 +161,8 @@
         cola.push({
           id: secuencia,
           archivo: nuevo,
+          claveIdempotencia: nuevaClave(),
+          revisionUrl: null,
           estado: "Pendiente",
           claseEstado: "pendiente",
           error: null,
@@ -169,25 +193,25 @@
       agregarArchivos(e.dataTransfer && e.dataTransfer.files);
     });
 
-    formulario.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (procesando || cola.length === 0) return;
-
-      procesando = true;
-      indicador.hidden = false;
-      renderizar();
-      let destinoUnico = null;
-
-      for (let indice = 0; indice < cola.length; indice += 1) {
-        const item = cola[indice];
-        item.estado = "Leyendo…";
-        item.claseEstado = "leyendo";
-        textoIndicador.textContent = `Leyendo documento ${indice + 1} de ${cola.length}…`;
-        renderizar();
+    const procesarItem = async (item, posicion, total) => {
+      for (let intento = 0; intento < esperasReintento.length; intento += 1) {
+        if (esperasReintento[intento] > 0) {
+          item.estado = `Reintentando ${intento + 1}/${esperasReintento.length}…`;
+          item.claseEstado = "leyendo";
+          textoIndicador.textContent = `Servicio temporalmente no disponible. Reintentando documento ${posicion} de ${total}…`;
+          renderizar();
+          await esperar(esperasReintento[intento]);
+        } else {
+          item.estado = "Leyendo…";
+          item.claseEstado = "leyendo";
+          textoIndicador.textContent = `Leyendo documento ${posicion} de ${total}…`;
+          renderizar();
+        }
 
         const datos = new FormData();
         datos.append("csrf_token", csrf.value);
         datos.append("archivo", item.archivo, item.archivo.name);
+        datos.append("clave_idempotencia", item.claveIdempotencia);
 
         try {
           const respuesta = await fetch(colaUrl, {
@@ -196,29 +220,74 @@
             credentials: "same-origin",
             headers: { Accept: "application/json" },
           });
-          const resultado = await respuesta.json();
-          if (resultado.revision_url) destinoUnico = resultado.revision_url;
 
-          if (respuesta.ok && resultado.ok) {
+          let resultado = null;
+          const tipoContenido = respuesta.headers.get("content-type") || "";
+          if (tipoContenido.includes("application/json")) {
+            resultado = await respuesta.json();
+          }
+
+          if (respuesta.ok && resultado && resultado.ok) {
             item.estado = "Listo";
             item.claseEstado = "listo";
             item.error = null;
-          } else {
-            item.estado = "Error";
-            item.claseEstado = "error";
-            item.error = resultado.error || "No se pudo leer este archivo.";
+            item.revisionUrl = resultado.revision_url || item.revisionUrl;
+            renderizar();
+            return true;
           }
-        } catch (error) {
+
+          if (codigosTransitorios.has(respuesta.status)) {
+            if (intento + 1 < esperasReintento.length) continue;
+            item.estado = "Pausado";
+            item.claseEstado = "pausado";
+            item.error = `Triage respondió ${respuesta.status}. La cola se pausó para no perder los archivos pendientes.`;
+            renderizar();
+            return false;
+          }
+
           item.estado = "Error";
           item.claseEstado = "error";
-          item.error = "No se pudo completar la comunicación con Triage.";
+          item.error = (resultado && resultado.error) || `No se pudo leer este archivo (HTTP ${respuesta.status}).`;
+          item.revisionUrl = resultado && resultado.revision_url ? resultado.revision_url : null;
+          renderizar();
+          return true;
+        } catch (error) {
+          if (intento + 1 < esperasReintento.length) continue;
+          item.estado = "Pausado";
+          item.claseEstado = "pausado";
+          item.error = "No se pudo comunicar con Triage. La cola se pausó y los archivos pendientes permanecen intactos.";
+          renderizar();
+          return false;
         }
-        renderizar();
+      }
+      return false;
+    };
+
+    formulario.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const pendientes = cola.filter(esProcesable);
+      if (procesando || pendientes.length === 0) return;
+
+      procesando = true;
+      colaPausada = false;
+      indicador.hidden = false;
+      renderizar();
+
+      for (const item of pendientes) {
+        const posicion = cola.indexOf(item) + 1;
+        const continuar = await procesarItem(item, posicion, cola.length);
+        if (!continuar) {
+          procesando = false;
+          colaPausada = true;
+          textoIndicador.textContent = "Cola pausada. Cuando el servicio vuelva, pulsa “Reintentar pendientes”.";
+          renderizar();
+          return;
+        }
       }
 
       textoIndicador.textContent = "Lectura terminada. Abriendo resultados…";
-      if (cola.length === 1 && destinoUnico) {
-        window.location.assign(destinoUnico);
+      if (cola.length === 1 && cola[0].revisionUrl) {
+        window.location.assign(cola[0].revisionUrl);
       } else {
         window.location.assign(`/cotizaciones/${cotizacionId}`);
       }
