@@ -39,6 +39,18 @@ def limpiar_clave_idempotencia(clave: str | None) -> str | None:
     return valor[:80] or None
 
 
+def limpiar_motivo_exclusion(motivo: str | None) -> str | None:
+    """Oculta prefijos técnicos antiguos y conserva un motivo entendible."""
+
+    valor = " ".join((motivo or "").split())
+    if not valor:
+        return None
+    partes = valor.split(" · ", 2)
+    if valor.startswith("POL-") and len(partes) == 3 and partes[1].startswith("R"):
+        return partes[2][:300]
+    return valor[:300]
+
+
 def validar_archivo(*, contenido: bytes, mime_type: str, max_bytes: int) -> None:
     """Valida tipo y tamaño antes de enviar contenido a un servicio externo."""
 
@@ -151,6 +163,8 @@ def _reemplazar_partidas(
             incluida, motivo_exclusion = decisiones_inclusion[indice - 1]
         if incluida:
             motivo_exclusion = None
+        else:
+            motivo_exclusion = limpiar_motivo_exclusion(motivo_exclusion)
 
         sesion.add(
             PartidaDocumento(
