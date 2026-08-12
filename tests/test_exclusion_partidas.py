@@ -75,22 +75,25 @@ def test_partida_restringida_puede_excluirse_y_reintegrarse(cliente: TestClient)
     assert "Posible rechazo - requiere revisión" in alerta.text
     assert "Excluir de cotización" in alerta.text
     assert "Ver detalle de la regla" in alerta.text
+    assert 'data-motivo="Midazolam (en todas sus presentaciones)."' in alerta.text
 
-    motivo = "POL-COM-001 · R16 · Midazolam (en todas sus presentaciones)."
+    motivo_heredado = "POL-COM-001 · R16 · Midazolam (en todas sus presentaciones)."
     excluido = cliente.post(
         revision_url + "/revision",
-        data=_datos_midazolam(_csrf(alerta.text), incluida=False, motivo=motivo),
+        data=_datos_midazolam(_csrf(alerta.text), incluida=False, motivo=motivo_heredado),
         follow_redirects=False,
     )
     assert excluido.status_code == 303
 
     partida = _partida_persistida(cliente, documento_id)
     assert partida.incluida_cotizacion is False
-    assert partida.motivo_exclusion == motivo
+    assert partida.motivo_exclusion == "Midazolam (en todas sus presentaciones)."
 
     comprobacion = cliente.get(excluido.headers["location"])
     assert "1 partida excluida de la cotización" in comprobacion.text
     assert "Reintegrar" in comprobacion.text
+    assert "Motivo: Midazolam (en todas sus presentaciones)." in comprobacion.text
+    assert "Motivo: POL-COM-001" not in comprobacion.text
     assert 'name="partida_0_incluir" value="0"' in comprobacion.text
 
     reintegrado = cliente.post(

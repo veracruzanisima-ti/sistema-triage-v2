@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from triage.cotizaciones.modelos import Cotizacion, EstadoCotizacion, ahora_utc
+from triage.documentos.modelos import Documento, EstadoDocumento
 
 
 def limpiar_referencia(referencia: str | None) -> str | None:
@@ -18,7 +19,11 @@ def limpiar_referencia(referencia: str | None) -> str | None:
 def crear_cotizacion(sesion: Session, referencia: str | None = None) -> Cotizacion:
     """Crea una unidad de trabajo recuperable por futuras sesiones."""
 
-    cotizacion = Cotizacion(referencia=limpiar_referencia(referencia))
+    referencia_limpia = limpiar_referencia(referencia)
+    cotizacion = Cotizacion(
+        referencia=referencia_limpia,
+        referencia_fijada_manual=referencia_limpia is not None,
+    )
     sesion.add(cotizacion)
     sesion.commit()
     sesion.refresh(cotizacion)
@@ -36,6 +41,80 @@ def obtener_cotizacion(sesion: Session, cotizacion_id: str) -> Cotizacion | None
     """Recupera una cotización por su identificador interno."""
 
     return sesion.get(Cotizacion, cotizacion_id)
+
+
+def referencias_documentos_revisados(sesion: Session, cotizacion_id: str) -> list[str]:
+    """Lista referencias distintas confirmadas por personas en documentos revisados."""
+
+    consulta = select(Documento.memorandum).where(
+        Documento.cotizacion_id == cotizacion_id,
+        Documento.estado == EstadoDocumento.REVISADO.value,
+        Documento.memorandum.is_not(None),
+    )
+    referencias = {
+        referencia_limpia
+        for referencia in sesion.scalars(consulta)
+        if (referencia_limpia := limpiar_referencia(referencia)) is not None
+    }
+    return sorted(referencias)
+
+
+def sincronizar_referencia_cotizacion(
+    sesion: Session,
+    cotizacion_id: str,
+) -> list[str]:
+    """Sincroniza sólo cuando una referencia revisada es inequívoca y no está fijada."""
+
+    cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+    if cotizacion is None:
+        return []
+
+    referencias = referencias_documentos_revisados(sesion, cotizacion_id)
+    if cotizacion.referencia_fijada_manual:
+        return referencias
+
+    nueva_referencia = referencias[0] if len(referencias) == 1 else None
+    if cotizacion.referencia != nueva_referencia:
+        cotizacion.referencia = nueva_referencia
+        cotizacion.actualizada_en = ahora_utc()
+        sesion.add(cotizacion)
+        sesion.commit()
+        sesion.refresh(cotizacion)
+
+    return referencias
+
+
+def actualizar_referencia_manual(
+    sesion: Session,
+    cotizacion: Cotizacion,
+    referencia: str | None,
+) -> Cotizacion:
+    """Fija una referencia elegida por una persona y evita sobrescrituras automáticas."""
+
+    referencia_limpia = limpiar_referencia(referencia)
+    if referencia_limpia is None:
+        raise ValueError("Escribe una referencia antes de guardarla.")
+
+    cotizacion.referencia = referencia_limpia
+    cotizacion.referencia_fijada_manual = True
+    cotizacion.actualizada_en = ahora_utc()
+    sesion.add(cotizacion)
+    sesion.commit()
+    sesion.refresh(cotizacion)
+    return cotizacion
+
+
+def usar_referencia_automatica(sesion: Session, cotizacion: Cotizacion) -> Cotizacion:
+    """Libera una referencia manual para volver a usar documentos revisados."""
+
+    cotizacion.referencia_fijada_manual = False
+    cotizacion.referencia = None
+    cotizacion.actualizada_en = ahora_utc()
+    sesion.add(cotizacion)
+    sesion.commit()
+    sincronizar_referencia_cotizacion(sesion, cotizacion.id)
+    sesion.refresh(cotizacion)
+    return cotizacion
 
 
 def actualizar_estado(

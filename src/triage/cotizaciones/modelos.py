@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from triage.base_datos import Base
@@ -35,6 +35,11 @@ class Cotizacion(Base):
         default=lambda: str(uuid4()),
     )
     referencia: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    referencia_fijada_manual: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
     estado: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

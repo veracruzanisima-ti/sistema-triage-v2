@@ -11,6 +11,47 @@
   <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
 </div>
 
+<section class="tarjeta" id="referencia-cotizacion">
+  <h2>Referencia administrativa</h2>
+  <form method="post" action="/cotizaciones/{{ cotizacion.id }}/referencia">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="accion" value="guardar">
+    <div class="campo">
+      <label for="referencia">Memorándum / referencia de la cotización</label>
+      <input id="referencia" name="referencia" value="{{ cotizacion.referencia or '' }}" placeholder="Ej. DAIS/SSMA/777/2026" required>
+    </div>
+    <button class="boton" type="submit">Guardar referencia</button>
+  </form>
+
+  {% if cotizacion.referencia_fijada_manual %}
+    <p class="ayuda">Esta referencia fue fijada por una persona. Triage no la reemplazará con otra lectura automática.</p>
+    <form method="post" action="/cotizaciones/{{ cotizacion.id }}/referencia">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="accion" value="automatica">
+      <button class="boton boton-secundario" type="submit">Volver a detección automática</button>
+    </form>
+  {% elif conflicto_referencias %}
+    <div class="aviso">
+      <strong>Se detectaron varias referencias en documentos revisados.</strong>
+      <p>Triage no eligió una automáticamente. Selecciona la que identifica esta cotización.</p>
+      <div class="grupo-botones">
+        {% for referencia_detectada in referencias_revisadas %}
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/referencia">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="accion" value="guardar">
+            <input type="hidden" name="referencia" value="{{ referencia_detectada }}">
+            <button class="boton boton-secundario" type="submit">Usar {{ referencia_detectada }}</button>
+          </form>
+        {% endfor %}
+      </div>
+    </div>
+  {% elif referencias_revisadas|length == 1 %}
+    <p class="ayuda">Referencia sincronizada desde un documento que ya fue revisado por una persona.</p>
+  {% else %}
+    <p class="ayuda">Aún no hay una referencia confirmada. Puedes escribirla ahora o dejar que Triage la complete cuando un documento sea revisado.</p>
+  {% endif %}
+</section>
+
 <section class="tarjeta">
   <div class="barra">
     <div>
@@ -67,6 +108,6 @@
 
 <section class="tarjeta">
   <h2>Después</h2>
-  <p>Cuando los documentos y partidas estén revisados incorporaremos normalización de producto, restricciones de comercialización, histórico de precios y proveedores. Todavía no se ejecutan decisiones fiscales ni comerciales automáticas.</p>
+  <p>Cuando los documentos y partidas estén revisados incorporaremos normalización de producto, histórico de precios y proveedores. Las alertas provisionales de comercialización ya se muestran, pero siguen requiriendo decisión humana.</p>
 </section>
 {% endblock %}
