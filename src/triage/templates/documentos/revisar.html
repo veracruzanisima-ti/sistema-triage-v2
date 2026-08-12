@@ -71,57 +71,92 @@
         </p>
       {% endif %}
 
+      {% if partidas_excluidas %}
+        <p class="resumen-exclusion">
+          <strong>{{ partidas_excluidas }} partida{% if partidas_excluidas != 1 %}s{% endif %} excluida{% if partidas_excluidas != 1 %}s{% endif %} de la cotización.</strong>
+          Se conserva{% if partidas_excluidas != 1 %}n{% endif %} como parte de la solicitud original.
+        </p>
+      {% endif %}
+
       {% for partida in partidas %}
         {% set i = loop.index0 %}
         {% set alertas_partida = alertas_por_partida[i] %}
-        <article class="partida{% if alertas_partida %} partida-restringida{% endif %}">
-          <h3>Partida {{ loop.index }}</h3>
+        <article class="partida{% if alertas_partida and partida.incluida_cotizacion %} partida-restringida{% endif %}{% if not partida.incluida_cotizacion %} partida-excluida{% endif %}" data-partida-indice="{{ i }}">
+          <input class="partida-incluir" type="hidden" name="partida_{{ i }}_incluir" value="{% if partida.incluida_cotizacion %}1{% else %}0{% endif %}">
+          <input class="partida-motivo-exclusion" type="hidden" name="partida_{{ i }}_motivo_exclusion" value="{{ partida.motivo_exclusion or '' }}">
 
-          {% if alertas_partida %}
-            <div class="alerta-restriccion">
-              <strong>Posible rechazo - requiere revisión</strong>
-              <p>Este producto podría no ser cotizable según una política interna provisional.</p>
-              {% for alerta in alertas_partida %}
-                <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
-                {% if alerta.nota %}
-                  <p class="alerta-restriccion-meta">{{ alerta.nota }}</p>
-                {% endif %}
-                <p class="alerta-restriccion-meta">
-                  {{ alerta.politica_id }} · {{ alerta.regla_id }} · {{ alerta.politica_version }} · Pendiente de validación del Responsable Sanitario.
-                </p>
-              {% endfor %}
-              <p class="alerta-restriccion-meta">La partida permanece disponible; una persona debe decidir cómo proceder.</p>
+          <div class="estado-partida-excluida" {% if partida.incluida_cotizacion %}hidden{% endif %}>
+            <div>
+              <strong>Excluida de la cotización</strong>
+              <p class="ayuda">
+                {{ partida.producto_solicitado or "Partida sin nombre" }}
+                {% if partida.concentracion %} · {{ partida.concentracion }}{% endif %}
+                {% if partida.cantidad %} · {{ cantidad_visible(partida.cantidad) }} {{ partida.unidad_medida or "unidades" }}{% endif %}
+              </p>
+              <p class="ayuda motivo-exclusion-visible">Motivo: {{ partida.motivo_exclusion or "Decisión de revisión humana." }}</p>
             </div>
-          {% endif %}
+            <button class="boton boton-secundario reintegrar-partida" type="button">Reintegrar</button>
+          </div>
 
-          <div class="rejilla">
-            <div class="campo campo-ancho">
-              <label for="partida_{{ i }}_producto">Producto solicitado</label>
-              <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto" value="{{ partida.producto_solicitado or '' }}">
-            </div>
-            <div class="campo">
-              <label for="partida_{{ i }}_marca">Marca solicitada</label>
-              <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca" value="{{ partida.marca_solicitada or '' }}">
-            </div>
-            <div class="campo">
-              <label for="partida_{{ i }}_concentracion">Concentración</label>
-              <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion" value="{{ partida.concentracion or '' }}">
-            </div>
-            <div class="campo">
-              <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
-              <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma" value="{{ partida.forma_farmaceutica_dispositivo or '' }}">
-            </div>
-            <div class="campo campo-ancho">
-              <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
-              <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion" value="{{ partida.presentacion_solicitada or '' }}">
-            </div>
-            <div class="campo">
-              <label for="partida_{{ i }}_cantidad">Cantidad</label>
-              <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric" value="{{ cantidad_visible(partida.cantidad) }}">
-            </div>
-            <div class="campo">
-              <label for="partida_{{ i }}_unidad">Unidad de medida</label>
-              <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad" value="{{ partida.unidad_medida or '' }}">
+          <div class="contenido-partida" {% if not partida.incluida_cotizacion %}hidden{% endif %}>
+            <h3>Partida {{ loop.index }}</h3>
+
+            {% if alertas_partida %}
+              <div class="alerta-restriccion">
+                <strong>Posible rechazo - requiere revisión</strong>
+                <p>Este producto podría no ser cotizable según una política interna provisional.</p>
+                {% for alerta in alertas_partida %}
+                  <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
+                  {% if alerta.nota %}
+                    <p class="alerta-restriccion-meta">{{ alerta.nota }}</p>
+                  {% endif %}
+                  <details class="detalle-regla">
+                    <summary>Ver detalle de la regla</summary>
+                    <p class="alerta-restriccion-meta">
+                      {{ alerta.politica_id }} · {{ alerta.regla_id }} · {{ alerta.politica_version }} · Pendiente de validación del Responsable Sanitario.
+                    </p>
+                  </details>
+                {% endfor %}
+                <p class="alerta-restriccion-meta">La partida permanece disponible hasta que una persona decida cómo proceder.</p>
+                {% set primera_alerta = alertas_partida[0] %}
+                <button
+                  class="boton boton-excluir excluir-partida"
+                  type="button"
+                  data-motivo="{{ primera_alerta.politica_id }} · {{ primera_alerta.regla_id }} · {{ primera_alerta.motivo }}"
+                  data-producto="{{ partida.producto_solicitado or 'esta partida' }}"
+                >Excluir de cotización</button>
+              </div>
+            {% endif %}
+
+            <div class="rejilla">
+              <div class="campo campo-ancho">
+                <label for="partida_{{ i }}_producto">Producto solicitado</label>
+                <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto" value="{{ partida.producto_solicitado or '' }}">
+              </div>
+              <div class="campo">
+                <label for="partida_{{ i }}_marca">Marca solicitada</label>
+                <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca" value="{{ partida.marca_solicitada or '' }}">
+              </div>
+              <div class="campo">
+                <label for="partida_{{ i }}_concentracion">Concentración</label>
+                <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion" value="{{ partida.concentracion or '' }}">
+              </div>
+              <div class="campo">
+                <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
+                <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma" value="{{ partida.forma_farmaceutica_dispositivo or '' }}">
+              </div>
+              <div class="campo campo-ancho">
+                <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
+                <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion" value="{{ partida.presentacion_solicitada or '' }}">
+              </div>
+              <div class="campo">
+                <label for="partida_{{ i }}_cantidad">Cantidad</label>
+                <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric" value="{{ cantidad_visible(partida.cantidad) }}">
+              </div>
+              <div class="campo">
+                <label for="partida_{{ i }}_unidad">Unidad de medida</label>
+                <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad" value="{{ partida.unidad_medida or '' }}">
+              </div>
             </div>
           </div>
         </article>
@@ -264,6 +299,41 @@
         const boton = evento.target.closest(".quitar-partida");
         if (!boton) return;
         boton.closest(".partida")?.remove();
+        marcarCambios();
+      });
+
+      formulario.addEventListener("click", (evento) => {
+        const excluir = evento.target.closest(".excluir-partida");
+        if (excluir) {
+          const partida = excluir.closest(".partida");
+          const producto = excluir.dataset.producto || "esta partida";
+          const confirmado = window.confirm(
+            `¿Excluir ${producto} de esta cotización? La partida seguirá registrada y podrás reintegrarla.`
+          );
+          if (!confirmado) return;
+
+          partida.querySelector(".partida-incluir").value = "0";
+          partida.querySelector(".partida-motivo-exclusion").value = excluir.dataset.motivo || "Decisión de revisión humana.";
+          partida.querySelector(".motivo-exclusion-visible").textContent = `Motivo: ${excluir.dataset.motivo || "Decisión de revisión humana."}`;
+          partida.querySelector(".contenido-partida").hidden = true;
+          partida.querySelector(".estado-partida-excluida").hidden = false;
+          partida.classList.remove("partida-restringida");
+          partida.classList.add("partida-excluida");
+          marcarCambios();
+          return;
+        }
+
+        const reintegrar = evento.target.closest(".reintegrar-partida");
+        if (!reintegrar) return;
+        const partida = reintegrar.closest(".partida");
+        partida.querySelector(".partida-incluir").value = "1";
+        partida.querySelector(".partida-motivo-exclusion").value = "";
+        partida.querySelector(".contenido-partida").hidden = false;
+        partida.querySelector(".estado-partida-excluida").hidden = true;
+        partida.classList.remove("partida-excluida");
+        if (partida.querySelector(".alerta-restriccion")) {
+          partida.classList.add("partida-restringida");
+        }
         marcarCambios();
       });
 
