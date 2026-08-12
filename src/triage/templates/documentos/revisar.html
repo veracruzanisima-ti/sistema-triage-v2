@@ -27,9 +27,9 @@
     <p class="error">{{ error }}</p>
   {% endif %}
 
-  <form method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/revision">
+  <form id="formulario-revision" method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/revision">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="partidas_total" value="{{ partidas|length + 2 }}">
+    <input id="partidas-total" type="hidden" name="partidas_total" value="{{ partidas|length + 1 }}">
 
     <section class="tarjeta">
       <h2>Lo que entendí</h2>
@@ -62,7 +62,7 @@
 
     <section class="tarjeta">
       <h2>Partidas</h2>
-      <p class="ayuda">Puedes corregir las partidas detectadas. Al final dejamos dos renglones vacíos por si faltó alguna.</p>
+      <p class="ayuda">Puedes corregir las partidas detectadas. Si faltó alguna, usa el renglón de agregar partida y crea más sólo cuando los necesites.</p>
 
       {% for partida in partidas %}
         {% set i = loop.index0 %}
@@ -101,42 +101,82 @@
         </article>
       {% endfor %}
 
-      {% for extra in range(2) %}
-        {% set i = partidas|length + extra %}
+      {% set i = partidas|length %}
+      <article class="partida partida-vacia">
+        <h3>Agregar partida</h3>
+        <div class="rejilla">
+          <div class="campo campo-ancho">
+            <label for="partida_{{ i }}_producto">Producto solicitado</label>
+            <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_marca">Marca solicitada</label>
+            <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_concentracion">Concentración</label>
+            <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
+            <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma">
+          </div>
+          <div class="campo campo-ancho">
+            <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
+            <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_cantidad">Cantidad</label>
+            <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" inputmode="decimal">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_unidad">Unidad de medida</label>
+            <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad">
+          </div>
+        </div>
+      </article>
+
+      <div id="partidas-extras"></div>
+      <button id="agregar-partida" class="boton boton-secundario" type="button">+ Agregar otra partida</button>
+
+      <template id="plantilla-partida">
         <article class="partida partida-vacia">
-          <h3>Agregar partida</h3>
+          <div class="encabezado-partida">
+            <h3>Agregar partida</h3>
+            <button class="boton boton-texto quitar-partida" type="button">× Quitar</button>
+          </div>
           <div class="rejilla">
             <div class="campo campo-ancho">
-              <label for="partida_{{ i }}_producto">Producto solicitado</label>
-              <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto">
+              <label for="partida___INDICE___producto">Producto solicitado</label>
+              <input id="partida___INDICE___producto" name="partida___INDICE___producto">
             </div>
             <div class="campo">
-              <label for="partida_{{ i }}_marca">Marca solicitada</label>
-              <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca">
+              <label for="partida___INDICE___marca">Marca solicitada</label>
+              <input id="partida___INDICE___marca" name="partida___INDICE___marca">
             </div>
             <div class="campo">
-              <label for="partida_{{ i }}_concentracion">Concentración</label>
-              <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion">
+              <label for="partida___INDICE___concentracion">Concentración</label>
+              <input id="partida___INDICE___concentracion" name="partida___INDICE___concentracion">
             </div>
             <div class="campo">
-              <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
-              <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma">
+              <label for="partida___INDICE___forma">Forma / dispositivo</label>
+              <input id="partida___INDICE___forma" name="partida___INDICE___forma">
             </div>
             <div class="campo campo-ancho">
-              <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
-              <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion">
+              <label for="partida___INDICE___presentacion">Presentación solicitada</label>
+              <input id="partida___INDICE___presentacion" name="partida___INDICE___presentacion">
             </div>
             <div class="campo">
-              <label for="partida_{{ i }}_cantidad">Cantidad</label>
-              <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" inputmode="decimal">
+              <label for="partida___INDICE___cantidad">Cantidad</label>
+              <input id="partida___INDICE___cantidad" name="partida___INDICE___cantidad" inputmode="decimal">
             </div>
             <div class="campo">
-              <label for="partida_{{ i }}_unidad">Unidad de medida</label>
-              <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad">
+              <label for="partida___INDICE___unidad">Unidad de medida</label>
+              <input id="partida___INDICE___unidad" name="partida___INDICE___unidad">
             </div>
           </div>
         </article>
-      {% endfor %}
+      </template>
     </section>
 
     <section class="tarjeta">
@@ -163,5 +203,54 @@
       <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver sin guardar</a>
     </div>
   </form>
+
+  <script>
+    (() => {
+      const formulario = document.getElementById("formulario-revision");
+      const total = document.getElementById("partidas-total");
+      const botonAgregar = document.getElementById("agregar-partida");
+      const contenedor = document.getElementById("partidas-extras");
+      const plantilla = document.getElementById("plantilla-partida");
+      let siguienteIndice = Number(total.value);
+      let hayCambios = false;
+      let guardando = false;
+
+      const marcarCambios = () => {
+        hayCambios = true;
+      };
+
+      formulario.addEventListener("input", marcarCambios);
+      formulario.addEventListener("change", marcarCambios);
+
+      botonAgregar.addEventListener("click", () => {
+        const html = plantilla.innerHTML.replaceAll("__INDICE__", String(siguienteIndice));
+        const temporal = document.createElement("div");
+        temporal.innerHTML = html.trim();
+        const nuevaPartida = temporal.firstElementChild;
+        contenedor.append(nuevaPartida);
+        siguienteIndice += 1;
+        total.value = String(siguienteIndice);
+        marcarCambios();
+        nuevaPartida.querySelector("input")?.focus();
+      });
+
+      contenedor.addEventListener("click", (evento) => {
+        const boton = evento.target.closest(".quitar-partida");
+        if (!boton) return;
+        boton.closest(".partida")?.remove();
+        marcarCambios();
+      });
+
+      formulario.addEventListener("submit", () => {
+        guardando = true;
+      });
+
+      window.addEventListener("beforeunload", (evento) => {
+        if (!hayCambios || guardando) return;
+        evento.preventDefault();
+        evento.returnValue = "";
+      });
+    })();
+  </script>
 {% endif %}
 {% endblock %}
