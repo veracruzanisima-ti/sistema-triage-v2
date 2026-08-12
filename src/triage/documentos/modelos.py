@@ -19,6 +19,7 @@ class EstadoDocumento(StrEnum):
     ANALIZADO = "ANALIZADO"
     ERROR = "ERROR"
     REVISADO = "REVISADO"
+    DESCARTADO = "DESCARTADO"
 
 
 class Documento(Base):
@@ -63,6 +64,11 @@ class Documento(Base):
     analizado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revisado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revisado_por_usuario_id: Mapped[str | None] = mapped_column(
+        ForeignKey("usuarios.id"),
+        nullable=True,
+    )
+    descartado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    descartado_por_usuario_id: Mapped[str | None] = mapped_column(
         ForeignKey("usuarios.id"),
         nullable=True,
     )
