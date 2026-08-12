@@ -23,11 +23,68 @@
   <form method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="campo">
-      <label for="archivo">Archivo</label>
-      <input id="archivo" name="archivo" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required>
+      <label>Archivo</label>
+      <div id="zona-archivo" class="zona-archivo">
+        <input id="archivo" class="archivo-input" name="archivo" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required>
+        <strong>Arrastra aquí tu foto o PDF</strong>
+        <span class="ayuda">o</span>
+        <label class="boton boton-secundario selector-archivo" for="archivo">Seleccionar archivo</label>
+        <p id="archivo-seleccionado" class="ayuda archivo-seleccionado">Ningún archivo seleccionado</p>
+        <button id="quitar-archivo" class="boton boton-texto" type="button" hidden>Quitar archivo</button>
+      </div>
       <p class="ayuda">Formatos: PDF, JPG, PNG o WEBP. Un archivo por vez en esta primera versión.</p>
     </div>
-    <button class="boton" type="submit">Leer documento</button>
+    <button id="leer-documento" class="boton" type="submit" disabled>Leer documento</button>
   </form>
 </section>
+
+<script>
+  (() => {
+    const zona = document.getElementById("zona-archivo");
+    const archivo = document.getElementById("archivo");
+    const nombre = document.getElementById("archivo-seleccionado");
+    const quitar = document.getElementById("quitar-archivo");
+    const leer = document.getElementById("leer-documento");
+
+    const actualizar = () => {
+      const seleccionado = archivo.files && archivo.files[0];
+      nombre.textContent = seleccionado ? seleccionado.name : "Ningún archivo seleccionado";
+      quitar.hidden = !seleccionado;
+      leer.disabled = !seleccionado;
+    };
+
+    archivo.addEventListener("change", actualizar);
+
+    quitar.addEventListener("click", () => {
+      archivo.value = "";
+      actualizar();
+      archivo.focus();
+    });
+
+    ["dragenter", "dragover"].forEach((evento) => {
+      zona.addEventListener(evento, (e) => {
+        e.preventDefault();
+        zona.classList.add("zona-archivo-activa");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((evento) => {
+      zona.addEventListener(evento, (e) => {
+        e.preventDefault();
+        zona.classList.remove("zona-archivo-activa");
+      });
+    });
+
+    zona.addEventListener("drop", (e) => {
+      const recibido = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!recibido) return;
+      const transferencia = new DataTransfer();
+      transferencia.items.add(recibido);
+      archivo.files = transferencia.files;
+      actualizar();
+    });
+
+    actualizar();
+  })();
+</script>
 {% endblock %}
