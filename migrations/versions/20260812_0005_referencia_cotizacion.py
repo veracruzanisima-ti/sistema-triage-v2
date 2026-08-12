@@ -20,7 +20,7 @@ def upgrade() -> None:
                 "referencia_fijada_manual",
                 sa.Boolean(),
                 nullable=False,
-                server_default=sa.false(),
+                server_default=sa.true(),
             )
         )
 
@@ -29,8 +29,10 @@ def upgrade() -> None:
         sa.text(
             """
             UPDATE cotizaciones
-            SET referencia_fijada_manual = true
-            WHERE referencia IS NOT NULL AND TRIM(referencia) <> ''
+            SET referencia_fijada_manual = CASE
+                WHEN referencia IS NOT NULL AND TRIM(referencia) <> '' THEN true
+                ELSE false
+            END
             """
         )
     )
