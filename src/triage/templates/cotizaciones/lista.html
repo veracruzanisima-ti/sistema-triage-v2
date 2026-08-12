@@ -17,9 +17,14 @@
       <div class="barra">
         <div>
           <div class="referencia">{{ cotizacion.referencia or "Sin referencia identificada" }}</div>
-          <span class="estado">{{ cotizacion.estado | replace("_", " ") | title }}</span>
+          <span class="estado estado-{{ cotizacion.estado | lower | replace('_', '-') }}">{{ cotizacion.estado | replace("_", " ") | title }}</span>
         </div>
-        <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Abrir</a>
+        <div class="grupo-botones">
+          <a class="boton boton-texto" href="/cotizaciones/{{ cotizacion.id }}#referencia-cotizacion">
+            {% if cotizacion.referencia %}Editar referencia{% else %}Añadir referencia{% endif %}
+          </a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Abrir</a>
+        </div>
       </div>
     </section>
   {% endfor %}
