@@ -69,6 +69,25 @@ def _guardar_revision(
     assert respuesta.status_code == 303
 
 
+def test_referencia_ingresada_al_crear_queda_fijada_manualmente(cliente: TestClient):
+    formulario = cliente.get("/cotizaciones/nueva")
+    creada = cliente.post(
+        "/cotizaciones",
+        data={
+            "referencia": "  DAIS/SSMA/300/2026  ",
+            "csrf_token": _csrf(formulario.text),
+        },
+        follow_redirects=False,
+    )
+    cotizacion_id = creada.headers["location"].rsplit("/", 1)[-1]
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+        assert cotizacion is not None
+        assert cotizacion.referencia == "DAIS/SSMA/300/2026"
+        assert cotizacion.referencia_fijada_manual is True
+
+
 def test_referencia_se_sincroniza_solo_despues_de_revision_humana(cliente: TestClient):
     cotizacion_id = _crear_sin_referencia(cliente)
     revision_url = _subir_documento(cliente, cotizacion_id, "primero.pdf")
@@ -176,6 +195,29 @@ def test_puede_volver_a_deteccion_automatica(cliente: TestClient):
         cotizacion = obtener_cotizacion(sesion, cotizacion_id)
         assert cotizacion is not None
         assert cotizacion.referencia == "DAIS/SSMA/600/2026"
+        assert cotizacion.referencia_fijada_manual is False
+
+
+def test_eliminar_documento_revisado_resincroniza_referencia(cliente: TestClient):
+    cotizacion_id = _crear_sin_referencia(cliente)
+    revision_url = _subir_documento(cliente, cotizacion_id, "eliminable.pdf")
+    _guardar_revision(cliente, revision_url, "DAIS/SSMA/700/2026")
+    documento_id = revision_url.rsplit("/", 1)[-1]
+
+    detalle = cliente.get(f"/cotizaciones/{cotizacion_id}")
+    eliminado = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/eliminar",
+        data={"csrf_token": _csrf(detalle.text)},
+        follow_redirects=False,
+    )
+    assert eliminado.status_code == 303
+
+    listado = cliente.get("/cotizaciones")
+    assert "Sin referencia identificada" in listado.text
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+        assert cotizacion is not None
+        assert cotizacion.referencia is None
         assert cotizacion.referencia_fijada_manual is False
 
 
