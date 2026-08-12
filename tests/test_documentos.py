@@ -4,6 +4,20 @@ import re
 
 from fastapi.testclient import TestClient
 
+from triage.lectores.esquemas import LecturaDocumento
+
+
+class LectorVacio:
+    """Simula un proveedor que responde correctamente pero sin extraer datos útiles."""
+
+    modelo = "lector-vacio"
+
+    def leer(self, *, contenido: bytes, mime_type: str, nombre_archivo: str) -> LecturaDocumento:
+        assert contenido
+        assert mime_type
+        assert nombre_archivo
+        return LecturaDocumento()
+
 
 def _extraer_csrf(html: str) -> str:
     """Obtiene el token CSRF de un formulario renderizado para estas pruebas."""
@@ -61,6 +75,29 @@ def test_subir_documento_muestra_lectura_estructurada(cliente: TestClient):
     assert "PRODUCTO DE PRUEBA" in revision.text
     assert "Caja con 10 unidades" in revision.text
     assert "Ver por qué el lector lo sugirió" in revision.text
+
+
+def test_respuesta_estructurada_vacia_se_trata_como_error(cliente: TestClient):
+    cliente.app.state.lector_documentos = LectorVacio()
+    cotizacion_id = _crear_cotizacion(cliente)
+    formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
+
+    subida = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos",
+        data={"csrf_token": _extraer_csrf(formulario.text)},
+        files={"archivo": ("legible-pero-no-extraido.pdf", b"pdf-ficticio", "application/pdf")},
+        follow_redirects=False,
+    )
+
+    assert subida.status_code == 303
+    revision = cliente.get(subida.headers["location"])
+    assert revision.status_code == 200
+    assert "No se pudo leer el archivo" in revision.text
+    assert "no identificó información útil" in revision.text
+
+    detalle = cliente.get(f"/cotizaciones/{cotizacion_id}")
+    assert "Error" in detalle.text
+    assert "estado-error" in detalle.text
 
 
 def test_cola_procesa_documentos_secuencialmente(cliente: TestClient):
