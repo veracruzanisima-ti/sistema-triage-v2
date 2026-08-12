@@ -24,8 +24,10 @@ jobs:
       - name: Revisar estilo y errores simples
         run: ruff check .
 
-      - name: Validar script de arranque del preview
-        run: bash -n scripts/iniciar_preview_render.sh
+      - name: Validar scripts del preview
+        run: |
+          bash -n scripts/construir_preview_render.sh
+          bash -n scripts/iniciar_preview_render.sh
 
       - name: Validar migraciones
         env:
