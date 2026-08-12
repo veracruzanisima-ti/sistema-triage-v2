@@ -105,6 +105,35 @@ def test_revision_ofrece_una_partida_extra_y_agregado_dinamico(cliente: TestClie
     assert "+ Agregar otra partida" in revision.text
     assert 'id="plantilla-partida"' in revision.text
     assert "beforeunload" in revision.text
+    assert 'type="number" min="0" step="1" inputmode="numeric" value="2"' in revision.text
+    assert 'value="2.000"' not in revision.text
+
+
+def test_revision_rechaza_cantidad_fraccionaria(cliente: TestClient):
+    cotizacion_id = _crear_cotizacion(cliente)
+    formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
+    subida = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos",
+        data={"csrf_token": _extraer_csrf(formulario.text)},
+        files={"archivo": ("solicitud-prueba.pdf", b"pdf-ficticio", "application/pdf")},
+        follow_redirects=False,
+    )
+    revision_url = subida.headers["location"]
+    revision = cliente.get(revision_url)
+
+    respuesta = cliente.post(
+        revision_url + "/revision",
+        data={
+            "csrf_token": _extraer_csrf(revision.text),
+            "partidas_total": "2",
+            "partida_0_producto": "PRODUCTO DE PRUEBA",
+            "partida_0_cantidad": "2.5",
+            "partida_0_unidad": "cajas",
+        },
+    )
+
+    assert respuesta.status_code == 422
+    assert "La cantidad debe ser un número entero" in respuesta.text
 
 
 def test_revision_humana_corrige_y_persiste_partidas(cliente: TestClient):
@@ -149,6 +178,8 @@ def test_revision_humana_corrige_y_persiste_partidas(cliente: TestClient):
     assert "MEMO/CORREGIDO/002/2026" in comprobacion.text
     assert "PRODUCTO CORREGIDO" in comprobacion.text
     assert "SEGUNDA PARTIDA AGREGADA" in comprobacion.text
+    assert 'value="4"' in comprobacion.text
+    assert 'value="4.000"' not in comprobacion.text
     atributos_checkbox = comprobacion.text.split('name="parece_fragmento"', 1)[1].split(">", 1)[0]
     assert "checked" not in atributos_checkbox
 
@@ -182,7 +213,7 @@ def test_cola_rechaza_archivo_no_permitido_como_json(cliente: TestClient):
     assert "Sólo se admiten PDF, JPG, PNG o WEBP" in respuesta.json()["error"]
 
 
-def test_documento_aparece_en_detalle_de_cotizacion(cliente: TestClient):
+def test_documento_aparece_en_detalle_con_estados_coloreados(cliente: TestClient):
     cotizacion_id = _crear_cotizacion(cliente)
     formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
     cliente.post(
@@ -196,6 +227,8 @@ def test_documento_aparece_en_detalle_de_cotizacion(cliente: TestClient):
     assert "MEMO/PRUEBA/001/2026" in detalle.text
     assert "Revisar" in detalle.text
     assert "Eliminar" in detalle.text
+    assert "estado-en-proceso" in detalle.text
+    assert "estado-analizado" in detalle.text
 
 
 def test_eliminar_documento_borra_registro_y_extraccion(cliente: TestClient):
