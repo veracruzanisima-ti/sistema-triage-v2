@@ -12,59 +12,145 @@
 </div>
 
 <section class="tarjeta">
-  <h2>Sube una foto o PDF</h2>
-  <p>El sistema leerá el archivo y después te mostrará lo que entendió para que puedas corregirlo antes de guardar la revisión.</p>
+  <h2>Sube fotos o PDF</h2>
+  <p>Agrega uno o varios archivos. Triage los leerá en orden y después podrás revisar cada resultado antes de usarlo para cotizar.</p>
   <p class="aviso">Este entorno sigue siendo de prueba. Usa documentos ficticios; todavía no debemos cargar información sensible real.</p>
 
   {% if error %}
     <p class="error">{{ error }}</p>
   {% endif %}
 
-  <form method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos" enctype="multipart/form-data">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <form id="formulario-documentos" method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos" enctype="multipart/form-data" data-cotizacion-id="{{ cotizacion.id }}">
+    <input id="csrf-documentos" type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="campo">
-      <label>Archivo</label>
+      <label>Archivos</label>
       <div id="zona-archivo" class="zona-archivo">
         <input id="archivo" class="archivo-input" name="archivo" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required>
-        <strong>Arrastra aquí tu foto o PDF</strong>
+        <strong>Arrastra aquí tus fotos o PDF</strong>
         <span class="ayuda">o</span>
-        <label class="boton boton-secundario selector-archivo" for="archivo">Seleccionar archivo</label>
-        <p id="archivo-seleccionado" class="ayuda archivo-seleccionado">Ningún archivo seleccionado</p>
-        <button id="quitar-archivo" class="boton boton-texto" type="button" hidden>Quitar archivo</button>
+        <label class="boton boton-secundario selector-archivo" for="archivo">Seleccionar archivos</label>
       </div>
-      <p class="ayuda">Formatos: PDF, JPG, PNG o WEBP. Un archivo por vez en esta primera versión.</p>
+      <p class="ayuda">Formatos: PDF, JPG, PNG o WEBP. Puedes agregar varios y Triage los procesará uno por uno.</p>
     </div>
-    <button id="leer-documento" class="boton" type="submit" disabled>Leer documento</button>
+
+    <div id="cola-archivos" class="cola-archivos" aria-live="polite"></div>
+    <p id="cola-vacia" class="ayuda">Aún no hay archivos en la cola.</p>
+
+    <div id="indicador-lectura" class="indicador-lectura" hidden aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <strong id="texto-indicador">Leyendo documentos…</strong>
+    </div>
+
+    <button id="leer-documento" class="boton" type="submit" disabled>Leer documentos</button>
   </form>
 </section>
 
 <script>
   (() => {
+    const formulario = document.getElementById("formulario-documentos");
     const zona = document.getElementById("zona-archivo");
     const archivo = document.getElementById("archivo");
-    const nombre = document.getElementById("archivo-seleccionado");
-    const quitar = document.getElementById("quitar-archivo");
+    const csrf = document.getElementById("csrf-documentos");
+    const contenedor = document.getElementById("cola-archivos");
+    const vacia = document.getElementById("cola-vacia");
     const leer = document.getElementById("leer-documento");
+    const indicador = document.getElementById("indicador-lectura");
+    const textoIndicador = document.getElementById("texto-indicador");
+    const cotizacionId = formulario.dataset.cotizacionId;
+    const colaUrl = `${formulario.action}/cola`;
+    let cola = [];
+    let secuencia = 0;
+    let procesando = false;
 
-    const actualizar = () => {
-      const seleccionado = archivo.files && archivo.files[0];
-      nombre.textContent = seleccionado ? seleccionado.name : "Ningún archivo seleccionado";
-      quitar.hidden = !seleccionado;
-      leer.disabled = !seleccionado;
+    archivo.multiple = true;
+    archivo.required = false;
+
+    const tamanoLegible = (bytes) => {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     };
 
-    archivo.addEventListener("change", actualizar);
+    const textoEstado = (item) => item.estado || "Pendiente";
 
-    quitar.addEventListener("click", () => {
+    const renderizar = () => {
+      contenedor.replaceChildren();
+      vacia.hidden = cola.length > 0;
+
+      cola.forEach((item) => {
+        const tarjeta = document.createElement("div");
+        tarjeta.className = "archivo-tarjeta";
+
+        const informacion = document.createElement("div");
+        informacion.className = "archivo-informacion";
+
+        const nombre = document.createElement("strong");
+        nombre.className = "archivo-nombre";
+        nombre.textContent = item.archivo.name;
+
+        const meta = document.createElement("span");
+        meta.className = "ayuda archivo-meta";
+        meta.textContent = tamanoLegible(item.archivo.size);
+
+        informacion.append(nombre, meta);
+
+        const acciones = document.createElement("div");
+        acciones.className = "archivo-acciones";
+
+        const estado = document.createElement("span");
+        estado.className = `archivo-estado archivo-estado-${item.claseEstado || "pendiente"}`;
+        estado.textContent = textoEstado(item);
+        if (item.error) estado.title = item.error;
+
+        const quitar = document.createElement("button");
+        quitar.className = "archivo-quitar";
+        quitar.type = "button";
+        quitar.textContent = "×";
+        quitar.disabled = procesando;
+        quitar.setAttribute("aria-label", `Quitar ${item.archivo.name}`);
+        quitar.addEventListener("click", () => {
+          if (procesando) return;
+          cola = cola.filter((actual) => actual.id !== item.id);
+          renderizar();
+        });
+
+        acciones.append(estado, quitar);
+        tarjeta.append(informacion, acciones);
+        contenedor.append(tarjeta);
+      });
+
+      leer.disabled = procesando || cola.length === 0;
+      leer.textContent = cola.length === 1 ? "Leer documento" : `Leer ${cola.length} documentos`;
+    };
+
+    const agregarArchivos = (lista) => {
+      if (procesando) return;
+      Array.from(lista || []).forEach((nuevo) => {
+        const repetido = cola.some((item) =>
+          item.archivo.name === nuevo.name &&
+          item.archivo.size === nuevo.size &&
+          item.archivo.lastModified === nuevo.lastModified
+        );
+        if (repetido) return;
+        secuencia += 1;
+        cola.push({
+          id: secuencia,
+          archivo: nuevo,
+          estado: "Pendiente",
+          claseEstado: "pendiente",
+          error: null,
+        });
+      });
       archivo.value = "";
-      actualizar();
-      archivo.focus();
-    });
+      renderizar();
+    };
+
+    archivo.addEventListener("change", () => agregarArchivos(archivo.files));
 
     ["dragenter", "dragover"].forEach((evento) => {
       zona.addEventListener(evento, (e) => {
         e.preventDefault();
-        zona.classList.add("zona-archivo-activa");
+        if (!procesando) zona.classList.add("zona-archivo-activa");
       });
     });
 
@@ -76,15 +162,66 @@
     });
 
     zona.addEventListener("drop", (e) => {
-      const recibido = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!recibido) return;
-      const transferencia = new DataTransfer();
-      transferencia.items.add(recibido);
-      archivo.files = transferencia.files;
-      actualizar();
+      if (procesando) return;
+      agregarArchivos(e.dataTransfer && e.dataTransfer.files);
     });
 
-    actualizar();
+    formulario.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (procesando || cola.length === 0) return;
+
+      procesando = true;
+      indicador.hidden = false;
+      renderizar();
+      let destinoUnico = null;
+
+      for (let indice = 0; indice < cola.length; indice += 1) {
+        const item = cola[indice];
+        item.estado = "Leyendo…";
+        item.claseEstado = "leyendo";
+        textoIndicador.textContent = `Leyendo documento ${indice + 1} de ${cola.length}…`;
+        renderizar();
+
+        const datos = new FormData();
+        datos.append("csrf_token", csrf.value);
+        datos.append("archivo", item.archivo, item.archivo.name);
+
+        try {
+          const respuesta = await fetch(colaUrl, {
+            method: "POST",
+            body: datos,
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          });
+          const resultado = await respuesta.json();
+          if (resultado.revision_url) destinoUnico = resultado.revision_url;
+
+          if (respuesta.ok && resultado.ok) {
+            item.estado = "Listo";
+            item.claseEstado = "listo";
+            item.error = null;
+          } else {
+            item.estado = "Error";
+            item.claseEstado = "error";
+            item.error = resultado.error || "No se pudo leer este archivo.";
+          }
+        } catch (error) {
+          item.estado = "Error";
+          item.claseEstado = "error";
+          item.error = "No se pudo completar la comunicación con Triage.";
+        }
+        renderizar();
+      }
+
+      textoIndicador.textContent = "Lectura terminada. Abriendo resultados…";
+      if (cola.length === 1 && destinoUnico) {
+        window.location.assign(destinoUnico);
+      } else {
+        window.location.assign(`/cotizaciones/${cotizacionId}`);
+      }
+    });
+
+    renderizar();
   })();
 </script>
 {% endblock %}
