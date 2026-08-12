@@ -58,7 +58,7 @@ class LectorOpenAI:
             entrada_archivo = {
                 "type": "input_file",
                 "filename": nombre_archivo,
-                "file_data": codificado,
+                "file_data": f"data:{mime_type};base64,{codificado}",
             }
         else:
             entrada_archivo = {
