@@ -28,14 +28,17 @@ def _crear_cotizacion(cliente: TestClient) -> str:
     return respuesta.headers["location"].rsplit("/", 1)[-1]
 
 
-def test_formulario_ofrece_arrastrar_seleccionar_y_quitar(cliente: TestClient):
+def test_formulario_ofrece_cola_arrastrar_y_quitar(cliente: TestClient):
     cotizacion_id = _crear_cotizacion(cliente)
     formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
 
     assert formulario.status_code == 200
-    assert "Arrastra aquí tu foto o PDF" in formulario.text
-    assert "Seleccionar archivo" in formulario.text
-    assert "Quitar archivo" in formulario.text
+    assert "Arrastra aquí tus fotos o PDF" in formulario.text
+    assert "Seleccionar archivos" in formulario.text
+    assert 'id="cola-archivos"' in formulario.text
+    assert "archivo.multiple = true" in formulario.text
+    assert 'className = "archivo-quitar"' in formulario.text
+    assert "Leyendo documento" in formulario.text
     assert 'id="leer-documento"' in formulario.text
     assert "disabled" in formulario.text
 
@@ -58,6 +61,50 @@ def test_subir_documento_muestra_lectura_estructurada(cliente: TestClient):
     assert "PRODUCTO DE PRUEBA" in revision.text
     assert "Caja con 10 unidades" in revision.text
     assert "Ver por qué el lector lo sugirió" in revision.text
+
+
+def test_cola_procesa_documentos_secuencialmente(cliente: TestClient):
+    cotizacion_id = _crear_cotizacion(cliente)
+    formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
+    token = _extraer_csrf(formulario.text)
+
+    primero = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos/cola",
+        data={"csrf_token": token},
+        files={"archivo": ("primero.pdf", b"pdf-uno", "application/pdf")},
+    )
+    segundo = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos/cola",
+        data={"csrf_token": token},
+        files={"archivo": ("segundo.jpg", b"imagen-dos", "image/jpeg")},
+    )
+
+    assert primero.status_code == 200
+    assert segundo.status_code == 200
+    assert primero.json()["ok"] is True
+    assert segundo.json()["ok"] is True
+    assert primero.json()["revision_url"] != segundo.json()["revision_url"]
+    assert cliente.get(primero.json()["revision_url"]).status_code == 200
+    assert cliente.get(segundo.json()["revision_url"]).status_code == 200
+
+
+def test_revision_ofrece_una_partida_extra_y_agregado_dinamico(cliente: TestClient):
+    cotizacion_id = _crear_cotizacion(cliente)
+    formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
+    subida = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos",
+        data={"csrf_token": _extraer_csrf(formulario.text)},
+        files={"archivo": ("solicitud-prueba.pdf", b"pdf-ficticio", "application/pdf")},
+        follow_redirects=False,
+    )
+    revision = cliente.get(subida.headers["location"])
+
+    assert 'id="partidas-total"' in revision.text
+    assert 'name="partidas_total" value="2"' in revision.text
+    assert 'id="agregar-partida"' in revision.text
+    assert "+ Agregar otra partida" in revision.text
+    assert 'id="plantilla-partida"' in revision.text
+    assert "beforeunload" in revision.text
 
 
 def test_revision_humana_corrige_y_persiste_partidas(cliente: TestClient):
@@ -118,6 +165,21 @@ def test_archivo_no_permitido_se_rechaza_sin_crear_lectura(cliente: TestClient):
 
     assert respuesta.status_code == 422
     assert "Sólo se admiten PDF, JPG, PNG o WEBP" in respuesta.text
+
+
+def test_cola_rechaza_archivo_no_permitido_como_json(cliente: TestClient):
+    cotizacion_id = _crear_cotizacion(cliente)
+    formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
+
+    respuesta = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos/cola",
+        data={"csrf_token": _extraer_csrf(formulario.text)},
+        files={"archivo": ("notas.txt", b"contenido", "text/plain")},
+    )
+
+    assert respuesta.status_code == 422
+    assert respuesta.json()["ok"] is False
+    assert "Sólo se admiten PDF, JPG, PNG o WEBP" in respuesta.json()["error"]
 
 
 def test_documento_aparece_en_detalle_de_cotizacion(cliente: TestClient):
