@@ -267,7 +267,7 @@ def guardar_revision(
     usuario_id: str,
     decisiones_inclusion: list[DecisionInclusion] | None = None,
 ) -> Documento:
-    """Guarda correcciones y la decisión humana de incluir o excluir cada partida."""
+    """Guarda correcciones y resincroniza la referencia administrativa de la cotización."""
 
     documento.tipo_documento = lectura_revisada.tipo_documento
     documento.memorandum = lectura_revisada.memorandum
@@ -288,14 +288,23 @@ def guardar_revision(
     sesion.add(documento)
     sesion.commit()
     sesion.refresh(documento)
+
+    from triage.cotizaciones.servicio import sincronizar_referencia_cotizacion
+
+    sincronizar_referencia_cotizacion(sesion, documento.cotizacion_id)
     return documento
 
 
 def eliminar_documento(sesion: Session, *, documento: Documento) -> None:
-    """Elimina metadatos, extracción y partidas de un archivo cargado por error."""
+    """Elimina un archivo cargado por error y resincroniza la referencia automática."""
 
+    cotizacion_id = documento.cotizacion_id
     sesion.execute(
         delete(PartidaDocumento).where(PartidaDocumento.documento_id == documento.id)
     )
     sesion.delete(documento)
     sesion.commit()
+
+    from triage.cotizaciones.servicio import sincronizar_referencia_cotizacion
+
+    sincronizar_referencia_cotizacion(sesion, cotizacion_id)
