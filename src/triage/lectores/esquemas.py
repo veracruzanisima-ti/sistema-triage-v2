@@ -13,7 +13,7 @@ class PartidaLeida(BaseModel):
     concentracion: str | None = None
     forma_farmaceutica_dispositivo: str | None = None
     presentacion_solicitada: str | None = None
-    cantidad: float | None = Field(default=None, ge=0)
+    cantidad: int | None = Field(default=None, ge=0)
     unidad_medida: str | None = None
 
 

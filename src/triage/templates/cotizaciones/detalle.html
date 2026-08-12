@@ -6,7 +6,7 @@
 <div class="barra">
   <div>
     <h1>{{ cotizacion.referencia or "Cotización sin referencia" }}</h1>
-    <span class="estado">{{ cotizacion.estado | replace("_", " ") | title }}</span>
+    <span class="estado estado-{{ cotizacion.estado | lower | replace('_', '-') }}">{{ cotizacion.estado | replace("_", " ") | title }}</span>
   </div>
   <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
 </div>
@@ -26,7 +26,7 @@
         <div class="barra">
           <div>
             <div class="referencia">{{ documento.memorandum or documento.nombre_original }}</div>
-            <span class="estado">{{ documento.estado | replace("_", " ") | title }}</span>
+            <span class="estado estado-{{ documento.estado | lower | replace('_', '-') }}">{{ documento.estado | replace("_", " ") | title }}</span>
             {% if documento.memorandum %}
               <p class="ayuda">Archivo: {{ documento.nombre_original }}</p>
             {% endif %}
@@ -67,6 +67,6 @@
 
 <section class="tarjeta">
   <h2>Después</h2>
-  <p>Cuando los documentos y partidas estén revisados incorporaremos normalización de producto, histórico de precios y proveedores. Todavía no se ejecutan decisiones fiscales ni comerciales automáticas.</p>
+  <p>Cuando los documentos y partidas estén revisados incorporaremos normalización de producto, restricciones de comercialización, histórico de precios y proveedores. Todavía no se ejecutan decisiones fiscales ni comerciales automáticas.</p>
 </section>
 {% endblock %}

@@ -67,7 +67,9 @@ def _separar_folios(valor: object | None) -> list[str]:
     return [parte.strip() for parte in re.split(r"[,;\n]+", texto) if parte.strip()]
 
 
-def _cantidad(valor: object | None) -> float | None:
+def _cantidad(valor: object | None) -> int | None:
+    """Convierte una cantidad humana a entero y rechaza fracciones."""
+
     texto = str(valor or "").strip().replace(",", ".")
     if not texto:
         return None
@@ -77,7 +79,23 @@ def _cantidad(valor: object | None) -> float | None:
         raise ValueError(f"Cantidad inválida: {texto}") from error
     if numero < 0:
         raise ValueError("La cantidad no puede ser negativa")
-    return float(numero)
+    if numero != numero.to_integral_value():
+        raise ValueError("La cantidad debe ser un número entero")
+    return int(numero)
+
+
+def _cantidad_visible(valor: object | None) -> str:
+    """Evita mostrar ceros decimales heredados sin ocultar una fracción existente."""
+
+    if valor is None:
+        return ""
+    try:
+        numero = Decimal(str(valor))
+    except InvalidOperation:
+        return str(valor)
+    if numero == numero.to_integral_value():
+        return str(int(numero))
+    return format(numero, "f")
 
 
 def _partida_desde_formulario(formulario: FormData, indice: int) -> PartidaLeida | None:
@@ -133,6 +151,7 @@ def _render_revision(
             partidas=partidas,
             error=error,
             estado_error=EstadoDocumento.ERROR.value,
+            cantidad_visible=_cantidad_visible,
         ),
         status_code=codigo,
     )
