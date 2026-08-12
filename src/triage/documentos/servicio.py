@@ -45,11 +45,14 @@ def validar_archivo(*, contenido: bytes, mime_type: str, max_bytes: int) -> None
 
 
 def listar_documentos_cotizacion(sesion: Session, cotizacion_id: str) -> list[Documento]:
-    """Lista primero los documentos recibidos más recientemente."""
+    """Lista primero los documentos activos recibidos más recientemente."""
 
     consulta = (
         select(Documento)
-        .where(Documento.cotizacion_id == cotizacion_id)
+        .where(
+            Documento.cotizacion_id == cotizacion_id,
+            Documento.estado != EstadoDocumento.DESCARTADO.value,
+        )
         .order_by(Documento.recibido_en.desc())
     )
     return list(sesion.scalars(consulta))
@@ -61,11 +64,12 @@ def obtener_documento(
     cotizacion_id: str,
     documento_id: str,
 ) -> Documento | None:
-    """Recupera un documento únicamente dentro de su cotización."""
+    """Recupera un documento activo únicamente dentro de su cotización."""
 
     consulta = select(Documento).where(
         Documento.id == documento_id,
         Documento.cotizacion_id == cotizacion_id,
+        Documento.estado != EstadoDocumento.DESCARTADO.value,
     )
     return sesion.scalar(consulta)
 
@@ -181,6 +185,23 @@ def guardar_revision(
     documento.revisado_en = ahora_utc()
     documento.revisado_por_usuario_id = usuario_id
     _reemplazar_partidas(sesion, documento, lectura_revisada.partidas)
+    sesion.add(documento)
+    sesion.commit()
+    sesion.refresh(documento)
+    return documento
+
+
+def descartar_documento(
+    sesion: Session,
+    *,
+    documento: Documento,
+    usuario_id: str,
+) -> Documento:
+    """Quita un documento del flujo activo sin borrar su rastro de auditoría."""
+
+    documento.estado = EstadoDocumento.DESCARTADO.value
+    documento.descartado_en = ahora_utc()
+    documento.descartado_por_usuario_id = usuario_id
     sesion.add(documento)
     sesion.commit()
     sesion.refresh(documento)
