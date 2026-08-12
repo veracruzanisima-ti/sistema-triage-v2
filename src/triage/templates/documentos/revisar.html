@@ -62,7 +62,7 @@
 
     <section class="tarjeta">
       <h2>Partidas</h2>
-      <p class="ayuda">Puedes corregir las partidas detectadas. Si faltó alguna, usa el renglón de agregar partida y crea más sólo cuando los necesites.</p>
+      <p class="ayuda">Puedes corregir las partidas detectadas. La cantidad se captura en unidades completas. Si faltó alguna partida, usa el renglón de agregar y crea más sólo cuando los necesites.</p>
 
       {% for partida in partidas %}
         {% set i = loop.index0 %}
@@ -91,7 +91,7 @@
             </div>
             <div class="campo">
               <label for="partida_{{ i }}_cantidad">Cantidad</label>
-              <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" inputmode="decimal" value="{{ partida.cantidad if partida.cantidad is not none else '' }}">
+              <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric" value="{{ cantidad_visible(partida.cantidad) }}">
             </div>
             <div class="campo">
               <label for="partida_{{ i }}_unidad">Unidad de medida</label>
@@ -127,7 +127,7 @@
           </div>
           <div class="campo">
             <label for="partida_{{ i }}_cantidad">Cantidad</label>
-            <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" inputmode="decimal">
+            <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric">
           </div>
           <div class="campo">
             <label for="partida_{{ i }}_unidad">Unidad de medida</label>
@@ -168,7 +168,7 @@
             </div>
             <div class="campo">
               <label for="partida___INDICE___cantidad">Cantidad</label>
-              <input id="partida___INDICE___cantidad" name="partida___INDICE___cantidad" inputmode="decimal">
+              <input id="partida___INDICE___cantidad" name="partida___INDICE___cantidad" type="number" min="0" step="1" inputmode="numeric">
             </div>
             <div class="campo">
               <label for="partida___INDICE___unidad">Unidad de medida</label>
