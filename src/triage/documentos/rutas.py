@@ -12,6 +12,7 @@ from triage.cotizaciones.servicio import obtener_cotizacion
 from triage.documentos.modelos import EstadoDocumento
 from triage.documentos.servicio import (
     ArchivoDocumentoInvalido,
+    eliminar_documento,
     guardar_revision,
     listar_partidas_documento,
     obtener_documento,
@@ -284,5 +285,29 @@ async def guardar(
     )
     return RedirectResponse(
         url=f"/cotizaciones/{cotizacion.id}/documentos/{documento.id}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post(
+    "/cotizaciones/{cotizacion_id}/documentos/{documento_id}/eliminar",
+    name="eliminar_documento",
+)
+def eliminar(
+    cotizacion_id: str,
+    documento_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+):
+    """Elimina por completo el registro de un archivo cargado por error."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = _cotizacion_o_404(sesion, cotizacion_id)
+    documento = _documento_o_404(sesion, cotizacion_id, documento_id)
+    eliminar_documento(sesion, documento=documento)
+    return RedirectResponse(
+        url=f"/cotizaciones/{cotizacion.id}",
         status_code=status.HTTP_303_SEE_OTHER,
     )

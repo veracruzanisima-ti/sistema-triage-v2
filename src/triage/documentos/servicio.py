@@ -185,3 +185,13 @@ def guardar_revision(
     sesion.commit()
     sesion.refresh(documento)
     return documento
+
+
+def eliminar_documento(sesion: Session, *, documento: Documento) -> None:
+    """Elimina metadatos, extracción y partidas de un archivo cargado por error."""
+
+    sesion.execute(
+        delete(PartidaDocumento).where(PartidaDocumento.documento_id == documento.id)
+    )
+    sesion.delete(documento)
+    sesion.commit()

@@ -28,6 +28,18 @@ def _crear_cotizacion(cliente: TestClient) -> str:
     return respuesta.headers["location"].rsplit("/", 1)[-1]
 
 
+def test_formulario_ofrece_arrastrar_seleccionar_y_quitar(cliente: TestClient):
+    cotizacion_id = _crear_cotizacion(cliente)
+    formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
+
+    assert formulario.status_code == 200
+    assert "Arrastra aquí tu foto o PDF" in formulario.text
+    assert "Seleccionar archivo" in formulario.text
+    assert "Quitar archivo" in formulario.text
+    assert 'id="leer-documento"' in formulario.text
+    assert "disabled" in formulario.text
+
+
 def test_subir_documento_muestra_lectura_estructurada(cliente: TestClient):
     cotizacion_id = _crear_cotizacion(cliente)
     formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
@@ -121,3 +133,30 @@ def test_documento_aparece_en_detalle_de_cotizacion(cliente: TestClient):
     assert detalle.status_code == 200
     assert "MEMO/PRUEBA/001/2026" in detalle.text
     assert "Revisar" in detalle.text
+    assert "Eliminar" in detalle.text
+
+
+def test_eliminar_documento_borra_registro_y_extraccion(cliente: TestClient):
+    cotizacion_id = _crear_cotizacion(cliente)
+    formulario = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/nuevo")
+    subida = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos",
+        data={"csrf_token": _extraer_csrf(formulario.text)},
+        files={"archivo": ("archivo-personal-por-error.jpg", b"imagen-ficticia", "image/jpeg")},
+        follow_redirects=False,
+    )
+    revision_url = subida.headers["location"]
+    documento_id = revision_url.rsplit("/", 1)[-1]
+    detalle = cliente.get(f"/cotizaciones/{cotizacion_id}")
+
+    eliminado = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/eliminar",
+        data={"csrf_token": _extraer_csrf(detalle.text)},
+        follow_redirects=False,
+    )
+
+    assert eliminado.status_code == 303
+    assert cliente.get(revision_url).status_code == 404
+    detalle_final = cliente.get(f"/cotizaciones/{cotizacion_id}")
+    assert "MEMO/PRUEBA/001/2026" not in detalle_final.text
+    assert "archivo-personal-por-error.jpg" not in detalle_final.text
