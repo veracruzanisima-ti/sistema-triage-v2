@@ -64,10 +64,36 @@
       <h2>Partidas</h2>
       <p class="ayuda">Puedes corregir las partidas detectadas. La cantidad se captura en unidades completas. Si faltó alguna partida, usa el renglón de agregar y crea más sólo cuando los necesites.</p>
 
+      {% if partidas_con_alerta %}
+        <p class="alerta-restriccion-resumen">
+          <strong>{{ partidas_con_alerta }} partida{% if partidas_con_alerta != 1 %}s{% endif %} requiere{% if partidas_con_alerta != 1 %}n{% endif %} revisión por posible restricción.</strong>
+          Triage no rechazó ninguna automáticamente.
+        </p>
+      {% endif %}
+
       {% for partida in partidas %}
         {% set i = loop.index0 %}
-        <article class="partida">
+        {% set alertas_partida = alertas_por_partida[i] %}
+        <article class="partida{% if alertas_partida %} partida-restringida{% endif %}">
           <h3>Partida {{ loop.index }}</h3>
+
+          {% if alertas_partida %}
+            <div class="alerta-restriccion">
+              <strong>Posible rechazo - requiere revisión</strong>
+              <p>Este producto podría no ser cotizable según una política interna provisional.</p>
+              {% for alerta in alertas_partida %}
+                <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
+                {% if alerta.nota %}
+                  <p class="alerta-restriccion-meta">{{ alerta.nota }}</p>
+                {% endif %}
+                <p class="alerta-restriccion-meta">
+                  {{ alerta.politica_id }} · {{ alerta.regla_id }} · {{ alerta.politica_version }} · Pendiente de validación del Responsable Sanitario.
+                </p>
+              {% endfor %}
+              <p class="alerta-restriccion-meta">La partida permanece disponible; una persona debe decidir cómo proceder.</p>
+            </div>
+          {% endif %}
+
           <div class="rejilla">
             <div class="campo campo-ancho">
               <label for="partida_{{ i }}_producto">Producto solicitado</label>
