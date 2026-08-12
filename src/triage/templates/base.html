@@ -24,6 +24,7 @@
     .boton-secundario { background: #e9edf5; color: #172033; }
     .boton-peligro { background: #fff0f0; color: #8d1b1b; border: 1px solid #efc1c1; }
     .boton-texto { background: transparent; color: #485367; padding: 7px 9px; }
+    .boton-excluir { background: #f9e8e8; color: #713737; border: 1px solid #e2bcbc; margin-top: 8px; }
     .grupo-botones { display: flex; flex-wrap: wrap; gap: 10px; }
     .usuario { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     label { display: block; margin-bottom: 8px; font-weight: 700; }
@@ -50,10 +51,17 @@
     .partida-vacia { opacity: .88; }
     .partida.partida-restringida { margin: 14px 0; padding: 16px; border: 1px solid #edcdcd; border-left: 4px solid #c56a6a; border-radius: 12px; background: #fff9f9; }
     .partida.partida-restringida:first-of-type { border-top: 1px solid #edcdcd; }
+    .partida.partida-excluida { margin: 14px 0; padding: 14px 16px; border: 1px solid #d8dde5; border-left: 4px solid #8993a3; border-radius: 12px; background: #f7f8fa; }
+    .partida.partida-excluida:first-of-type { border-top: 1px solid #d8dde5; }
+    .estado-partida-excluida { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .estado-partida-excluida[hidden], .contenido-partida[hidden] { display: none; }
+    .estado-partida-excluida p { margin: 4px 0 0; }
+    .resumen-exclusion { color: #4f5969; background: #f1f3f6; border: 1px solid #d8dde5; border-radius: 10px; padding: 11px 13px; }
     .alerta-restriccion-resumen, .alerta-restriccion { color: #713737; background: #fff5f5; border: 1px solid #edcdcd; border-radius: 10px; padding: 11px 13px; }
     .alerta-restriccion { margin: 0 0 16px; }
     .alerta-restriccion p { margin: 6px 0; }
     .alerta-restriccion-meta { color: #765858; font-size: .84rem; }
+    .detalle-regla { margin: 8px 0; }
     .encabezado-partida { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .opcion { display: flex; align-items: flex-start; gap: 10px; font-weight: 600; }
     .zona-archivo { position: relative; display: flex; min-height: 170px; padding: 28px; border: 2px dashed #b8c0cf; border-radius: 14px; align-items: center; justify-content: center; flex-direction: column; gap: 10px; text-align: center; background: #fafbfe; transition: border-color .15s ease, background .15s ease; }
@@ -70,6 +78,7 @@
     .archivo-estado-leyendo { background: #fff8e7; color: #684c08; }
     .archivo-estado-listo { background: #eef9f1; color: #245d36; }
     .archivo-estado-error { background: #fff0f0; color: #9f1d1d; }
+    .archivo-estado-pausado { background: #fff4df; color: #76530b; }
     .archivo-quitar { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: #eef1f6; color: #485367; font: inherit; font-size: 1.2rem; line-height: 1; cursor: pointer; }
     .archivo-quitar:disabled { opacity: .5; cursor: not-allowed; }
     .indicador-lectura { display: flex; align-items: center; gap: 10px; margin: 14px 0; padding: 11px 13px; border: 1px solid #dfe4ec; border-radius: 10px; background: #fafbfe; }
@@ -87,6 +96,7 @@
       .zona-archivo { min-height: 150px; padding: 22px 16px; }
       .archivo-tarjeta { align-items: flex-start; }
       .archivo-acciones { flex-direction: column-reverse; align-items: flex-end; }
+      .estado-partida-excluida { align-items: flex-start; flex-direction: column; }
     }
   </style>
 </head>
