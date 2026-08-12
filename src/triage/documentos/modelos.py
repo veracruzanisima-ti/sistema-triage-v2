@@ -5,7 +5,17 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from triage.base_datos import Base
@@ -25,6 +35,13 @@ class Documento(Base):
     """Metadatos y extracción de una fuente; el archivo original aún no se conserva."""
 
     __tablename__ = "documentos"
+    __table_args__ = (
+        UniqueConstraint(
+            "cotizacion_id",
+            "clave_idempotencia",
+            name="uq_documentos_cotizacion_idempotencia",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36),
@@ -40,6 +57,7 @@ class Documento(Base):
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     tamano_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    clave_idempotencia: Mapped[str | None] = mapped_column(String(80), nullable=True)
     estado: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
@@ -94,3 +112,5 @@ class PartidaDocumento(Base):
     presentacion_solicitada: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cantidad: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     unidad_medida: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    incluida_cotizacion: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    motivo_exclusion: Mapped[str | None] = mapped_column(String(300), nullable=True)

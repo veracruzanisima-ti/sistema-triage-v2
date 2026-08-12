@@ -18,6 +18,8 @@ MIME_PERMITIDOS = {
     "image/webp",
 }
 
+DecisionInclusion = tuple[bool, str | None]
+
 
 class ArchivoDocumentoInvalido(ValueError):
     """El archivo no cumple las reglas mínimas de entrada del MVP."""
@@ -28,6 +30,13 @@ def limpiar_nombre_archivo(nombre: str | None) -> str:
 
     nombre_limpio = Path(nombre or "documento").name.strip()
     return (nombre_limpio or "documento")[:255]
+
+
+def limpiar_clave_idempotencia(clave: str | None) -> str | None:
+    """Limita la clave interna usada para reintentar un elemento de la cola."""
+
+    valor = (clave or "").strip()
+    return valor[:80] or None
 
 
 def validar_archivo(*, contenido: bytes, mime_type: str, max_bytes: int) -> None:
@@ -66,6 +75,19 @@ def obtener_documento(
     consulta = select(Documento).where(
         Documento.id == documento_id,
         Documento.cotizacion_id == cotizacion_id,
+    )
+    return sesion.scalar(consulta)
+
+
+def _obtener_documento_por_clave(
+    sesion: Session,
+    *,
+    cotizacion_id: str,
+    clave_idempotencia: str,
+) -> Documento | None:
+    consulta = select(Documento).where(
+        Documento.cotizacion_id == cotizacion_id,
+        Documento.clave_idempotencia == clave_idempotencia,
     )
     return sesion.scalar(consulta)
 
@@ -115,13 +137,21 @@ def _reemplazar_partidas(
     sesion: Session,
     documento: Documento,
     partidas: list[PartidaLeida],
+    decisiones_inclusion: list[DecisionInclusion] | None = None,
 ) -> None:
-    """Sustituye el borrador de partidas por la versión que se está guardando."""
+    """Sustituye partidas conservando la decisión humana de incluirlas o excluirlas."""
 
     sesion.execute(
         delete(PartidaDocumento).where(PartidaDocumento.documento_id == documento.id)
     )
     for indice, partida in enumerate(partidas, start=1):
+        incluida = True
+        motivo_exclusion = None
+        if decisiones_inclusion and indice - 1 < len(decisiones_inclusion):
+            incluida, motivo_exclusion = decisiones_inclusion[indice - 1]
+        if incluida:
+            motivo_exclusion = None
+
         sesion.add(
             PartidaDocumento(
                 documento_id=documento.id,
@@ -133,6 +163,8 @@ def _reemplazar_partidas(
                 presentacion_solicitada=partida.presentacion_solicitada,
                 cantidad=partida.cantidad,
                 unidad_medida=partida.unidad_medida,
+                incluida_cotizacion=incluida,
+                motivo_exclusion=motivo_exclusion,
             )
         )
 
@@ -157,20 +189,41 @@ def procesar_documento(
     mime_type: str,
     contenido: bytes,
     lector: LectorDocumento,
+    clave_idempotencia: str | None = None,
 ) -> Documento:
-    """Registra metadatos, ejecuta el lector y persiste un borrador revisable."""
+    """Registra y lee un archivo; un reintento reutiliza el mismo registro documental."""
 
-    documento = Documento(
-        cotizacion_id=cotizacion_id,
-        nombre_original=limpiar_nombre_archivo(nombre_archivo),
-        mime_type=mime_type,
-        tamano_bytes=len(contenido),
-        sha256=sha256(contenido).hexdigest(),
-        modelo_lector=lector.modelo,
-    )
-    sesion.add(documento)
-    sesion.commit()
-    sesion.refresh(documento)
+    huella = sha256(contenido).hexdigest()
+    clave = limpiar_clave_idempotencia(clave_idempotencia)
+    documento = None
+
+    if clave:
+        documento = _obtener_documento_por_clave(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            clave_idempotencia=clave,
+        )
+        if documento is not None:
+            if documento.sha256 != huella:
+                raise ArchivoDocumentoInvalido(
+                    "El identificador de reintento ya corresponde a otro archivo."
+                )
+            if documento.estado != EstadoDocumento.RECIBIDO.value:
+                return documento
+
+    if documento is None:
+        documento = Documento(
+            cotizacion_id=cotizacion_id,
+            nombre_original=limpiar_nombre_archivo(nombre_archivo),
+            mime_type=mime_type,
+            tamano_bytes=len(contenido),
+            sha256=huella,
+            clave_idempotencia=clave,
+            modelo_lector=lector.modelo,
+        )
+        sesion.add(documento)
+        sesion.commit()
+        sesion.refresh(documento)
 
     try:
         lectura = lector.leer(
@@ -212,8 +265,9 @@ def guardar_revision(
     documento: Documento,
     lectura_revisada: LecturaDocumento,
     usuario_id: str,
+    decisiones_inclusion: list[DecisionInclusion] | None = None,
 ) -> Documento:
-    """Guarda la versión corregida por una persona y la marca como revisada."""
+    """Guarda correcciones y la decisión humana de incluir o excluir cada partida."""
 
     documento.tipo_documento = lectura_revisada.tipo_documento
     documento.memorandum = lectura_revisada.memorandum
@@ -225,7 +279,12 @@ def guardar_revision(
     documento.estado = EstadoDocumento.REVISADO.value
     documento.revisado_en = ahora_utc()
     documento.revisado_por_usuario_id = usuario_id
-    _reemplazar_partidas(sesion, documento, lectura_revisada.partidas)
+    _reemplazar_partidas(
+        sesion,
+        documento,
+        lectura_revisada.partidas,
+        decisiones_inclusion=decisiones_inclusion,
+    )
     sesion.add(documento)
     sesion.commit()
     sesion.refresh(documento)
