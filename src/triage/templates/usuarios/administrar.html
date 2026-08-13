@@ -45,14 +45,14 @@
   </form>
 </section>
 
-<section class="tarjeta">
-  <h2>Cuentas</h2>
-  {% for cuenta in usuarios %}
-    <div class="usuario-fila">
+<h2>Cuentas</h2>
+{% for cuenta in usuarios %}
+  <section class="tarjeta">
+    <div class="barra">
       <div>
-        <strong>{{ cuenta.nombre }}</strong>
-        <div class="ayuda">{{ cuenta.correo }}</div>
-        <div class="grupo-botones usuario-etiquetas">
+        <div class="referencia">{{ cuenta.nombre }}</div>
+        <p class="ayuda">{{ cuenta.correo }}</p>
+        <div class="grupo-botones">
           {% if cuenta.activo %}
             <span class="estado estado-revisado">Activa</span>
           {% else %}
@@ -63,33 +63,30 @@
           {% endif %}
         </div>
       </div>
-      <div class="usuario-acciones">
-        {% if cuenta.id == usuario.id %}
-          <span class="ayuda">Tu cuenta</span>
-        {% else %}
-          <form method="post" action="/usuarios/{{ cuenta.id }}/estado">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="activo" value="{% if cuenta.activo %}0{% else %}1{% endif %}">
-            <button class="boton {% if cuenta.activo %}boton-peligro{% else %}boton-secundario{% endif %}" type="submit">
-              {% if cuenta.activo %}Desactivar{% else %}Reactivar{% endif %}
-            </button>
-          </form>
-        {% endif %}
-      </div>
+      {% if cuenta.id == usuario.id %}
+        <span class="ayuda">Tu cuenta</span>
+      {% else %}
+        <form method="post" action="/usuarios/{{ cuenta.id }}/estado">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="activo" value="{% if cuenta.activo %}0{% else %}1{% endif %}">
+          <button class="boton {% if cuenta.activo %}boton-peligro{% else %}boton-secundario{% endif %}" type="submit">
+            {% if cuenta.activo %}Desactivar{% else %}Reactivar{% endif %}
+          </button>
+        </form>
+      {% endif %}
     </div>
 
     <details>
-      <summary>Restablecer contraseña de {{ cuenta.nombre }}</summary>
-      <form class="formulario-compacto" method="post" action="/usuarios/{{ cuenta.id }}/contrasena">
+      <summary>Restablecer contraseña</summary>
+      <form method="post" action="/usuarios/{{ cuenta.id }}/contrasena">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="campo">
-          <label for="temporal_{{ cuenta.id }}">Nueva contraseña temporal</label>
+          <label for="temporal_{{ cuenta.id }}">Nueva contraseña temporal para {{ cuenta.nombre }}</label>
           <input id="temporal_{{ cuenta.id }}" name="contrasena_temporal" type="password" minlength="12" autocomplete="new-password" required>
         </div>
         <button class="boton boton-secundario" type="submit">Restablecer contraseña</button>
       </form>
     </details>
-    {% if not loop.last %}<hr class="separador">{% endif %}
-  {% endfor %}
-</section>
+  </section>
+{% endfor %}
 {% endblock %}
