@@ -16,6 +16,7 @@ from triage.cotizaciones.servicio import (
     usar_referencia_automatica,
 )
 from triage.documentos.servicio import listar_documentos_cotizacion
+from triage.normalizacion.servicio import resumen_normalizacion_cotizacion
 from triage.usuarios.seguridad import (
     Sesion,
     UsuarioActual,
@@ -111,6 +112,10 @@ def detalle(
             conflicto_referencias=(
                 not cotizacion.referencia_fijada_manual
                 and len(referencias_revisadas) > 1
+            ),
+            resumen_normalizacion=resumen_normalizacion_cotizacion(
+                sesion,
+                cotizacion.id,
             ),
         ),
     )
