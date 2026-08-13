@@ -9,6 +9,7 @@ from triage.base_datos import Base, normalizar_database_url
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, PartidaDocumento
+from triage.normalizacion.modelos import NormalizacionPartida
 from triage.usuarios.modelos import Usuario
 
 config = context.config
@@ -17,7 +18,13 @@ if config.config_file_name is not None:
 
 url_base_datos = normalizar_database_url(obtener_configuracion().database_url)
 config.set_main_option("sqlalchemy.url", url_base_datos.replace("%", "%%"))
-_MODELOS_REGISTRADOS = (Cotizacion, Usuario, Documento, PartidaDocumento)
+_MODELOS_REGISTRADOS = (
+    Cotizacion,
+    Usuario,
+    Documento,
+    PartidaDocumento,
+    NormalizacionPartida,
+)
 target_metadata = Base.metadata
 
 

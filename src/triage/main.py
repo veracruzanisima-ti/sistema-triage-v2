@@ -16,6 +16,7 @@ from triage.cotizaciones.rutas import router as router_cotizaciones
 from triage.documentos.rutas import router as router_documentos
 from triage.lectores.base import LectorDocumento
 from triage.lectores.openai import LectorOpenAI
+from triage.normalizacion.rutas import router as router_normalizacion
 from triage.usuarios.rutas import router as router_usuarios
 from triage.usuarios.seguridad import AccesoRequerido
 from triage.usuarios.servicio import crear_admin_inicial_si_corresponde, hay_usuarios_activos
@@ -78,6 +79,7 @@ def crear_app(
     aplicacion.include_router(router_usuarios)
     aplicacion.include_router(router_cotizaciones)
     aplicacion.include_router(router_documentos)
+    aplicacion.include_router(router_normalizacion)
 
     @aplicacion.exception_handler(AccesoRequerido)
     async def manejar_acceso_requerido(

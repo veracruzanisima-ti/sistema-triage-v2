@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block titulo %}Preparar productos · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Preparar productos para búsqueda</h1>
+    <p class="ayuda">{{ cotizacion.referencia or "Cotización sin referencia" }}</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a la cotización</a>
+</div>
+
+{% if guardado %}
+  <p class="exito">Preparación guardada. Estos datos quedan listos para las búsquedas posteriores.</p>
+{% endif %}
+
+<section class="tarjeta">
+  <h2>Qué se está preparando</h2>
+  <p>La solicitud revisada no se modifica. Esta pantalla crea una copia operativa para buscar el producto correcto después en histórico y proveedores.</p>
+  <p class="ayuda">Triage sólo aplica limpieza tipográfica básica. No cambia marca, dispositivo, liberación ni presentación por equivalentes. Si un dato no fue solicitado, puede permanecer vacío.</p>
+</section>
+
+{% if entradas %}
+  <form method="post" action="/cotizaciones/{{ cotizacion.id }}/normalizacion">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="partidas_total" value="{{ entradas|length }}">
+
+    {% for entrada in entradas %}
+      {% set i = loop.index0 %}
+      {% set valores = entrada.normalizacion or entrada.propuesta %}
+      <section class="tarjeta">
+        <input type="hidden" name="partida_{{ i }}_id" value="{{ entrada.partida.id }}">
+        <div class="barra">
+          <div>
+            <h2>Partida {{ loop.index }}</h2>
+            <p class="ayuda">{{ entrada.documento.memorandum or entrada.documento.nombre_original }}</p>
+          </div>
+          {% if entrada.normalizacion %}
+            <span class="estado estado-revisado">Preparado</span>
+          {% else %}
+            <span class="estado estado-pendiente-revision">Pendiente</span>
+          {% endif %}
+        </div>
+
+        <details>
+          <summary>Ver solicitud revisada</summary>
+          <p>
+            <strong>{{ entrada.partida.producto_solicitado or "Producto sin nombre" }}</strong>
+            {% if entrada.partida.marca_solicitada %} · {{ entrada.partida.marca_solicitada }}{% endif %}
+            {% if entrada.partida.concentracion %} · {{ entrada.partida.concentracion }}{% endif %}
+          </p>
+          {% if entrada.partida.forma_farmaceutica_dispositivo %}
+            <p class="ayuda">Forma / dispositivo: {{ entrada.partida.forma_farmaceutica_dispositivo }}</p>
+          {% endif %}
+          {% if entrada.partida.presentacion_solicitada %}
+            <p class="ayuda">Presentación: {{ entrada.partida.presentacion_solicitada }}</p>
+          {% endif %}
+        </details>
+
+        <div class="rejilla">
+          <div class="campo campo-ancho">
+            <label for="partida_{{ i }}_producto">Producto para buscar</label>
+            <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto" value="{{ valores.producto or '' }}">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_marca">Marca solicitada</label>
+            <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca" value="{{ valores.marca or '' }}" placeholder="Vacío si no se pidió marca">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_concentracion">Concentración</label>
+            <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion" value="{{ valores.concentracion or '' }}">
+          </div>
+          <div class="campo">
+            <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
+            <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma" value="{{ valores.forma_dispositivo or '' }}">
+          </div>
+          <div class="campo campo-ancho">
+            <label for="partida_{{ i }}_presentacion">Presentación a respetar</label>
+            <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion" value="{{ valores.presentacion or '' }}">
+          </div>
+        </div>
+      </section>
+    {% endfor %}
+
+    <div class="grupo-botones">
+      <button class="boton" type="submit">Guardar preparación</button>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver sin guardar</a>
+    </div>
+  </form>
+{% else %}
+  <section class="tarjeta vacio">
+    <h2>Aún no hay partidas listas para preparar</h2>
+    <p>Primero revisa al menos un documento y deja incluida alguna partida.</p>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a documentos</a>
+  </section>
+{% endif %}
+{% endblock %}
