@@ -9,7 +9,12 @@ from triage.normalizacion.servicio import (
     guardar_normalizaciones,
     listar_partidas_normalizables,
 )
-from triage.usuarios.seguridad import Sesion, UsuarioActual, obtener_token_csrf, validar_token_csrf
+from triage.usuarios.seguridad import (
+    Sesion,
+    UsuarioActual,
+    obtener_token_csrf,
+    validar_token_csrf,
+)
 
 router = APIRouter(prefix="/cotizaciones", tags=["normalizacion"])
 
