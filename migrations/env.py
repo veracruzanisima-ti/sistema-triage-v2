@@ -6,6 +6,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from triage.base_datos import Base, normalizar_database_url
+from triage.calculos.modelos import CalculoComercial
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, PartidaDocumento
@@ -30,6 +31,7 @@ _MODELOS_REGISTRADOS = (
     ObservacionPrecio,
     ConsultaProveedor,
     DecisionPrecio,
+    CalculoComercial,
 )
 target_metadata = Base.metadata
 
