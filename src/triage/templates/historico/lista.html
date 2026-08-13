@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block titulo %}Histórico de precios · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Histórico de precios</h1>
+    <p class="ayuda">{{ cotizacion.referencia or "Cotización sin referencia" }}</p>
+  </div>
+  <div class="grupo-botones">
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a la cotización</a>
+  </div>
+</div>
+
+{% if guardado %}
+  <p class="exito">Observación agregada al histórico. Las observaciones anteriores no se modificaron.</p>
+{% endif %}
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% endif %}
+
+<section class="tarjeta">
+  <h2>Qué guarda esta etapa</h2>
+  <p>Cada registro es una fotografía de lo que una fuente mostró en un momento concreto. Triage no reemplaza precios anteriores y todavía no decide cuál usar como referencia estable o como oportunidad de compra.</p>
+  <p class="ayuda">Captura sólo datos que realmente muestre la fuente. IVA, promoción, disponibilidad y entrega pueden quedar sin definir si no están confirmados.</p>
+</section>
+
+{% if productos %}
+  {% for producto in productos %}
+    <section class="tarjeta">
+      <div class="barra">
+        <div>
+          <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
+          <p class="ayuda">
+            {% if producto.normalizacion.marca %}{{ producto.normalizacion.marca }} · {% endif %}
+            {{ producto.normalizacion.concentracion or "Sin concentración" }}
+            {% if producto.normalizacion.forma_dispositivo %} · {{ producto.normalizacion.forma_dispositivo }}{% endif %}
+          </p>
+          {% if producto.normalizacion.presentacion %}
+            <p class="ayuda">{{ producto.normalizacion.presentacion }}</p>
+          {% endif %}
+        </div>
+        <span class="estado {% if producto.observaciones %}estado-revisado{% else %}estado-pendiente-revision{% endif %}">
+          {{ producto.observaciones|length }} observación{% if producto.observaciones|length != 1 %}es{% endif %}
+        </span>
+      </div>
+
+      {% if producto.observaciones %}
+        <h3>Observaciones recientes</h3>
+        {% for observacion in producto.observaciones[:5] %}
+          <div class="partida">
+            <div class="barra">
+              <div>
+                <strong>{{ observacion.proveedor }}</strong>
+                <div class="ayuda">{{ observacion.observado_en.strftime("%d/%m/%Y %H:%M") }}</div>
+              </div>
+              {% if observacion.es_promocion %}
+                <span class="estado estado-pendiente-revision">Promoción</span>
+              {% endif %}
+            </div>
+            <p>
+              {% if observacion.precio_antes_iva is not none %}
+                Antes de IVA: ${{ "%.2f"|format(observacion.precio_antes_iva) }}
+              {% endif %}
+              {% if observacion.iva_porcentaje is not none %}
+                · IVA observado: {{ "%.2f"|format(observacion.iva_porcentaje) }}%
+              {% endif %}
+              {% if observacion.precio_total is not none %}
+                · Total: ${{ "%.2f"|format(observacion.precio_total) }}
+              {% endif %}
+            </p>
+            {% if observacion.disponibilidad %}
+              <p class="ayuda">Disponibilidad: {{ observacion.disponibilidad }}</p>
+            {% endif %}
+            {% if observacion.entrega_viable is sameas true %}
+              <p class="ayuda">Entrega al destino: confirmada como viable.</p>
+            {% elif observacion.entrega_viable is sameas false %}
+              <p class="ayuda">Entrega al destino: no viable.</p>
+            {% endif %}
+            {% if observacion.condiciones_promocion %}
+              <p class="ayuda">Condiciones de promoción: {{ observacion.condiciones_promocion }}</p>
+            {% endif %}
+            <p class="ayuda">Fuente: {{ observacion.fuente }}</p>
+          </div>
+        {% endfor %}
+        {% if producto.observaciones|length > 5 %}
+          <p class="ayuda">Hay {{ producto.observaciones|length - 5 }} observaciones anteriores adicionales.</p>
+        {% endif %}
+      {% else %}
+        <p class="ayuda">Todavía no hay precios guardados para esta identidad exacta de producto.</p>
+      {% endif %}
+
+      <details>
+        <summary>Agregar observación de precio</summary>
+        <form method="post" action="/cotizaciones/{{ cotizacion.id }}/historico/{{ producto.partida.id }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="rejilla">
+            <div class="campo">
+              <label for="proveedor_{{ loop.index }}">Proveedor / establecimiento</label>
+              <input id="proveedor_{{ loop.index }}" name="proveedor" required>
+            </div>
+            <div class="campo">
+              <label for="fuente_{{ loop.index }}">Fuente / evidencia</label>
+              <input id="fuente_{{ loop.index }}" name="fuente" placeholder="Ej. portal proveedor, cotización recibida o URL" required>
+            </div>
+            <div class="campo">
+              <label for="base_{{ loop.index }}">Precio antes de IVA</label>
+              <input id="base_{{ loop.index }}" name="precio_antes_iva" type="number" min="0" step="0.01">
+            </div>
+            <div class="campo">
+              <label for="iva_{{ loop.index }}">IVA observado (%)</label>
+              <input id="iva_{{ loop.index }}" name="iva_porcentaje" type="number" min="0" max="100" step="0.01">
+            </div>
+            <div class="campo">
+              <label for="total_{{ loop.index }}">Precio total</label>
+              <input id="total_{{ loop.index }}" name="precio_total" type="number" min="0" step="0.01">
+              <p class="ayuda">Se requiere al menos precio antes de IVA o precio total.</p>
+            </div>
+            <div class="campo">
+              <label for="disponibilidad_{{ loop.index }}">Disponibilidad</label>
+              <input id="disponibilidad_{{ loop.index }}" name="disponibilidad" placeholder="Ej. 12 piezas, disponible, agotado">
+            </div>
+            <div class="campo">
+              <label for="entrega_{{ loop.index }}">Entrega al destino</label>
+              <select id="entrega_{{ loop.index }}" name="entrega_viable">
+                <option value="">Sin confirmar</option>
+                <option value="si">Sí, viable</option>
+                <option value="no">No viable</option>
+              </select>
+            </div>
+            <div class="campo campo-ancho">
+              <label class="opcion">
+                <input type="checkbox" name="es_promocion" value="1">
+                <span>La fuente muestra este precio como promoción</span>
+              </label>
+            </div>
+            <div class="campo campo-ancho">
+              <label for="promo_{{ loop.index }}">Condiciones de promoción</label>
+              <input id="promo_{{ loop.index }}" name="condiciones_promocion" placeholder="Ej. membresía, 2x1, vigencia o cantidad mínima">
+            </div>
+          </div>
+          <button class="boton" type="submit">Agregar al histórico</button>
+        </form>
+      </details>
+    </section>
+  {% endfor %}
+{% else %}
+  <section class="tarjeta vacio">
+    <h2>Aún no hay productos preparados</h2>
+    <p>Primero confirma la preparación de al menos una partida. El histórico nunca trabaja directamente sobre una lectura sin revisar.</p>
+    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+  </section>
+{% endif %}
+{% endblock %}
