@@ -90,7 +90,9 @@ def listar_productos_consultables(
             .order_by(ConsultaProveedor.iniciada_en.desc())
         )
     )
-    por_partida: dict[str, list[ConsultaProveedor]] = {identificador: [] for identificador in ids_partida}
+    por_partida: dict[str, list[ConsultaProveedor]] = {
+        identificador: [] for identificador in ids_partida
+    }
     for intento in consultas:
         if intento.partida_documento_id:
             por_partida.setdefault(intento.partida_documento_id, []).append(intento)
