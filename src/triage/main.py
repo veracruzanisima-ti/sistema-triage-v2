@@ -21,6 +21,7 @@ from triage.lectores.openai import LectorOpenAI
 from triage.normalizacion.rutas import router as router_normalizacion
 from triage.proveedores.base import ProveedorProducto
 from triage.proveedores.rutas import router as router_proveedores
+from triage.revision_final.rutas import router as router_revision_final
 from triage.usuarios.rutas import router as router_usuarios
 from triage.usuarios.seguridad import AccesoRequerido
 from triage.usuarios.servicio import crear_admin_inicial_si_corresponde, hay_usuarios_activos
@@ -99,6 +100,7 @@ def crear_app(
     aplicacion.include_router(router_historico)
     aplicacion.include_router(router_decisiones_precio)
     aplicacion.include_router(router_proveedores)
+    aplicacion.include_router(router_revision_final)
 
     @aplicacion.exception_handler(AccesoRequerido)
     async def manejar_acceso_requerido(
