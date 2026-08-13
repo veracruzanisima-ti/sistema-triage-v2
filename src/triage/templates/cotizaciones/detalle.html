@@ -93,7 +93,7 @@
 <section class="tarjeta">
   <div class="barra">
     <div>
-      <h2>Preparación de productos</h2>
+      <h2>Preparación e histórico</h2>
       {% if resumen_normalizacion.total %}
         <p class="ayuda">{{ resumen_normalizacion.preparados }} de {{ resumen_normalizacion.total }} partidas incluidas están preparadas para búsqueda.</p>
       {% else %}
@@ -101,10 +101,15 @@
       {% endif %}
     </div>
     {% if resumen_normalizacion.total %}
-      <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+      <div class="grupo-botones">
+        <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+        {% if resumen_normalizacion.preparados %}
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Histórico de precios</a>
+        {% endif %}
+      </div>
     {% endif %}
   </div>
-  <p>Esta etapa conserva la solicitud original y crea una copia operativa para histórico de precios y proveedores.</p>
+  <p>La preparación conserva la solicitud original. El histórico agrega observaciones de precio sin reemplazar registros anteriores.</p>
 </section>
 
 <section class="tarjeta">
@@ -125,6 +130,6 @@
 
 <section class="tarjeta">
   <h2>Después</h2>
-  <p>Con productos preparados incorporaremos histórico de precios y proveedores. Las alertas provisionales de comercialización siguen requiriendo decisión humana.</p>
+  <p>Con el histórico como evidencia incorporaremos búsqueda actual en proveedores y la selección explícita entre referencia estable y oportunidad de adquisición.</p>
 </section>
 {% endblock %}
