@@ -107,6 +107,7 @@
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Histórico de precios</a>
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/proveedores">Consultar proveedores</a>
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/decisiones-precio">Decidir referencias</a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisión consolidada</a>
         {% endif %}
       </div>
     {% endif %}
@@ -132,6 +133,6 @@
 
 <section class="tarjeta">
   <h2>Después</h2>
-  <p>Con referencias elegidas podremos incorporar cálculo fiscal validado, precio de venta y revisión final sin confundir evidencia con decisión.</p>
+  <p>La revisión consolidada será el punto de entrada a cálculo validado y generación de salidas, evitando mezclar evidencia pendiente con datos listos.</p>
 </section>
 {% endblock %}
