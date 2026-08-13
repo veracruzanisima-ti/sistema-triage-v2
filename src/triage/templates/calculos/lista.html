@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block titulo %}Calculos comerciales · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Calculos comerciales</h1>
+    <p class="ayuda">{{ cotizacion.referencia or "Cotizacion sin referencia" }}</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Volver a revision</a>
+</div>
+
+{% if guardado %}
+  <p class="exito">Calculo guardado como una nueva revision. Los calculos anteriores no se sobrescriben.</p>
+{% endif %}
+
+<section class="tarjeta">
+  <h2>Antes de calcular</h2>
+  <p>El sistema usa la referencia estable seleccionada como costo base y aplica el markup indicado por la persona.</p>
+  <p class="aviso"><strong>IVA:</strong> Triage no decide el tratamiento fiscal automaticamente. El porcentaje debe estar validado por Contabilidad antes de usarse en una cotizacion real.</p>
+  <p class="ayuda">Markup es incremento sobre costo, no margen ni utilidad neta.</p>
+</section>
+
+{% for item in productos %}
+  {% set producto = item.precierre.producto %}
+  <section class="tarjeta">
+    <h2>{{ producto.normalizacion.producto or producto.partida.producto_solicitado or "Producto sin nombre" }}</h2>
+    <p class="ayuda">{{ producto.normalizacion.presentacion or producto.partida.presentacion_solicitada or "Sin presentacion" }} · Cantidad {{ producto.partida.cantidad or "sin confirmar" }}</p>
+
+    {% if not item.puede_calcular %}
+      <p class="aviso">{{ item.motivo_bloqueo }}</p>
+    {% else %}
+      <p><strong>Referencia estable:</strong> {{ item.precierre.referencia.proveedor }} · ${{ "%.2f"|format(item.precierre.referencia.precio_antes_iva) }} antes de IVA.</p>
+      {% if item.precierre.oportunidad %}
+        <p><strong>Oportunidad de adquisicion:</strong> {{ item.precierre.oportunidad.proveedor }}{% if item.precierre.oportunidad.precio_antes_iva is not none %} · ${{ "%.2f"|format(item.precierre.oportunidad.precio_antes_iva) }} antes de IVA{% endif %}.</p>
+      {% endif %}
+
+      <form method="post" action="/cotizaciones/{{ cotizacion.id }}/calculos/{{ producto.partida.id }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="rejilla">
+          <div class="campo">
+            <label for="markup_{{ producto.partida.id }}">Markup sobre costo (%)</label>
+            <input id="markup_{{ producto.partida.id }}" name="markup_porcentaje" type="number" min="0" max="1000" step="0.01" required value="{% if item.calculo_actual %}{{ item.calculo_actual.markup_porcentaje }}{% endif %}">
+          </div>
+          <div class="campo">
+            <label for="iva_{{ producto.partida.id }}">IVA de venta confirmado (%)</label>
+            <input id="iva_{{ producto.partida.id }}" name="iva_venta_porcentaje" type="number" min="0" max="100" step="0.01" required value="{% if item.calculo_actual %}{{ item.calculo_actual.iva_venta_porcentaje }}{% endif %}">
+          </div>
+        </div>
+        <button class="boton" type="submit">Calcular y guardar revision</button>
+      </form>
+    {% endif %}
+
+    {% if item.calculo_actual %}
+      <div class="exito" style="margin-top: 16px;">
+        <strong>Calculo vigente</strong>
+        <p>Precio unitario antes de IVA: ${{ "%.2f"|format(item.calculo_actual.precio_unitario_antes_iva) }}</p>
+        <p>IVA unitario: ${{ "%.2f"|format(item.calculo_actual.iva_unitario) }} · Total unitario: ${{ "%.2f"|format(item.calculo_actual.precio_unitario_total) }}</p>
+        <p>Subtotal pedido: ${{ "%.2f"|format(item.calculo_actual.subtotal_pedido_antes_iva) }} · IVA pedido: ${{ "%.2f"|format(item.calculo_actual.iva_pedido) }} · <strong>Total: ${{ "%.2f"|format(item.calculo_actual.total_pedido) }}</strong></p>
+        {% if item.calculo_actual.diferencia_bruta_estimada_antes_iva is not none %}
+          <p>Diferencia bruta estimada vs. oportunidad de adquisicion, antes de IVA: ${{ "%.2f"|format(item.calculo_actual.diferencia_bruta_estimada_antes_iva) }}</p>
+          <p class="ayuda">No representa utilidad neta: no descuenta logistica, comisiones, impuestos, financiamiento ni otros costos.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+{% else %}
+  <section class="tarjeta vacio">
+    <h2>No hay productos listos para calcular</h2>
+    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Ir a revision consolidada</a>
+  </section>
+{% endfor %}
+{% endblock %}
