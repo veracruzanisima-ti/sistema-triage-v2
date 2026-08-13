@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block titulo %}Cambiar contraseña · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Cambiar mi contraseña</h1>
+    <p class="ayuda">Usa una contraseña distinta a la temporal que recibiste.</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
+</div>
+
+{% if guardado %}
+  <p class="exito">Contraseña actualizada.</p>
+{% endif %}
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% endif %}
+
+<section class="tarjeta acceso">
+  <form method="post" action="/mi-cuenta/contrasena">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="campo">
+      <label for="contrasena_actual">Contraseña actual</label>
+      <input id="contrasena_actual" name="contrasena_actual" type="password" autocomplete="current-password" required>
+    </div>
+    <div class="campo">
+      <label for="contrasena_nueva">Nueva contraseña</label>
+      <input id="contrasena_nueva" name="contrasena_nueva" type="password" minlength="12" autocomplete="new-password" required>
+      <p class="ayuda">Mínimo 12 caracteres.</p>
+    </div>
+    <div class="campo">
+      <label for="confirmar_contrasena">Confirmar nueva contraseña</label>
+      <input id="confirmar_contrasena" name="confirmar_contrasena" type="password" minlength="12" autocomplete="new-password" required>
+    </div>
+    <button class="boton" type="submit">Cambiar contraseña</button>
+  </form>
+</section>
+{% endblock %}

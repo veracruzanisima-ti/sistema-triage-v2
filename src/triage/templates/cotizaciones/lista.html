@@ -8,8 +8,28 @@
     <h1>Cotizaciones</h1>
     <p class="ayuda">Cualquier integrante puede iniciar una cotización y retomarla después.</p>
   </div>
-  <a class="boton" href="/cotizaciones/nueva">Nueva cotización</a>
+  <div class="grupo-botones">
+    <a class="boton boton-secundario" href="/mi-cuenta/contrasena">Mi contraseña</a>
+    {% if usuario.es_admin %}
+      <a class="boton boton-secundario" href="/usuarios">Usuarios</a>
+    {% endif %}
+    <a class="boton" href="/cotizaciones/nueva">Nueva cotización</a>
+  </div>
 </div>
+
+<section class="aviso">
+  <strong>Piloto interno</strong>
+  <p>Por ahora usa documentos ficticios o anonimizados. No cargues información sensible real en este entorno.</p>
+  <details>
+    <summary>Cómo probar Triage</summary>
+    <ol>
+      <li>Inicia o abre una cotización.</li>
+      <li>Agrega uno o varios documentos y espera la lectura.</li>
+      <li>Revisa y corrige lo que Triage entendió antes de guardar.</li>
+      <li>Excluye partidas restringidas cuando corresponda y prepara los productos para búsqueda.</li>
+    </ol>
+  </details>
+</section>
 
 {% if cotizaciones %}
   {% for cotizacion in cotizaciones %}

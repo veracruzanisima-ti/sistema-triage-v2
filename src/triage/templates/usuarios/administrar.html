@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block titulo %}Usuarios · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Usuarios internos</h1>
+    <p class="ayuda">Crea y desactiva cuentas del piloto. No existe registro público.</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
+</div>
+
+{% if creado %}
+  <p class="exito">Cuenta creada. Comparte la contraseña temporal por un canal interno y pide a la persona que la cambie al entrar.</p>
+{% endif %}
+{% if actualizado %}
+  <p class="exito">Cuenta actualizada.</p>
+{% endif %}
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% endif %}
+
+<section class="tarjeta">
+  <h2>Crear cuenta</h2>
+  <p class="ayuda">Las cuentas creadas aquí son operativas, no administradoras.</p>
+  <form method="post" action="/usuarios">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="rejilla">
+      <div class="campo">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" name="nombre" autocomplete="name" required>
+      </div>
+      <div class="campo">
+        <label for="correo">Correo</label>
+        <input id="correo" name="correo" type="email" autocomplete="email" required>
+      </div>
+      <div class="campo campo-ancho">
+        <label for="contrasena_temporal">Contraseña temporal</label>
+        <input id="contrasena_temporal" name="contrasena_temporal" type="password" minlength="12" autocomplete="new-password" required>
+        <p class="ayuda">Mínimo 12 caracteres. Triage no volverá a mostrar esta contraseña.</p>
+      </div>
+    </div>
+    <button class="boton" type="submit">Crear usuario</button>
+  </form>
+</section>
+
+<h2>Cuentas</h2>
+{% for cuenta in usuarios %}
+  <section class="tarjeta">
+    <div class="barra">
+      <div>
+        <div class="referencia">{{ cuenta.nombre }}</div>
+        <p class="ayuda">{{ cuenta.correo }}</p>
+        <div class="grupo-botones">
+          {% if cuenta.activo %}
+            <span class="estado estado-revisado">Activa</span>
+          {% else %}
+            <span class="estado estado-error">Desactivada</span>
+          {% endif %}
+          {% if cuenta.es_admin %}
+            <span class="estado estado-analizado">Administrador</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if cuenta.id == usuario.id %}
+        <span class="ayuda">Tu cuenta</span>
+      {% else %}
+        <form method="post" action="/usuarios/{{ cuenta.id }}/estado">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="activo" value="{% if cuenta.activo %}0{% else %}1{% endif %}">
+          <button class="boton {% if cuenta.activo %}boton-peligro{% else %}boton-secundario{% endif %}" type="submit">
+            {% if cuenta.activo %}Desactivar{% else %}Reactivar{% endif %}
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+    <details>
+      <summary>Restablecer contraseña</summary>
+      <form method="post" action="/usuarios/{{ cuenta.id }}/contrasena">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="campo">
+          <label for="temporal_{{ cuenta.id }}">Nueva contraseña temporal para {{ cuenta.nombre }}</label>
+          <input id="temporal_{{ cuenta.id }}" name="contrasena_temporal" type="password" minlength="12" autocomplete="new-password" required>
+        </div>
+        <button class="boton boton-secundario" type="submit">Restablecer contraseña</button>
+      </form>
+    </details>
+  </section>
+{% endfor %}
+{% endblock %}

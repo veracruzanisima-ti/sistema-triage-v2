@@ -63,6 +63,64 @@ def crear_usuario(
     return usuario
 
 
+def listar_usuarios(sesion: Session) -> list[Usuario]:
+    """Lista cuentas internas para administración explícita del piloto."""
+
+    consulta = select(Usuario).order_by(Usuario.nombre.asc(), Usuario.correo.asc())
+    return list(sesion.scalars(consulta))
+
+
+def cambiar_estado_usuario(
+    sesion: Session,
+    *,
+    usuario_objetivo: Usuario,
+    activo: bool,
+    usuario_actual: Usuario,
+) -> None:
+    """Activa o desactiva una cuenta sin permitir auto-bloqueo accidental."""
+
+    if usuario_objetivo.id == usuario_actual.id and not activo:
+        raise ValueError("no puedes desactivar tu propia cuenta")
+    usuario_objetivo.activo = activo
+    sesion.add(usuario_objetivo)
+    sesion.commit()
+
+
+def cambiar_contrasena_propia(
+    sesion: Session,
+    *,
+    usuario: Usuario,
+    contrasena_actual: str,
+    contrasena_nueva: str,
+    confirmar_contrasena: str,
+) -> None:
+    """Permite a una persona sustituir su contraseña después de autenticarse."""
+
+    if not verificar_contrasena(contrasena_actual, usuario.password_hash):
+        raise ValueError("la contraseña actual no es correcta")
+    if contrasena_nueva != confirmar_contrasena:
+        raise ValueError("la nueva contraseña y su confirmación no coinciden")
+    if contrasena_nueva == contrasena_actual:
+        raise ValueError("la nueva contraseña debe ser distinta de la actual")
+
+    usuario.password_hash = hash_contrasena(contrasena_nueva)
+    sesion.add(usuario)
+    sesion.commit()
+
+
+def restablecer_contrasena_usuario(
+    sesion: Session,
+    *,
+    usuario_objetivo: Usuario,
+    contrasena_temporal: str,
+) -> None:
+    """Permite al administrador fijar una contraseña temporal sin revelarla después."""
+
+    usuario_objetivo.password_hash = hash_contrasena(contrasena_temporal)
+    sesion.add(usuario_objetivo)
+    sesion.commit()
+
+
 def autenticar_usuario(sesion: Session, correo: str, contrasena: str) -> Usuario | None:
     """Autentica con un mensaje indistinguible para correos inexistentes/inactivos."""
 

@@ -1,4 +1,4 @@
-"""Sesiones, CSRF y dependencia de acceso interno."""
+"""Sesiones, CSRF y dependencias de acceso interno."""
 
 import secrets
 from typing import Annotated
@@ -82,3 +82,17 @@ def requerir_usuario(request: Request, sesion: Sesion) -> Usuario:
 
 
 UsuarioActual = Annotated[Usuario, Depends(requerir_usuario)]
+
+
+def requerir_admin(usuario: UsuarioActual) -> Usuario:
+    """Reserva funciones administrativas a cuentas marcadas como administradoras."""
+
+    if not usuario.es_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta acción requiere una cuenta administradora.",
+        )
+    return usuario
+
+
+UsuarioAdmin = Annotated[Usuario, Depends(requerir_admin)]
