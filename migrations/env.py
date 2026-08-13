@@ -11,6 +11,7 @@ from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, PartidaDocumento
 from triage.historico.modelos import ObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
+from triage.proveedores.modelos import ConsultaProveedor
 from triage.usuarios.modelos import Usuario
 
 config = context.config
@@ -26,6 +27,7 @@ _MODELOS_REGISTRADOS = (
     PartidaDocumento,
     NormalizacionPartida,
     ObservacionPrecio,
+    ConsultaProveedor,
 )
 target_metadata = Base.metadata
 

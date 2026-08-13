@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block titulo %}Proveedores · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Consulta actual de proveedores</h1>
+    <p class="ayuda">Cada consulta conserva trazabilidad. Triage registra lo observado, pero no elige automáticamente qué comprar.</p>
+  </div>
+  <div class="grupo-botones">
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Ver histórico</a>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver</a>
+  </div>
+</div>
+
+{% if mensaje %}<p class="exito">{{ mensaje }}</p>{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="tarjeta">
+  <h2>Canales configurados</h2>
+  {% if proveedores %}
+    <div class="grupo-botones">
+      {% for nombre in proveedores %}<span class="estado estado-analizado">{{ nombre }}</span>{% endfor %}
+    </div>
+    <p class="ayuda">Una coincidencia exitosa crea una nueva observación append-only en el histórico.</p>
+  {% else %}
+    <div class="aviso">
+      <strong>Aún no hay proveedores automáticos configurados en este entorno.</strong>
+      <p>Puedes seguir registrando evidencia manual desde Histórico. NADRO/FESA se conectarán como adaptadores sin cambiar esta pantalla.</p>
+    </div>
+  {% endif %}
+</section>
+
+{% if productos %}
+  {% for producto in productos %}
+    <section class="tarjeta">
+      <div class="barra">
+        <div>
+          <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
+          <p class="ayuda">
+            {% if producto.normalizacion.marca %}{{ producto.normalizacion.marca }} · {% endif %}
+            {{ producto.normalizacion.concentracion or "Sin concentración" }} ·
+            {{ producto.normalizacion.forma_dispositivo or "Sin forma/dispositivo" }} ·
+            {{ producto.normalizacion.presentacion or "Sin presentación" }}
+          </p>
+        </div>
+        {% if proveedores %}
+          <div class="grupo-botones">
+            {% for nombre in proveedores %}
+              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="proveedor" value="{{ nombre }}">
+                <button class="boton" type="submit">Consultar {{ nombre }}</button>
+              </form>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      {% if producto.consultas %}
+        <details>
+          <summary>Ver intentos recientes ({{ producto.consultas|length }})</summary>
+          {% for intento in producto.consultas %}
+            <div class="partida">
+              <div class="barra">
+                <div>
+                  <strong>{{ intento.proveedor }}</strong>
+                  <span class="estado estado-{{ intento.estado | lower | replace('_', '-') }}">{{ intento.estado | replace('_', ' ') | title }}</span>
+                  <p class="ayuda">{{ intento.iniciada_en }}</p>
+                </div>
+                <div>
+                  {% if intento.precio_total is not none %}<strong>Total observado: ${{ '%.2f'|format(intento.precio_total) }}</strong>{% endif %}
+                  {% if intento.precio_antes_iva is not none %}<div class="ayuda">Antes de IVA: ${{ '%.2f'|format(intento.precio_antes_iva) }}</div>{% endif %}
+                </div>
+              </div>
+              {% if intento.producto_encontrado %}<p><strong>Coincidencia:</strong> {{ intento.producto_encontrado }}</p>{% endif %}
+              {% if intento.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ intento.disponibilidad }}</p>{% endif %}
+              {% if intento.es_promocion %}<p class="aviso"><strong>Promoción observada.</strong> Debe revalidarse antes de tratarla como oportunidad de adquisición.</p>{% endif %}
+              {% if intento.mensaje_error %}<p class="error">{{ intento.mensaje_error }}</p>{% endif %}
+            </div>
+          {% endfor %}
+        </details>
+      {% else %}
+        <p class="ayuda">Todavía no hay consultas registradas para esta identidad preparada.</p>
+      {% endif %}
+    </section>
+  {% endfor %}
+{% else %}
+  <section class="tarjeta vacio">
+    <h2>No hay productos preparados para consultar</h2>
+    <p>Primero revisa el documento y confirma la preparación del producto.</p>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+  </section>
+{% endif %}
+{% endblock %}
