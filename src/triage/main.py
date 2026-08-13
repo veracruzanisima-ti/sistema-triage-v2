@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 from starlette.middleware.sessions import SessionMiddleware
 
 from triage.base_datos import crear_fabrica_sesiones, crear_motor
+from triage.calculos.rutas import router as router_calculos
 from triage.config import Configuracion, obtener_configuracion
 from triage.cotizaciones.rutas import router as router_cotizaciones
 from triage.documentos.rutas import router as router_documentos
@@ -101,6 +102,7 @@ def crear_app(
     aplicacion.include_router(router_decisiones_precio)
     aplicacion.include_router(router_proveedores)
     aplicacion.include_router(router_revision_final)
+    aplicacion.include_router(router_calculos)
 
     @aplicacion.exception_handler(AccesoRequerido)
     async def manejar_acceso_requerido(
