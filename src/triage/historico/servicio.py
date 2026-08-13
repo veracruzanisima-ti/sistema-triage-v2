@@ -132,6 +132,7 @@ def crear_observacion_precio(
     condiciones_promocion: str | None,
     disponibilidad: str | None,
     entrega_viable: bool | None,
+    guardar: bool = True,
 ) -> ObservacionPrecio:
     """Agrega una observación nueva; nunca modifica una observación anterior."""
 
@@ -181,6 +182,9 @@ def crear_observacion_precio(
         capturada_por_usuario_id=usuario_id,
     )
     sesion.add(observacion)
-    sesion.commit()
-    sesion.refresh(observacion)
+    if guardar:
+        sesion.commit()
+        sesion.refresh(observacion)
+    else:
+        sesion.flush()
     return observacion

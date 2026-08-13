@@ -1,6 +1,6 @@
 """Punto de entrada de Triage V2."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -18,6 +18,8 @@ from triage.historico.rutas import router as router_historico
 from triage.lectores.base import LectorDocumento
 from triage.lectores.openai import LectorOpenAI
 from triage.normalizacion.rutas import router as router_normalizacion
+from triage.proveedores.base import ProveedorProducto
+from triage.proveedores.rutas import router as router_proveedores
 from triage.usuarios.rutas import router as router_usuarios
 from triage.usuarios.seguridad import AccesoRequerido
 from triage.usuarios.servicio import crear_admin_inicial_si_corresponde, hay_usuarios_activos
@@ -30,6 +32,7 @@ def crear_app(
     *,
     motor: Engine | None = None,
     lector_documentos: LectorDocumento | None = None,
+    proveedores_productos: Sequence[ProveedorProducto] | None = None,
 ) -> FastAPI:
     """Construye la aplicación permitiendo inyectar infraestructura en pruebas."""
 
@@ -42,6 +45,16 @@ def crear_app(
             api_key=configuracion.openai_api_key,
             modelo=configuracion.openai_model,
         )
+
+    proveedores_por_nombre: dict[str, ProveedorProducto] = {}
+    for adaptador in proveedores_productos or ():
+        nombre = adaptador.nombre.strip()
+        if not nombre:
+            raise ValueError("un proveedor configurado no tiene nombre")
+        clave = nombre.casefold()
+        if clave in proveedores_por_nombre:
+            raise ValueError(f"proveedor duplicado: {nombre}")
+        proveedores_por_nombre[clave] = adaptador
 
     @asynccontextmanager
     async def ciclo_vida(_aplicacion: FastAPI) -> AsyncIterator[None]:
@@ -74,6 +87,7 @@ def crear_app(
     aplicacion.state.motor = motor_base_datos
     aplicacion.state.fabrica_sesiones = fabrica_sesiones
     aplicacion.state.lector_documentos = lector
+    aplicacion.state.proveedores_productos = proveedores_por_nombre
     aplicacion.state.plantillas = Jinja2Templates(
         directory=str(BASE_DIR / "templates")
     )
@@ -82,6 +96,7 @@ def crear_app(
     aplicacion.include_router(router_documentos)
     aplicacion.include_router(router_normalizacion)
     aplicacion.include_router(router_historico)
+    aplicacion.include_router(router_proveedores)
 
     @aplicacion.exception_handler(AccesoRequerido)
     async def manejar_acceso_requerido(
