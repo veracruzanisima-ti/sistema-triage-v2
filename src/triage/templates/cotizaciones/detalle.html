@@ -93,7 +93,7 @@
 <section class="tarjeta">
   <div class="barra">
     <div>
-      <h2>Preparación, histórico y proveedores</h2>
+      <h2>Preparación, precios y proveedores</h2>
       {% if resumen_normalizacion.total %}
         <p class="ayuda">{{ resumen_normalizacion.preparados }} de {{ resumen_normalizacion.total }} partidas incluidas están preparadas para búsqueda.</p>
       {% else %}
@@ -106,11 +106,12 @@
         {% if resumen_normalizacion.preparados %}
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Histórico de precios</a>
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/proveedores">Consultar proveedores</a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/decisiones-precio">Decidir referencias</a>
         {% endif %}
       </div>
     {% endif %}
   </div>
-  <p>La preparación conserva la solicitud original. El histórico agrega evidencia append-only y las consultas actuales registran intentos sin elegir automáticamente un proveedor.</p>
+  <p>La preparación conserva la solicitud original. El histórico guarda evidencia, las consultas registran intentos y una persona decide qué usar como referencia estable u oportunidad de adquisición.</p>
 </section>
 
 <section class="tarjeta">
@@ -131,6 +132,6 @@
 
 <section class="tarjeta">
   <h2>Después</h2>
-  <p>Con evidencia histórica y consultas actuales incorporaremos la selección explícita entre referencia estable y oportunidad de adquisición.</p>
+  <p>Con referencias elegidas podremos incorporar cálculo fiscal validado, precio de venta y revisión final sin confundir evidencia con decisión.</p>
 </section>
 {% endblock %}
