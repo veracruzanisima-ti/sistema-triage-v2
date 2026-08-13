@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block titulo %}Decisiones de precio · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Decisiones de precio</h1>
+    <p class="ayuda">Elige evidencia; Triage no selecciona automáticamente el proveedor.</p>
+  </div>
+  <div class="grupo-botones">
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Histórico</a>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Cotización</a>
+  </div>
+</div>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="tarjeta">
+  <h2>Cómo usar esta etapa</h2>
+  <p><strong>Referencia estable:</strong> evidencia que usarás como base para construir la cotización.</p>
+  <p><strong>Oportunidad de adquisición:</strong> evidencia que podría servir para comprar mejor al momento de surtir.</p>
+  <p class="ayuda">Una promoción histórica no se considera vigente por sí sola. Revalida condiciones, stock y entrega antes de comprar.</p>
+</section>
+
+{% if productos %}
+  {% for producto in productos %}
+    {% set seleccion = selecciones.get(producto.partida.id) %}
+    <section class="tarjeta">
+      <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
+      <p class="ayuda">
+        {% if producto.normalizacion.marca %}{{ producto.normalizacion.marca }} · {% endif %}
+        {{ producto.normalizacion.concentracion or "Sin concentración" }}
+        {% if producto.normalizacion.forma_dispositivo %} · {{ producto.normalizacion.forma_dispositivo }}{% endif %}
+        {% if producto.normalizacion.presentacion %} · {{ producto.normalizacion.presentacion }}{% endif %}
+      </p>
+
+      {% if seleccion and (seleccion.referencia_estable_id or seleccion.oportunidad_adquisicion_id) %}
+        <div class="aviso">
+          <strong>Selección vigente</strong>
+          <p>
+            Referencia estable: {% if seleccion.referencia_estable_id %}seleccionada{% else %}sin definir{% endif %}
+            · Oportunidad de adquisición: {% if seleccion.oportunidad_adquisicion_id %}seleccionada{% else %}sin definir{% endif %}
+          </p>
+        </div>
+      {% endif %}
+
+      {% if producto.observaciones %}
+        {% for observacion in producto.observaciones %}
+          <div class="partida">
+            <div class="barra">
+              <div>
+                <strong>{{ observacion.proveedor }}</strong>
+                <div class="ayuda">{{ observacion.observado_en.strftime("%d/%m/%Y %H:%M") }} · {{ observacion.fuente }}</div>
+              </div>
+              <div class="grupo-botones">
+                {% if observacion.es_promocion %}<span class="estado estado-pendiente-revision">Promoción</span>{% endif %}
+                {% if seleccion and seleccion.referencia_estable_id == observacion.id %}<span class="estado estado-revisado">Referencia estable</span>{% endif %}
+                {% if seleccion and seleccion.oportunidad_adquisicion_id == observacion.id %}<span class="estado estado-analizado">Oportunidad de adquisición</span>{% endif %}
+              </div>
+            </div>
+            <p>
+              {% if observacion.precio_antes_iva is not none %}Antes de IVA: ${{ "%.2f"|format(observacion.precio_antes_iva) }}{% endif %}
+              {% if observacion.precio_total is not none %} · Total: ${{ "%.2f"|format(observacion.precio_total) }}{% endif %}
+            </p>
+            {% if observacion.disponibilidad %}<p class="ayuda">Disponibilidad: {{ observacion.disponibilidad }}</p>{% endif %}
+            {% if observacion.es_promocion and seleccion and seleccion.referencia_estable_id == observacion.id %}
+              <p class="aviso">Esta referencia estable proviene de una promoción. Confirma que sigue siendo adecuada como base.</p>
+            {% endif %}
+            {% if seleccion and seleccion.oportunidad_adquisicion_id == observacion.id and observacion.entrega_viable is sameas false %}
+              <p class="aviso">La entrega fue registrada como no viable. Revisa esta oportunidad antes de surtir.</p>
+            {% endif %}
+            <div class="grupo-botones">
+              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="rol" value="{{ roles.REFERENCIA_ESTABLE.value }}">
+                <input type="hidden" name="observacion_id" value="{{ observacion.id }}">
+                <button class="boton boton-secundario" type="submit">Usar como referencia estable</button>
+              </form>
+              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="rol" value="{{ roles.OPORTUNIDAD_ADQUISICION.value }}">
+                <input type="hidden" name="observacion_id" value="{{ observacion.id }}">
+                <button class="boton boton-secundario" type="submit">Usar como oportunidad</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+
+        {% if seleccion and seleccion.referencia_estable_id %}
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="rol" value="{{ roles.REFERENCIA_ESTABLE.value }}">
+            <input type="hidden" name="observacion_id" value="">
+            <button class="boton boton-texto" type="submit">Quitar referencia estable</button>
+          </form>
+        {% endif %}
+        {% if seleccion and seleccion.oportunidad_adquisicion_id %}
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="rol" value="{{ roles.OPORTUNIDAD_ADQUISICION.value }}">
+            <input type="hidden" name="observacion_id" value="">
+            <button class="boton boton-texto" type="submit">Quitar oportunidad de adquisición</button>
+          </form>
+        {% endif %}
+      {% else %}
+        <p class="ayuda">Aún no hay evidencia de precio para decidir.</p>
+        <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Agregar evidencia</a>
+      {% endif %}
+    </section>
+  {% endfor %}
+{% else %}
+  <section class="tarjeta vacio"><h2>No hay productos preparados</h2></section>
+{% endif %}
+{% endblock %}

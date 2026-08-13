@@ -9,6 +9,7 @@ from triage.base_datos import Base, normalizar_database_url
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, PartidaDocumento
+from triage.historico.decisiones_modelos import DecisionPrecio
 from triage.historico.modelos import ObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.modelos import ConsultaProveedor
@@ -28,6 +29,7 @@ _MODELOS_REGISTRADOS = (
     NormalizacionPartida,
     ObservacionPrecio,
     ConsultaProveedor,
+    DecisionPrecio,
 )
 target_metadata = Base.metadata
 
