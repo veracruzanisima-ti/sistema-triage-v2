@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from triage.usuarios.modelos import Usuario
 from triage.usuarios.seguridad import (
     Sesion,
     UsuarioActual,
@@ -234,7 +235,10 @@ def cambiar_estado_usuario_web(
     """Activa o desactiva una cuenta interna de forma reversible."""
 
     validar_token_csrf(request, csrf_token)
-    usuario_objetivo = sesion.get(type(admin), usuario_id)
+    if activo not in {"0", "1"}:
+        raise HTTPException(status_code=422, detail="Estado de usuario no permitido")
+
+    usuario_objetivo = sesion.get(Usuario, usuario_id)
     if usuario_objetivo is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -254,7 +258,10 @@ def cambiar_estado_usuario_web(
     )
 
 
-@router.post("/usuarios/{usuario_id}/contrasena", name="restablecer_contrasena_usuario_web")
+@router.post(
+    "/usuarios/{usuario_id}/contrasena",
+    name="restablecer_contrasena_usuario_web",
+)
 def restablecer_contrasena_usuario_web(
     usuario_id: str,
     request: Request,
@@ -266,7 +273,7 @@ def restablecer_contrasena_usuario_web(
     """Permite al administrador fijar una nueva contraseña temporal."""
 
     validar_token_csrf(request, csrf_token)
-    usuario_objetivo = sesion.get(type(admin), usuario_id)
+    usuario_objetivo = sesion.get(Usuario, usuario_id)
     if usuario_objetivo is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     try:
