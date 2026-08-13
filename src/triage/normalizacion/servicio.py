@@ -1,7 +1,7 @@
 """Reglas mínimas para preparar partidas revisadas sin alterar la solicitud original."""
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
