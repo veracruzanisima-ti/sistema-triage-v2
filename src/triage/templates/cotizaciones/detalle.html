@@ -91,6 +91,23 @@
 </section>
 
 <section class="tarjeta">
+  <div class="barra">
+    <div>
+      <h2>Preparación de productos</h2>
+      {% if resumen_normalizacion.total %}
+        <p class="ayuda">{{ resumen_normalizacion.preparados }} de {{ resumen_normalizacion.total }} partidas incluidas están preparadas para búsqueda.</p>
+      {% else %}
+        <p class="ayuda">Primero revisa un documento y deja incluida al menos una partida.</p>
+      {% endif %}
+    </div>
+    {% if resumen_normalizacion.total %}
+      <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+    {% endif %}
+  </div>
+  <p>Esta etapa conserva la solicitud original y crea una copia operativa para histórico de precios y proveedores.</p>
+</section>
+
+<section class="tarjeta">
   <h2>Estado de trabajo</h2>
   <p class="ayuda">El estado sigue siendo una decisión explícita del equipo.</p>
   <div class="grupo-botones">
@@ -108,6 +125,6 @@
 
 <section class="tarjeta">
   <h2>Después</h2>
-  <p>Cuando los documentos y partidas estén revisados incorporaremos normalización de producto, histórico de precios y proveedores. Las alertas provisionales de comercialización ya se muestran, pero siguen requiriendo decisión humana.</p>
+  <p>Con productos preparados incorporaremos histórico de precios y proveedores. Las alertas provisionales de comercialización siguen requiriendo decisión humana.</p>
 </section>
 {% endblock %}
