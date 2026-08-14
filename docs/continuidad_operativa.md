@@ -10,15 +10,17 @@ Este documento conserva el contexto funcional que debe sobrevivir a cambios de c
 - PR #24 (`feat: cerrar flujo de precios a revisión`) integrado a `main` con CI verde.
 - PR #25 (`feat: conservar contexto de código postal en precios`) integrado a `main` con CI verde.
 - PR #26 (`feat: unificar búsqueda de precios`) integrado a `main` con CI verde.
+- PR #27 (`feat: descubrir proveedores en web con doble validación`) integrado a `main` con CI verde.
 - El recorrido visible ya puede avanzar por `Sube y analiza → Revisa → Confirma producto → Busca precio → Revisa cotización` sin obligar al usuario a recorrer pantallas técnicas.
 - En `Buscar precios`, una observación no promocional puede marcarse como `Usar para cotizar`; se reutiliza la decisión append-only `REFERENCIA_ESTABLE` ya existente.
 - Una promoción no puede convertirse en referencia estable, ni desde el flujo normal ni desde la vista avanzada. Las selecciones promocionales históricas dejan de considerarse vigentes sin borrar su trazabilidad.
 - El CP habitual puede configurarse con `CODIGO_POSTAL_CONSULTA_DEFAULT`; cada cotización puede cambiarlo y cada observación nueva conserva el CP con el que fue obtenida. Las consultas automáticas no corren sin CP.
-- La búsqueda unificada ya recorre todos los productos y adaptadores configurados con una sola acción. Un fallo aislado queda registrado y no detiene las demás fuentes.
-- El bloque actualmente en desarrollo (`agent/descubrimiento-web-proveedores`) agrega descubrimiento web opcional por producto. Sólo guarda coincidencias exactas con precio explícito y conserva URL, producto mostrado, CP y origen de evidencia.
+- La búsqueda unificada recorre todos los productos y adaptadores configurados con una sola acción. Un fallo aislado queda registrado y no detiene las demás fuentes.
+- El descubrimiento web es opcional por producto, conserva URL/producto mostrado/origen y aplica doble filtro de coincidencia antes de guardar un precio utilizable.
+- El bloque actualmente en desarrollo (`agent/reutilizar-precios-del-dia`) deduplica identidades repetidas y propone referencias estables realmente cotizadas durante el día actual con el mismo CP. La persona aún confirma `Usar precio de hoy` y puede ejecutar `Revalidar precio`.
 - NADRO no debe integrarse inicialmente mediante scraping de pantalla. La vía preferida es EdiNadro/archivos estructurados oficiales; antes de programar el parser se requiere una muestra real del archivo/layout autorizado para no inventar columnas.
 - Un scraper legado de FESA contiene una credencial real hardcodeada. Esa credencial no está en V2 ni en GitHub; debe rotarse y el secreto legado no debe reutilizarse ni copiarse al repositorio.
-- Todavía no están implementados el adaptador real NADRO/FESA, sesiones autenticadas por fuente, vigencia diaria/reutilización automática de precios, cadena fría persistente, Excel final ni sugerencia de recargo.
+- Todavía no están implementados el adaptador real NADRO/FESA, sesiones autenticadas por fuente, cadena fría persistente, Excel final ni sugerencia de recargo.
 
 ## 1. Fuente de verdad del proyecto
 
@@ -96,20 +98,21 @@ Una oferta puede registrarse como oportunidad de adquisición sin utilizarse com
 
 El sistema no compra automáticamente ni modifica inventario por detectar una oportunidad. Sólo la señala para evaluación humana.
 
-### Vigencia y reutilización de precios
+### Vigencia y reutilización diaria de precios
 
-Dirección operativa recomendada para el siguiente bloque:
+Política operativa adoptada para el MVP:
 
-- Si la misma identidad exacta de producto aparece varias veces en una cotización, consultar esa identidad una sola vez y reutilizar la misma evidencia para las partidas equivalentes.
-- Si una observación estable, no promocional, del mismo producto exacto y mismo CP fue obtenida durante el día actual, Triage puede proponerla nuevamente sin recorrer todas las fuentes.
-- La interfaz debe mostrar claramente la hora de la observación, por ejemplo `Visto hoy a las 10:42`.
-- Antes de cerrar una nueva cotización que reutiliza un precio, ofrecer o ejecutar un recheck corto contra la fuente/proveedor elegido. El recheck exitoso sí crea una nueva observación; reutilizar una existente no debe falsificar una nueva fecha de observación.
-- Al siguiente día, la búsqueda normal vuelve a considerarse necesaria por defecto.
-- Una promoción u oferta debe revalidarse cada vez y no entra en la vigencia estable diaria.
-- Cambiar marca, concentración, forma/dispositivo, presentación o CP invalida la reutilización automática.
-- No adoptar todavía vigencia semanal. Más adelante se podrá medir estabilidad por proveedor y ajustar la política con evidencia real.
-
-Esta política es una recomendación operativa para ahorrar consultas sin sacrificar trazabilidad. Debe medirse durante uso real antes de convertir intervalos mayores en regla fija.
+- La identidad de reutilización es exacta: producto, marca cuando exista, concentración, forma/dispositivo y presentación.
+- Si la misma identidad aparece varias veces en una cotización, la búsqueda unificada la consulta una sola vez. La evidencia resultante sigue siendo visible para todas las partidas que compartan esa identidad.
+- Una referencia sólo se considera `cotizada hoy` cuando fue realmente elegida mediante `REFERENCIA_ESTABLE`, la observación fue realizada hoy y la decisión también ocurrió hoy según el día operativo `America/Mexico_City`.
+- Para reutilizar debe conservar el mismo CP de consulta, no ser promoción y no tener entrega marcada como inviable.
+- La interfaz propone `Usar precio de hoy`; no crea silenciosamente una nueva decisión comercial.
+- Reutilizar una observación no crea una observación falsa ni cambia su fecha original.
+- `Revalidar precio` fuerza una consulta nueva contra todos los adaptadores configurados para esa partida. Los resultados del recheck sí crean nuevas observaciones append-only.
+- Al cambiar de día, una referencia deja de entrar en la reutilización automática y la búsqueda normal vuelve a ser necesaria.
+- Cambiar marca, concentración, forma/dispositivo, presentación o CP invalida la reutilización.
+- Las promociones/ofertas no entran en esta vigencia diaria estable y deben revalidarse.
+- No usar vigencia semanal por ahora. Sólo considerar intervalos mayores después de medir estabilidad real por proveedor.
 
 ## 7. Contexto de cada consulta de precio
 
@@ -159,7 +162,9 @@ El objetivo es descubrir opciones que el equipo no conocía sin mantener decenas
 
 ### Orquestación de consultas
 
-La interfaz normal ofrece una sola acción `Buscar precios` que recorre todos los productos preparados y todos los adaptadores configurados. Por ahora la ejecución es secuencial para mantener comportamiento simple, predecible y trazable.
+La interfaz normal ofrece una sola acción `Buscar precios`. La búsqueda deduplica identidades exactas, reutiliza referencias estables del día cuando corresponda y consulta los adaptadores configurados sólo para las identidades que necesitan actualización.
+
+Por ahora la ejecución de adaptadores es secuencial para mantener comportamiento simple, predecible y trazable.
 
 Un error operativo de una fuente se registra en su intento y no debe detener las demás consultas. Errores de configuración del sistema sí deben hacerse visibles en vez de ocultarse.
 
@@ -175,6 +180,7 @@ Reglas conservadoras:
 - sólo se guarda una opción si la fuente muestra un precio numérico explícito;
 - Triage no infiere IVA desde la web;
 - sólo una coincidencia exacta de identidad puede guardarse como observación utilizable;
+- además de la clasificación estructurada del buscador, un matcher local vuelve a validar marca, forma/dispositivo y medidas;
 - las coincidencias aproximadas se descartan del histórico de precios utilizables;
 - se conserva la URL directa y el texto exacto del producto mostrado por la fuente;
 - una promoción sólo se marca como tal si la fuente lo declara explícitamente;
@@ -281,14 +287,13 @@ No aplicar aprendizaje automático que cambie reglas silenciosamente. Acumular e
 
 Orden recomendado a partir de este documento:
 
-1. completar y validar descubrimiento web opcional por producto;
-2. deduplicar identidades repetidas y reutilizar precios estables observados durante el día, con recheck antes del cierre;
-3. obtener una muestra real de EdiNadro y construir el primer adaptador estructurado;
-4. incorporar manejo de sesiones autenticadas para fuentes que realmente lo requieran, sin guardar secretos en GitHub;
-5. persistir y reutilizar `Cadena fría: Sí/No` para productos conocidos;
-6. generar Excel limpio con fórmulas;
-7. incorporar sugerencia explicable de recargo 15–30%;
-8. acumular Excel aprobados y correcciones para detectar tendencias.
+1. completar y validar reutilización diaria/deduplicación con CI y uso interno;
+2. obtener una muestra real de EdiNadro y construir el primer adaptador estructurado;
+3. incorporar manejo de sesiones autenticadas para fuentes que realmente lo requieran, sin guardar secretos en GitHub;
+4. persistir y reutilizar `Cadena fría: Sí/No` para productos conocidos;
+5. generar Excel limpio con fórmulas;
+6. incorporar sugerencia explicable de recargo 15–30%;
+7. acumular Excel aprobados y correcciones para detectar tendencias.
 
 ## 14. Límites actuales
 
