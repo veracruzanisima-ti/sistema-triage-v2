@@ -126,7 +126,9 @@ def _convertir_candidato(candidato: CandidatoWebRespuesta) -> CandidatoWeb | Non
         return None
 
 
-def _convertir_resultado(resultado: ResultadoDescubrimientoWebRespuesta) -> tuple[CandidatoWeb, ...]:
+def _convertir_resultado(
+    resultado: ResultadoDescubrimientoWebRespuesta,
+) -> tuple[CandidatoWeb, ...]:
     candidatos: list[CandidatoWeb] = []
     for candidato_respuesta in resultado.candidatos[:5]:
         candidato = _convertir_candidato(candidato_respuesta)
