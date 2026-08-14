@@ -20,6 +20,7 @@ from triage.documentos.servicio import (
     validar_archivo,
 )
 from triage.lectores.esquemas import LecturaDocumento, PartidaLeida
+from triage.modelos_ia import obtener_lector_documentos
 from triage.restricciones import evaluar_partida
 from triage.usuarios.seguridad import Sesion, UsuarioActual, obtener_token_csrf, validar_token_csrf
 
@@ -209,7 +210,7 @@ async def subir_y_procesar(
 
     validar_token_csrf(request, csrf_token)
     cotizacion = _cotizacion_o_404(sesion, cotizacion_id)
-    lector = request.app.state.lector_documentos
+    lector = obtener_lector_documentos(request)
     if lector is None:
         return _render_subida(
             request,
@@ -267,7 +268,7 @@ async def subir_y_procesar_cola(
 
     validar_token_csrf(request, csrf_token)
     cotizacion = _cotizacion_o_404(sesion, cotizacion_id)
-    lector = request.app.state.lector_documentos
+    lector = obtener_lector_documentos(request)
     if lector is None:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
