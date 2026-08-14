@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block titulo %}Modelos IA · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Modelos IA</h1>
+    <p class="ayuda">Selector temporal para comparar precisión, velocidad y costo durante el piloto.</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
+</div>
+
+{% if guardado %}
+  <p class="exito">Modelos actualizados para esta sesión del navegador.</p>
+{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="tarjeta">
+  <h2>Cómo funciona</h2>
+  <p>La elección sólo afecta este navegador. No cambia la configuración de otras personas y no guarda ninguna API key.</p>
+  <p class="ayuda">Las opciones Gemini se habilitan únicamente cuando Render tenga configurada <code>GEMINI_API_KEY</code>.</p>
+</section>
+
+<form method="post" action="/modelos-ia">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <section class="tarjeta">
+    <h2>Lectura de documentos</h2>
+    <p class="ayuda">Se usa al analizar PDF o imágenes antes de tu revisión manual.</p>
+    <div class="campo">
+      <label for="modelo_lector">Modelo</label>
+      <select id="modelo_lector" name="modelo_lector" required>
+        {% for opcion in lectores %}
+          <option value="{{ opcion.clave }}" {% if opcion.seleccionada %}selected{% endif %} {% if not opcion.disponible %}disabled{% endif %}>
+            {{ opcion.etiqueta }}{% if not opcion.disponible %} · No disponible{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% for opcion in lectores %}
+      <div class="partida">
+        <div class="barra">
+          <strong>{{ opcion.etiqueta }}</strong>
+          {% if opcion.disponible %}
+            <span class="estado estado-revisado">Disponible</span>
+          {% else %}
+            <span class="estado estado-pendiente-revision">Falta API key</span>
+          {% endif %}
+        </div>
+        <p class="ayuda">{{ opcion.descripcion }}</p>
+      </div>
+    {% endfor %}
+  </section>
+
+  <section class="tarjeta">
+    <h2>Búsqueda web</h2>
+    <p class="ayuda">Se usa únicamente cuando pulsas una búsqueda de precios en web.</p>
+    <div class="campo">
+      <label for="modelo_web">Modelo</label>
+      <select id="modelo_web" name="modelo_web" required>
+        {% for opcion in buscadores %}
+          <option value="{{ opcion.clave }}" {% if opcion.seleccionada %}selected{% endif %} {% if not opcion.disponible %}disabled{% endif %}>
+            {{ opcion.etiqueta }}{% if not opcion.disponible %} · No disponible{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% for opcion in buscadores %}
+      <div class="partida">
+        <div class="barra">
+          <strong>{{ opcion.etiqueta }}</strong>
+          {% if opcion.disponible %}
+            <span class="estado estado-revisado">Disponible</span>
+          {% else %}
+            <span class="estado estado-pendiente-revision">Falta API key</span>
+          {% endif %}
+        </div>
+        <p class="ayuda">{{ opcion.descripcion }}</p>
+      </div>
+    {% endfor %}
+  </section>
+
+  <button class="boton" type="submit">Usar estos modelos</button>
+</form>
+{% endblock %}
