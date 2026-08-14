@@ -71,7 +71,9 @@ class Configuracion(BaseSettings):
         if not self.modelo_openai_web:
             raise ValueError("OPENAI_MODEL u OPENAI_MODEL_WEB debe definir el modelo web")
         if self.gemini_api_key.strip() and not self.gemini_model_lector.strip():
-            raise ValueError("GEMINI_MODEL_LECTOR no puede estar vacío cuando Gemini está configurado")
+            raise ValueError(
+                "GEMINI_MODEL_LECTOR no puede estar vacío cuando Gemini está configurado"
+            )
         if self.gemini_api_key.strip() and not self.gemini_model_web.strip():
             raise ValueError("GEMINI_MODEL_WEB no puede estar vacío cuando Gemini está configurado")
 
