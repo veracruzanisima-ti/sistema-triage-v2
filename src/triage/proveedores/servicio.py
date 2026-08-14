@@ -13,6 +13,7 @@ from triage.historico.modelos import OrigenObservacionPrecio
 from triage.historico.servicio import clave_producto, crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.base import ProveedorProducto, ResultadoProveedor, SolicitudProveedor
+from triage.proveedores.coincidencia_catalogo import CandidatoCatalogo, evaluar_candidato
 from triage.proveedores.descubrimiento_web import DescubridorWeb
 from triage.proveedores.modelos import ConsultaProveedor, EstadoConsultaProveedor
 
@@ -371,6 +372,19 @@ def ejecutar_descubrimiento_web(
             or not proveedor
             or not producto_observado
         ):
+            descartados += 1
+            continue
+
+        evaluacion = evaluar_candidato(
+            solicitud,
+            CandidatoCatalogo(
+                descripcion=producto_observado,
+                precio_observado=candidato.precio_total,
+                stock=None,
+                fuente=str(candidato.url),
+            ),
+        )
+        if not evaluacion.coincide:
             descartados += 1
             continue
 
