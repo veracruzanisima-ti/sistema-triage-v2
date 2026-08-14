@@ -1,12 +1,15 @@
 """Descubrimiento opcional de nuevas fuentes públicas para un producto preparado."""
 
+import logging
 from decimal import Decimal
 from typing import Protocol
 
 from openai import OpenAI
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, ValidationError
 
 from triage.proveedores.base import SolicitudProveedor
+
+logger = logging.getLogger(__name__)
 
 
 class CandidatoWeb(BaseModel):
@@ -25,6 +28,26 @@ class CandidatoWeb(BaseModel):
 
 class ResultadoDescubrimientoWeb(BaseModel):
     candidatos: list[CandidatoWeb] = Field(default_factory=list, max_length=5)
+
+
+class CandidatoWebRespuesta(BaseModel):
+    """Contrato deliberadamente simple para Structured Outputs de OpenAI."""
+
+    proveedor: str
+    producto_exacto: str
+    url: str
+    precio_total: float | None = None
+    coincidencia_exacta: bool
+    es_promocion: bool = False
+    condiciones_promocion: str | None = None
+    disponibilidad: str | None = None
+    entrega_viable: bool | None = None
+
+
+class ResultadoDescubrimientoWebRespuesta(BaseModel):
+    """Evita formatos y restricciones JSON Schema que no necesita el modelo externo."""
+
+    candidatos: list[CandidatoWebRespuesta] = Field(default_factory=list)
 
 
 class DescubridorWeb(Protocol):
@@ -61,6 +84,29 @@ Reglas obligatorias:
 - Prioriza farmacias, distribuidores y comercios con página de producto identificable.
 - No tomes ninguna decisión sobre qué opción debe cotizarse o comprarse.
 """.strip()
+
+
+def _convertir_candidato(candidato: CandidatoWebRespuesta) -> CandidatoWeb | None:
+    """Aplica validación local fuerte después de recibir un esquema externo simple."""
+
+    try:
+        return CandidatoWeb(
+            proveedor=candidato.proveedor,
+            producto_exacto=candidato.producto_exacto,
+            url=candidato.url,
+            precio_total=(
+                Decimal(str(candidato.precio_total))
+                if candidato.precio_total is not None
+                else None
+            ),
+            coincidencia_exacta=candidato.coincidencia_exacta,
+            es_promocion=candidato.es_promocion,
+            condiciones_promocion=candidato.condiciones_promocion,
+            disponibilidad=candidato.disponibilidad,
+            entrega_viable=candidato.entrega_viable,
+        )
+    except (ValidationError, ValueError):
+        return None
 
 
 class DescubridorWebOpenAI:
@@ -102,18 +148,33 @@ class DescubridorWebOpenAI:
                     }
                 ],
                 input=f"{_INSTRUCCIONES}\n\n{descripcion}",
-                text_format=ResultadoDescubrimientoWeb,
+                text_format=ResultadoDescubrimientoWebRespuesta,
             )
         except Exception as error:
+            logger.warning(
+                "Fallo de web_search OpenAI tipo=%s status=%s code=%s param=%s request_id=%s",
+                type(error).__name__,
+                getattr(error, "status_code", None),
+                getattr(error, "code", None),
+                getattr(error, "param", None),
+                getattr(error, "request_id", None),
+            )
             raise ErrorDescubrimientoWeb(
-                f"La búsqueda web no pudo completarse ({type(error).__name__})"
+                "La búsqueda web no pudo completarse. "
+                "Intenta de nuevo o registra el precio manualmente."
             ) from error
 
         for salida in respuesta.output:
             if salida.type != "message":
                 continue
             for parte in salida.content:
-                if parte.type == "output_text" and parte.parsed is not None:
-                    return tuple(parte.parsed.candidatos)
+                if parte.type != "output_text" or parte.parsed is None:
+                    continue
+                candidatos: list[CandidatoWeb] = []
+                for candidato_respuesta in parte.parsed.candidatos[:5]:
+                    candidato = _convertir_candidato(candidato_respuesta)
+                    if candidato is not None:
+                        candidatos.append(candidato)
+                return tuple(candidatos)
 
         raise ErrorDescubrimientoWeb("La búsqueda web no devolvió candidatos estructurados")

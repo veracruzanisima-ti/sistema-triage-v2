@@ -56,7 +56,7 @@
     {% elif proveedores %}
       <button class="boton" type="button" disabled>Buscar precios</button>
     {% else %}
-      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Registrar precio manual</a>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores">Registrar precio manual</a>
     {% endif %}
   </div>
 </section>
@@ -197,7 +197,7 @@
               {% endif %}
             {% endfor %}
           {% endif %}
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Registrar precio manual</a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores">Registrar precio manual</a>
         </div>
       </details>
 
