@@ -17,10 +17,15 @@ from triage.documentos.rutas import router as router_documentos
 from triage.historico.decisiones_rutas import router as router_decisiones_precio
 from triage.historico.rutas import router as router_historico
 from triage.lectores.base import LectorDocumento
+from triage.lectores.gemini import LectorGemini
 from triage.lectores.openai import LectorOpenAI
 from triage.normalizacion.rutas import router as router_normalizacion
 from triage.proveedores.base import ProveedorProducto
-from triage.proveedores.descubrimiento_web import DescubridorWeb, DescubridorWebOpenAI
+from triage.proveedores.descubrimiento_web import (
+    DescubridorWeb,
+    DescubridorWebGemini,
+    DescubridorWebOpenAI,
+)
 from triage.proveedores.rutas import router as router_proveedores
 from triage.revision_final.rutas import router as router_revision_final
 from triage.usuarios.rutas import router as router_usuarios
@@ -28,6 +33,17 @@ from triage.usuarios.seguridad import AccesoRequerido
 from triage.usuarios.servicio import crear_admin_inicial_si_corresponde, hay_usuarios_activos
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def _modelos_unicos(*modelos: str) -> tuple[str, ...]:
+    """Conserva el orden al armar el pequeño catálogo del piloto."""
+
+    resultado: list[str] = []
+    for modelo in modelos:
+        limpio = modelo.strip()
+        if limpio and limpio not in resultado:
+            resultado.append(limpio)
+    return tuple(resultado)
 
 
 def crear_app(
@@ -43,19 +59,52 @@ def crear_app(
     configuracion = configuracion or obtener_configuracion()
     motor_base_datos = motor or crear_motor(configuracion.database_url)
     fabrica_sesiones = crear_fabrica_sesiones(motor_base_datos)
-    lector = lector_documentos
-    if lector is None and configuracion.openai_api_key.strip():
-        lector = LectorOpenAI(
-            api_key=configuracion.openai_api_key,
-            modelo=configuracion.modelo_openai_lector,
+
+    lectores_ia: dict[str, LectorDocumento] = {}
+    clave_lector_default = ""
+    if lector_documentos is not None:
+        clave_lector_default = "inyectado:lector"
+        lectores_ia[clave_lector_default] = lector_documentos
+    elif configuracion.openai_api_key.strip():
+        for modelo in _modelos_unicos(configuracion.modelo_openai_lector, "gpt-5", "gpt-5.4-mini"):
+            lectores_ia[f"openai:{modelo}"] = LectorOpenAI(
+                api_key=configuracion.openai_api_key,
+                modelo=modelo,
+            )
+        clave_lector_default = f"openai:{configuracion.modelo_openai_lector}"
+
+    if configuracion.gemini_api_key.strip():
+        modelo = configuracion.gemini_model_lector.strip()
+        lectores_ia[f"gemini:{modelo}"] = LectorGemini(
+            api_key=configuracion.gemini_api_key,
+            modelo=modelo,
         )
 
-    buscador_web = descubridor_web
-    if buscador_web is None and configuracion.openai_api_key.strip():
-        buscador_web = DescubridorWebOpenAI(
-            api_key=configuracion.openai_api_key,
-            modelo=configuracion.modelo_openai_web,
+    lector = lectores_ia.get(clave_lector_default) or next(iter(lectores_ia.values()), None)
+
+    descubridores_ia: dict[str, DescubridorWeb] = {}
+    clave_web_default = ""
+    if descubridor_web is not None:
+        clave_web_default = "inyectado:web"
+        descubridores_ia[clave_web_default] = descubridor_web
+    elif configuracion.openai_api_key.strip():
+        for modelo in _modelos_unicos(configuracion.modelo_openai_web, "gpt-5", "gpt-5.4-mini"):
+            descubridores_ia[f"openai:{modelo}"] = DescubridorWebOpenAI(
+                api_key=configuracion.openai_api_key,
+                modelo=modelo,
+            )
+        clave_web_default = f"openai:{configuracion.modelo_openai_web}"
+
+    if configuracion.gemini_api_key.strip():
+        modelo = configuracion.gemini_model_web.strip()
+        descubridores_ia[f"gemini:{modelo}"] = DescubridorWebGemini(
+            api_key=configuracion.gemini_api_key,
+            modelo=modelo,
         )
+
+    buscador_web = descubridores_ia.get(clave_web_default) or next(
+        iter(descubridores_ia.values()), None
+    )
 
     proveedores_por_nombre: dict[str, ProveedorProducto] = {}
     for adaptador in proveedores_productos or ():
@@ -98,8 +147,12 @@ def crear_app(
     aplicacion.state.motor = motor_base_datos
     aplicacion.state.fabrica_sesiones = fabrica_sesiones
     aplicacion.state.lector_documentos = lector
+    aplicacion.state.lectores_ia = lectores_ia
+    aplicacion.state.clave_lector_default = clave_lector_default
     aplicacion.state.proveedores_productos = proveedores_por_nombre
     aplicacion.state.descubridor_web = buscador_web
+    aplicacion.state.descubridores_ia = descubridores_ia
+    aplicacion.state.clave_web_default = clave_web_default
     aplicacion.state.plantillas = Jinja2Templates(
         directory=str(BASE_DIR / "templates")
     )
