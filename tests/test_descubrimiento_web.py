@@ -90,6 +90,13 @@ class DescubridorFalso:
                 precio_total=Decimal("800.00"),
                 coincidencia_exacta=False,
             ),
+            CandidatoWeb(
+                proveedor="Farmacia Mal Clasificada",
+                producto_exacto="Lantus pluma 3 mL",
+                url="https://ejemplo.invalid/falso-exacto",
+                precio_total=Decimal("700.00"),
+                coincidencia_exacta=True,
+            ),
         )
 
 
@@ -103,9 +110,9 @@ def test_descubrimiento_web_guarda_solo_coincidencias_exactas(cliente):
             usuario_id=usuario_id,
             descubridor=DescubridorFalso(),
         )
-        assert resumen.candidatos == 2
+        assert resumen.candidatos == 3
         assert resumen.guardados == 1
-        assert resumen.descartados == 1
+        assert resumen.descartados == 2
 
         observaciones = list(sesion.scalars(select(ObservacionPrecio)))
         assert len(observaciones) == 1
