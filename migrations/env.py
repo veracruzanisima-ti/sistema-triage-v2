@@ -13,6 +13,7 @@ from triage.historico.decisiones_modelos import DecisionPrecio
 from triage.historico.modelos import ObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.modelos import ConsultaProveedor
+from triage.proveedores.nadro_modelos import ArticuloNadro, ImportacionNadro, OfertaNadro
 from triage.usuarios.modelos import Usuario
 
 config = context.config
@@ -30,6 +31,9 @@ _MODELOS_REGISTRADOS = (
     ObservacionPrecio,
     ConsultaProveedor,
     DecisionPrecio,
+    ImportacionNadro,
+    ArticuloNadro,
+    OfertaNadro,
 )
 target_metadata = Base.metadata
 
