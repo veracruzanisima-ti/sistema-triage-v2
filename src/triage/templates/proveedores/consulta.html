@@ -1,39 +1,51 @@
 {% extends "base.html" %}
 
-{% block titulo %}Proveedores · Sistema Triage{% endblock %}
+{% block titulo %}Buscar precios · Sistema Triage{% endblock %}
 
 {% block contenido %}
 <div class="barra">
   <div>
-    <h1>Consulta actual de proveedores</h1>
-    <p class="ayuda">Cada consulta conserva trazabilidad. Triage registra lo observado, pero no elige automáticamente qué comprar.</p>
+    <h1>Buscar precios</h1>
+    <p class="ayuda">Consulta opciones y confirma el precio estable que usarás para cotizar. Las fuentes y el histórico quedan guardados para double check.</p>
   </div>
-  <div class="grupo-botones">
-    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Ver histórico</a>
-    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver</a>
-  </div>
+  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver</a>
 </div>
 
 {% if mensaje %}<p class="exito">{{ mensaje }}</p>{% endif %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 <section class="tarjeta">
-  <h2>Canales configurados</h2>
+  <div class="barra">
+    <div>
+      <h2>Progreso</h2>
+      <p>{{ con_referencia }} de {{ productos|length }} productos tienen precio confirmado para cotizar.</p>
+      <p class="ayuda">Una promoción se conserva como oportunidad de compra, pero no se propone aquí como referencia estable.</p>
+    </div>
+    {% if todas_con_referencia %}
+      <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisar cotización</a>
+    {% endif %}
+  </div>
+</section>
+
+<details class="tarjeta">
+  <summary>Fuentes automáticas disponibles</summary>
   {% if proveedores %}
     <div class="grupo-botones">
       {% for nombre in proveedores %}<span class="estado estado-analizado">{{ nombre }}</span>{% endfor %}
     </div>
-    <p class="ayuda">Una coincidencia exitosa crea una nueva observación append-only en el histórico.</p>
+    <p class="ayuda">Cada consulta exitosa agrega una nueva observación sin modificar el histórico anterior.</p>
   {% else %}
     <div class="aviso">
       <strong>Aún no hay proveedores automáticos configurados en este entorno.</strong>
-      <p>Puedes seguir registrando evidencia manual desde Histórico. NADRO/FESA se conectarán como adaptadores sin cambiar esta pantalla.</p>
+      <p>Mientras conectamos NADRO, FESA y otras fuentes, puedes registrar un precio manual. El flujo normal no depende de esas integraciones.</p>
     </div>
   {% endif %}
-</section>
+</details>
 
 {% if productos %}
   {% for producto in productos %}
+    {% set seleccion = selecciones.get(producto.partida.id) %}
+    {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     <section class="tarjeta">
       <div class="barra">
         <div>
@@ -45,23 +57,72 @@
             {{ producto.normalizacion.presentacion or "Sin presentación" }}
           </p>
         </div>
-        {% if proveedores %}
-          <div class="grupo-botones">
+        <div class="grupo-botones">
+          {% if proveedores %}
             {% for nombre in proveedores %}
               <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="proveedor" value="{{ nombre }}">
-                <button class="boton" type="submit">Consultar {{ nombre }}</button>
+                <button class="boton boton-secundario" type="submit">Consultar {{ nombre }}</button>
               </form>
             {% endfor %}
-          </div>
-        {% endif %}
+          {% endif %}
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Registrar precio manual</a>
+        </div>
       </div>
 
-      {% if producto.consultas %}
+      {% if producto.observaciones %}
+        <h3>Precios encontrados</h3>
+        {% for observacion in producto.observaciones %}
+          <div class="partida">
+            <div class="barra">
+              <div>
+                <strong>{{ observacion.proveedor }}</strong>
+                {% if observacion.es_promocion %}
+                  <span class="estado estado-analizado">Oferta / promoción</span>
+                {% elif seleccion and seleccion.referencia_estable_id == observacion.id %}
+                  <span class="estado estado-revisado">Usado para cotizar</span>
+                {% endif %}
+                <p class="ayuda">Observado: {{ observacion.observado_en }}</p>
+              </div>
+              <div>
+                {% if observacion.precio_total is not none %}
+                  <strong>Total: ${{ '%.2f'|format(observacion.precio_total) }}</strong>
+                {% endif %}
+                {% if observacion.precio_antes_iva is not none %}
+                  <div class="ayuda">Antes de IVA: ${{ '%.2f'|format(observacion.precio_antes_iva) }}</div>
+                {% endif %}
+              </div>
+            </div>
+
+            {% if observacion.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
+            {% if observacion.entrega_viable is sameas false %}<p class="aviso"><strong>Entrega marcada como no viable.</strong></p>{% endif %}
+            {% if observacion.es_promocion %}
+              <p class="aviso"><strong>Oportunidad de compra.</strong> No se usa como referencia estable de la cotización.</p>
+            {% elif seleccion and seleccion.referencia_estable_id == observacion.id %}
+              <p class="ayuda">Este es el precio que actualmente alimentará la revisión de la cotización.</p>
+            {% else %}
+              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="rol" value="REFERENCIA_ESTABLE">
+                <input type="hidden" name="observacion_id" value="{{ observacion.id }}">
+                <input type="hidden" name="volver" value="proveedores">
+                <button class="boton" type="submit">Usar para cotizar</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="vacio">
+          <strong>Aún no hay precios observados.</strong>
+          <p class="ayuda">Consulta una fuente disponible o registra manualmente un precio para continuar.</p>
+        </div>
+      {% endif %}
+
+      {% if consultas %}
         <details>
-          <summary>Ver intentos recientes ({{ producto.consultas|length }})</summary>
-          {% for intento in producto.consultas %}
+          <summary>Ver intentos de consulta ({{ consultas|length }})</summary>
+          {% for intento in consultas %}
             <div class="partida">
               <div class="barra">
                 <div>
@@ -75,22 +136,18 @@
                 </div>
               </div>
               {% if intento.producto_encontrado %}<p><strong>Coincidencia:</strong> {{ intento.producto_encontrado }}</p>{% endif %}
-              {% if intento.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ intento.disponibilidad }}</p>{% endif %}
-              {% if intento.es_promocion %}<p class="aviso"><strong>Promoción observada.</strong> Debe revalidarse antes de tratarla como oportunidad de adquisición.</p>{% endif %}
               {% if intento.mensaje_error %}<p class="error">{{ intento.mensaje_error }}</p>{% endif %}
             </div>
           {% endfor %}
         </details>
-      {% else %}
-        <p class="ayuda">Todavía no hay consultas registradas para esta identidad preparada.</p>
       {% endif %}
     </section>
   {% endfor %}
 {% else %}
   <section class="tarjeta vacio">
-    <h2>No hay productos preparados para consultar</h2>
-    <p>Primero revisa el documento y confirma la preparación del producto.</p>
-    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+    <h2>No hay productos confirmados para buscar</h2>
+    <p>Primero revisa el documento y confirma el producto a cotizar.</p>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Confirmar producto</a>
   </section>
 {% endif %}
 {% endblock %}

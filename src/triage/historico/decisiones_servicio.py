@@ -58,6 +58,8 @@ def registrar_decision_precio(
             raise ValueError("la observación seleccionada ya no existe")
         if observacion.clave_producto != clave:
             raise ValueError("la observación pertenece a otra identidad de producto")
+        if rol == RolDecisionPrecio.REFERENCIA_ESTABLE and observacion.es_promocion:
+            raise ValueError("una promoción no puede usarse como referencia estable")
 
     decision = DecisionPrecio(
         cotizacion_id=cotizacion_id,
@@ -110,7 +112,12 @@ def listar_selecciones_actuales(
         decision = ultimas.get((partida_id, rol.value))
         if decision is None or decision.clave_producto != claves[partida_id]:
             return None
-        return decision.observacion_precio_id
+        observacion_id = decision.observacion_precio_id
+        if observacion_id and rol == RolDecisionPrecio.REFERENCIA_ESTABLE:
+            observacion = sesion.get(ObservacionPrecio, observacion_id)
+            if observacion is None or observacion.es_promocion:
+                return None
+        return observacion_id
 
     return {
         partida_id: SeleccionActual(

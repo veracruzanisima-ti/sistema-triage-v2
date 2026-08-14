@@ -4,6 +4,14 @@ Actualizado: 13 de agosto de 2026
 
 Este documento conserva el contexto funcional que debe sobrevivir a cambios de chat, desarrollador o PR. No reemplaza los ADR técnicos existentes; resume el flujo operativo aprobado, las reglas que Triage puede sugerir y las decisiones que todavía no deben automatizarse como verdad absoluta.
 
+## Estado de implementación
+
+- PR #23 (`feat: simplificar flujo operativo de cotizaciones`) ya fue integrado a `main` con CI verde.
+- Ya existe una acción primaria contextual en el detalle de cotización para avanzar por `Sube y analiza → Revisa → Confirma producto → Busca precio`.
+- Histórico, consultas, decisiones de precio, revisión consolidada y cambio manual de estado siguen disponibles bajo áreas secundarias; no se eliminaron datos ni rutas.
+- El siguiente bloque en desarrollo conecta la selección de una referencia estable directamente desde `Buscar precios` y hace que la acción primaria avance a `Revisar cotización` cuando todas las partidas tengan referencia.
+- Todavía no están implementados el buscador unificado real, CP/sesiones por fuente, cadena fría persistente, Excel final, sugerencia de recargo ni descubrimiento web automático.
+
 ## 1. Fuente de verdad del proyecto
 
 - Repositorio actual: `veracruzanisima-ti/sistema-triage-v2`.
@@ -210,15 +218,14 @@ No aplicar aprendizaje automático que cambie reglas silenciosamente. Acumular e
 
 Orden recomendado a partir de este documento:
 
-1. simplificar el recorrido visible y agregar una única acción primaria `Continuar cotización`;
-2. ocultar histórico/decisiones técnicas bajo `Análisis y trazabilidad` sin eliminar funcionalidad;
-3. conectar `Buscar precio` a un buscador unificado;
-4. modelar contexto de consulta (CP, sesión, promoción, disponibilidad);
-5. integrar fuentes recurrentes empezando por la vía estructurada más estable disponible;
-6. incorporar descubrimiento web de proveedores nuevos;
-7. generar Excel limpio con fórmulas;
-8. incorporar sugerencia explicable de recargo 15–30%;
-9. acumular Excel aprobados y correcciones para detectar tendencias.
+1. completar el recorrido visible hasta `Revisar cotización` sin obligar a pasar por pantallas técnicas;
+2. conectar `Buscar precio` a un buscador unificado;
+3. modelar contexto de consulta (CP, sesión, promoción, disponibilidad);
+4. integrar fuentes recurrentes empezando por la vía estructurada más estable disponible;
+5. incorporar descubrimiento web de proveedores nuevos;
+6. generar Excel limpio con fórmulas;
+7. incorporar sugerencia explicable de recargo 15–30%;
+8. acumular Excel aprobados y correcciones para detectar tendencias.
 
 ## 14. Límites actuales
 

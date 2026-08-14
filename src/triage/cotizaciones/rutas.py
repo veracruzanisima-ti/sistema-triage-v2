@@ -17,6 +17,7 @@ from triage.cotizaciones.servicio import (
 )
 from triage.documentos.modelos import EstadoDocumento
 from triage.documentos.servicio import listar_documentos_cotizacion
+from triage.historico.decisiones_servicio import listar_selecciones_actuales
 from triage.normalizacion.servicio import resumen_normalizacion_cotizacion
 from triage.usuarios.seguridad import (
     Sesion,
@@ -42,7 +43,12 @@ def _contexto(request: Request, usuario, **valores):
     }
 
 
-def _siguiente_paso(cotizacion_id: str, documentos, resumen_normalizacion):
+def _siguiente_paso(
+    cotizacion_id: str,
+    documentos,
+    resumen_normalizacion,
+    selecciones=None,
+):
     """Resuelve una única acción operativa usando sólo estado ya persistido."""
 
     if not documentos:
@@ -87,11 +93,26 @@ def _siguiente_paso(cotizacion_id: str, documentos, resumen_normalizacion):
         }
 
     if resumen_normalizacion.preparados:
+        selecciones = selecciones or {}
+        referencias_completas = (
+            len(selecciones) == resumen_normalizacion.preparados
+            and all(
+                seleccion.referencia_estable_id
+                for seleccion in selecciones.values()
+            )
+        )
+        if referencias_completas:
+            return {
+                "etapa": "Revisa cotización",
+                "accion": "Revisar cotización",
+                "url": f"/cotizaciones/{cotizacion_id}/revision-final",
+                "ayuda": "Comprueba productos, precios elegidos y alertas antes de finalizar.",
+            }
         return {
             "etapa": "Busca precio",
             "accion": "Buscar precios",
             "url": f"/cotizaciones/{cotizacion_id}/proveedores",
-            "ayuda": "Consulta las fuentes disponibles para continuar la cotización.",
+            "ayuda": "Busca opciones y elige el precio estable que usarás para cotizar.",
         }
 
     return {
@@ -165,6 +186,7 @@ def detalle(
         sesion,
         cotizacion.id,
     )
+    selecciones = listar_selecciones_actuales(sesion, cotizacion.id)
     return _plantillas(request).TemplateResponse(
         request=request,
         name="cotizaciones/detalle.html",
@@ -184,6 +206,7 @@ def detalle(
                 cotizacion.id,
                 documentos,
                 resumen_normalizacion,
+                selecciones,
             ),
         ),
     )
