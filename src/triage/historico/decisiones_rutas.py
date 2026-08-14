@@ -12,7 +12,12 @@ from triage.historico.decisiones_servicio import (
     registrar_decision_precio,
 )
 from triage.historico.servicio import listar_productos_historico
-from triage.usuarios.seguridad import Sesion, UsuarioActual, obtener_token_csrf, validar_token_csrf
+from triage.usuarios.seguridad import (
+    Sesion,
+    UsuarioActual,
+    obtener_token_csrf,
+    validar_token_csrf,
+)
 
 router = APIRouter(prefix="/cotizaciones", tags=["decisiones-precio"])
 
@@ -60,6 +65,7 @@ def guardar_decision(
     csrf_token: Annotated[str, Form()],
     rol: Annotated[str, Form()],
     observacion_id: Annotated[str, Form()] = "",
+    volver: Annotated[str, Form()] = "",
 ):
     validar_token_csrf(request, csrf_token)
     cotizacion = obtener_cotizacion(sesion, cotizacion_id)
@@ -77,7 +83,11 @@ def guardar_decision(
         )
     except ValueError as error:
         return _render(request, sesion, usuario, cotizacion, error=str(error))
+
+    destino = f"/cotizaciones/{cotizacion_id}/decisiones-precio"
+    if volver == "proveedores":
+        destino = f"/cotizaciones/{cotizacion_id}/proveedores"
     return RedirectResponse(
-        url=f"/cotizaciones/{cotizacion_id}/decisiones-precio",
+        url=destino,
         status_code=status.HTTP_303_SEE_OTHER,
     )
