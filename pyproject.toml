@@ -10,8 +10,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.18,<2.0",
+  "beautifulsoup4>=4.13,<5.0",
   "fastapi>=0.116,<1.0",
   "google-genai>=2.0,<3.0",
+  "httpx>=0.28,<1.0",
   "itsdangerous>=2.2,<3.0",
   "jinja2>=3.1,<4.0",
   "openai>=2.0,<3.0",
@@ -25,7 +27,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28,<1.0",
   "pytest>=8.4,<9.0",
   "ruff>=0.12,<1.0",
 ]
