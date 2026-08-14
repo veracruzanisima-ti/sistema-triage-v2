@@ -39,6 +39,31 @@
 <section class="tarjeta">
   <div class="barra">
     <div>
+      <h2>Consultar proveedores</h2>
+      {% if proveedores %}
+        <p>Buscará {{ productos|length }} producto(s) en {{ proveedores|length }} fuente(s) configurada(s).</p>
+        <p class="ayuda">Si una fuente falla, las demás continúan y el intento queda registrado.</p>
+      {% else %}
+        <p class="aviso"><strong>Aún no hay proveedores automáticos configurados.</strong></p>
+        <p class="ayuda">Puedes registrar precios manualmente mientras conectamos las primeras fuentes reales.</p>
+      {% endif %}
+    </div>
+    {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
+      <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/consultar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="boton" type="submit">Buscar precios</button>
+      </form>
+    {% elif proveedores %}
+      <button class="boton" type="button" disabled>Buscar precios</button>
+    {% else %}
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Registrar precio manual</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="tarjeta">
+  <div class="barra">
+    <div>
       <h2>Progreso</h2>
       <p>{{ con_referencia }} de {{ productos|length }} productos tienen precio confirmado para cotizar.</p>
       <p class="ayuda">Una promoción se conserva como oportunidad de compra, pero no se propone aquí como referencia estable.</p>
@@ -49,52 +74,19 @@
   </div>
 </section>
 
-<details class="tarjeta">
-  <summary>Fuentes automáticas disponibles</summary>
-  {% if proveedores %}
-    <div class="grupo-botones">
-      {% for nombre in proveedores %}<span class="estado estado-analizado">{{ nombre }}</span>{% endfor %}
-    </div>
-    <p class="ayuda">Cada consulta exitosa agrega una nueva observación sin modificar el histórico anterior.</p>
-  {% else %}
-    <div class="aviso">
-      <strong>Aún no hay proveedores automáticos configurados en este entorno.</strong>
-      <p>Mientras conectamos NADRO, FESA y otras fuentes, puedes registrar un precio manual. El flujo normal no depende de esas integraciones.</p>
-    </div>
-  {% endif %}
-</details>
-
 {% if productos %}
   {% for producto in productos %}
     {% set seleccion = selecciones.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     <section class="tarjeta">
-      <div class="barra">
-        <div>
-          <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
-          <p class="ayuda">
-            {% if producto.normalizacion.marca %}{{ producto.normalizacion.marca }} · {% endif %}
-            {{ producto.normalizacion.concentracion or "Sin concentración" }} ·
-            {{ producto.normalizacion.forma_dispositivo or "Sin forma/dispositivo" }} ·
-            {{ producto.normalizacion.presentacion or "Sin presentación" }}
-          </p>
-        </div>
-        <div class="grupo-botones">
-          {% if proveedores %}
-            {% for nombre in proveedores %}
-              {% if cotizacion.codigo_postal_consulta %}
-                <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                  <input type="hidden" name="proveedor" value="{{ nombre }}">
-                  <button class="boton boton-secundario" type="submit">Consultar {{ nombre }}</button>
-                </form>
-              {% else %}
-                <button class="boton boton-secundario" type="button" disabled>Consultar {{ nombre }}</button>
-              {% endif %}
-            {% endfor %}
-          {% endif %}
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Registrar precio manual</a>
-        </div>
+      <div>
+        <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
+        <p class="ayuda">
+          {% if producto.normalizacion.marca %}{{ producto.normalizacion.marca }} · {% endif %}
+          {{ producto.normalizacion.concentracion or "Sin concentración" }} ·
+          {{ producto.normalizacion.forma_dispositivo or "Sin forma/dispositivo" }} ·
+          {{ producto.normalizacion.presentacion or "Sin presentación" }}
+        </p>
       </div>
 
       {% if producto.observaciones %}
@@ -141,9 +133,27 @@
       {% else %}
         <div class="vacio">
           <strong>Aún no hay precios observados.</strong>
-          <p class="ayuda">Consulta una fuente disponible o registra manualmente un precio para continuar.</p>
+          <p class="ayuda">Usa la búsqueda general o registra manualmente un precio para continuar.</p>
         </div>
       {% endif %}
+
+      <details>
+        <summary>Consulta manual y por fuente</summary>
+        <div class="grupo-botones">
+          {% if proveedores %}
+            {% for nombre in proveedores %}
+              {% if cotizacion.codigo_postal_consulta %}
+                <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="proveedor" value="{{ nombre }}">
+                  <button class="boton boton-secundario" type="submit">Consultar {{ nombre }}</button>
+                </form>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Registrar precio manual</a>
+        </div>
+      </details>
 
       {% if consultas %}
         <details>
