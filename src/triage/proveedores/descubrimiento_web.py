@@ -245,7 +245,7 @@ class DescubridorWebGemini:
                 model=self.modelo,
                 contents=f"{_INSTRUCCIONES}\n\n{descripcion}",
                 config=types.GenerateContentConfig(
-                    tools=[{"google_search": {}}],
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
                     response_mime_type="application/json",
                     response_schema=ResultadoDescubrimientoWebRespuesta,
                 ),
