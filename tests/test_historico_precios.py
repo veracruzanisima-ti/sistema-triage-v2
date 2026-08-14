@@ -89,7 +89,7 @@ def test_historico_solo_muestra_productos_preparados(cliente: TestClient):
 
     vacio = cliente.get(f"/cotizaciones/{cotizacion_id}/historico")
     assert vacio.status_code == 200
-    assert "Aún no hay productos preparados" in vacio.text
+    assert "Aún no hay productos confirmados" in vacio.text
 
     _preparar(cliente, cotizacion_id)
     listo = cliente.get(f"/cotizaciones/{cotizacion_id}/historico")
@@ -212,3 +212,33 @@ def test_historico_no_infiere_iva_ni_clasificacion_comercial(cliente: TestClient
         assert observacion.entrega_viable is False
         assert not hasattr(observacion, "referencia_estable")
         assert not hasattr(observacion, "oportunidad_adquisicion")
+
+
+def test_historico_regresa_a_buscar_precios_si_ese_fue_el_origen(cliente: TestClient):
+    cotizacion_id = _crear_cotizacion(cliente)
+    _subir_y_revisar(cliente, cotizacion_id)
+    partida_id = _preparar(cliente, cotizacion_id)
+
+    pagina = cliente.get(f"/cotizaciones/{cotizacion_id}/historico?volver=proveedores")
+    assert pagina.status_code == 200
+    assert "Volver a buscar precios" in pagina.text
+    assert f'href="/cotizaciones/{cotizacion_id}/proveedores"' in pagina.text
+
+    respuesta = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/historico/{partida_id}",
+        data={
+            "csrf_token": _csrf(pagina.text),
+            "volver": "proveedores",
+            "proveedor": "Proveedor Manual",
+            "fuente": "Captura manual de prueba",
+            "precio_total": "321.00",
+        },
+        follow_redirects=False,
+    )
+    assert respuesta.status_code == 303
+    assert respuesta.headers["location"].endswith(
+        f"/cotizaciones/{cotizacion_id}/historico?guardado=1&volver=proveedores"
+    )
+
+    guardado = cliente.get(respuesta.headers["location"])
+    assert "Volver a buscar precios" in guardado.text
