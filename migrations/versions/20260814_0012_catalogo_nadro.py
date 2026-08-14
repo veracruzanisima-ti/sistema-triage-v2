@@ -94,7 +94,11 @@ def upgrade() -> None:
         sa.Column("desde_piezas_primera_escala", sa.Integer(), nullable=False),
         sa.Column("desde_piezas_segunda_escala", sa.Integer(), nullable=False),
         sa.Column("descuento_factura_pct", sa.Numeric(7, 2), nullable=False),
-        sa.ForeignKeyConstraint(["codigo_nadro"], ["articulos_nadro.codigo_nadro"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["codigo_nadro"],
+            ["articulos_nadro.codigo_nadro"],
+            ondelete="CASCADE",
+        ),
         sa.ForeignKeyConstraint(["importacion_id"], ["importaciones_nadro.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
