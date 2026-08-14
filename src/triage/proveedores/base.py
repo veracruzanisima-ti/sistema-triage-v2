@@ -15,6 +15,7 @@ class SolicitudProveedor:
     concentracion: str | None
     forma_dispositivo: str | None
     presentacion: str | None
+    codigo_postal: str | None = None
 
 
 @dataclass(frozen=True)
