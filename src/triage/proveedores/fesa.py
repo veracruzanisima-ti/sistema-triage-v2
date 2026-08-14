@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urljoin
 
@@ -12,6 +13,7 @@ from bs4 import BeautifulSoup
 from triage.proveedores.base import ResultadoProveedor, SolicitudProveedor
 from triage.proveedores.coincidencia_catalogo import (
     CandidatoCatalogo,
+    normalizar_texto,
     seleccionar_candidato,
 )
 
@@ -82,14 +84,14 @@ class AdaptadorFesa:
 
         candidatos = [
             CandidatoCatalogo(
-                descripcion=producto.nombre,
+                descripcion=_descripcion_para_match(producto.nombre),
                 precio_observado=producto.precio,
                 stock=producto.stock,
                 fuente=producto.url,
             )
             for producto in productos
         ]
-        seleccion = seleccionar_candidato(solicitud, candidatos)
+        seleccion = seleccionar_candidato(_solicitud_para_match(solicitud), candidatos)
         if seleccion is None:
             return ResultadoProveedor(
                 encontrado=False,
@@ -143,6 +145,38 @@ def _armar_consulta(solicitud: SolicitudProveedor) -> str:
         if limpio and limpio.casefold() not in {valor.casefold() for valor in vistas}:
             vistas.append(limpio)
     return " ".join(vistas)
+
+
+def _solicitud_para_match(solicitud: SolicitudProveedor) -> SolicitudProveedor:
+    """Conserva sólo rasgos de forma que FESA publica de manera consistente."""
+
+    forma = normalizar_texto(solicitud.forma_dispositivo)
+    equivalencias = (
+        (("PLUMA",), "PLUMA"),
+        (("CARTUCHO",), "CARTUCHO"),
+        (("VIAL", "AMPULA", "AMPOLLA"), "VIAL"),
+        (("JERINGA",), "JERINGA"),
+        (("TABLETA", "TABLETAS", "TAB"), "TAB"),
+        (("CAPSULA", "CAPSULAS", "CAP"), "CAP"),
+    )
+    distintivos: list[str] = []
+    for aliases, canonico in equivalencias:
+        if any(re.search(rf"\b{re.escape(alias)}\b", forma) for alias in aliases):
+            distintivos.append(canonico)
+    return replace(
+        solicitud,
+        forma_dispositivo=" ".join(distintivos) or None,
+    )
+
+
+def _descripcion_para_match(nombre: str) -> str:
+    """Expande abreviaturas propias del catálogo sin alterar la evidencia original."""
+
+    descripcion = normalizar_texto(nombre)
+    descripcion = re.sub(r"\bFAM\b", "VIAL", descripcion)
+    descripcion = re.sub(r"\bTABLETAS?\b", "TAB", descripcion)
+    descripcion = re.sub(r"\bCAPSULAS?\b", "CAP", descripcion)
+    return descripcion
 
 
 def _iniciar_sesion(cliente: httpx.Client, usuario: str, password: str) -> None:
