@@ -18,9 +18,9 @@
 
 <section class="tarjeta">
   <h2>Cómo usar esta etapa</h2>
-  <p><strong>Referencia estable:</strong> evidencia que usarás como base para construir la cotización.</p>
+  <p><strong>Referencia estable:</strong> evidencia no promocional que usarás como base para construir la cotización.</p>
   <p><strong>Oportunidad de adquisición:</strong> evidencia que podría servir para comprar mejor al momento de surtir.</p>
-  <p class="ayuda">Una promoción histórica no se considera vigente por sí sola. Revalida condiciones, stock y entrega antes de comprar.</p>
+  <p class="ayuda">Una promoción puede conservarse como oportunidad, pero no como referencia estable de la cotización.</p>
 </section>
 
 {% if productos %}
@@ -64,19 +64,21 @@
               {% if observacion.precio_total is not none %} · Total: ${{ "%.2f"|format(observacion.precio_total) }}{% endif %}
             </p>
             {% if observacion.disponibilidad %}<p class="ayuda">Disponibilidad: {{ observacion.disponibilidad }}</p>{% endif %}
-            {% if observacion.es_promocion and seleccion and seleccion.referencia_estable_id == observacion.id %}
-              <p class="aviso">Esta referencia estable proviene de una promoción. Confirma que sigue siendo adecuada como base.</p>
+            {% if observacion.es_promocion %}
+              <p class="aviso">Esta observación queda disponible como oportunidad de adquisición, no como referencia estable.</p>
             {% endif %}
             {% if seleccion and seleccion.oportunidad_adquisicion_id == observacion.id and observacion.entrega_viable is sameas false %}
               <p class="aviso">La entrega fue registrada como no viable. Revisa esta oportunidad antes de surtir.</p>
             {% endif %}
             <div class="grupo-botones">
-              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="rol" value="{{ roles.REFERENCIA_ESTABLE.value }}">
-                <input type="hidden" name="observacion_id" value="{{ observacion.id }}">
-                <button class="boton boton-secundario" type="submit">Usar como referencia estable</button>
-              </form>
+              {% if not observacion.es_promocion %}
+                <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="rol" value="{{ roles.REFERENCIA_ESTABLE.value }}">
+                  <input type="hidden" name="observacion_id" value="{{ observacion.id }}">
+                  <button class="boton boton-secundario" type="submit">Usar como referencia estable</button>
+                </form>
+              {% endif %}
               <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="rol" value="{{ roles.OPORTUNIDAD_ADQUISICION.value }}">
