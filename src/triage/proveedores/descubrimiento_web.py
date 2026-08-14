@@ -4,12 +4,14 @@ import logging
 from decimal import Decimal
 from typing import Protocol
 
-from openai import OpenAI
+from openai import APITimeoutError, OpenAI
 from pydantic import BaseModel, Field, HttpUrl, ValidationError
 
 from triage.proveedores.base import SolicitudProveedor
 
 logger = logging.getLogger(__name__)
+
+_TIMEOUT_BUSQUEDA_WEB_SEGUNDOS = 80.0
 
 
 class CandidatoWeb(BaseModel):
@@ -134,7 +136,10 @@ class DescubridorWebOpenAI:
             )
         )
         try:
-            respuesta = self._cliente.responses.parse(
+            respuesta = self._cliente.with_options(
+                timeout=_TIMEOUT_BUSQUEDA_WEB_SEGUNDOS,
+                max_retries=0,
+            ).responses.parse(
                 model=self.modelo,
                 store=False,
                 tools=[
@@ -150,6 +155,15 @@ class DescubridorWebOpenAI:
                 input=f"{_INSTRUCCIONES}\n\n{descripcion}",
                 text_format=ResultadoDescubrimientoWebRespuesta,
             )
+        except APITimeoutError as error:
+            logger.warning(
+                "Timeout de web_search OpenAI model=%s request_id=%s",
+                self.modelo,
+                getattr(error, "request_id", None),
+            )
+            raise ErrorDescubrimientoWeb(
+                "La búsqueda web tardó más de lo esperado. Intenta nuevamente."
+            ) from error
         except Exception as error:
             logger.warning(
                 "Fallo de web_search OpenAI tipo=%s status=%s code=%s param=%s request_id=%s",
