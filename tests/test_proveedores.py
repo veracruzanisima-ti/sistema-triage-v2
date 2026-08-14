@@ -9,7 +9,11 @@ from triage.historico.modelos import ObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.base import ResultadoProveedor, SolicitudProveedor
 from triage.proveedores.modelos import ConsultaProveedor, EstadoConsultaProveedor
-from triage.proveedores.servicio import ErrorConsultaProveedor, ejecutar_consulta
+from triage.proveedores.servicio import (
+    ErrorConsultaProveedor,
+    ejecutar_consulta,
+    ejecutar_consultas_configuradas,
+)
 from triage.usuarios.modelos import Usuario
 
 
@@ -105,6 +109,56 @@ def test_consulta_exitosa_crea_observacion_append_only_con_cp(cliente):
         assert observacion.proveedor == "Canal Prueba"
         assert observacion.codigo_postal == "91000"
         assert str(observacion.precio_total) == "123.45"
+
+
+def test_busqueda_unificada_continua_si_una_fuente_falla(cliente):
+    cotizacion_id, _, usuario_id = _preparar_producto(cliente)
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        resumen = ejecutar_consultas_configuradas(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            usuario_id=usuario_id,
+            proveedores=(CanalExitoso(), CanalVacio(), CanalConError()),
+        )
+        assert resumen.intentos == 3
+        assert resumen.precios_encontrados == 1
+        assert resumen.no_encontrados == 1
+        assert resumen.errores == 1
+        assert len(list(sesion.scalars(select(ConsultaProveedor)))) == 3
+        assert len(list(sesion.scalars(select(ObservacionPrecio)))) == 1
+
+
+def test_busqueda_unificada_se_expone_como_accion_principal(cliente):
+    cotizacion_id, _, _ = _preparar_producto(cliente)
+    cliente.app.state.proveedores_productos = {
+        "canal prueba": CanalExitoso(),
+        "canal vacío": CanalVacio(),
+    }
+
+    pagina = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    assert pagina.status_code == 200
+    assert f'/cotizaciones/{cotizacion_id}/proveedores/consultar' in pagina.text
+    assert "Buscar precios" in pagina.text
+
+    respuesta = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/proveedores/consultar",
+        data={"csrf_token": pagina.cookies.get("csrf_token", "") or ""},
+        follow_redirects=False,
+    )
+    if respuesta.status_code == 422:
+        import re
+
+        token = re.search(r'name="csrf_token" value="([^"]+)"', pagina.text)
+        assert token is not None
+        respuesta = cliente.post(
+            f"/cotizaciones/{cotizacion_id}/proveedores/consultar",
+            data={"csrf_token": token.group(1)},
+            follow_redirects=False,
+        )
+    assert respuesta.status_code == 303
+    assert "resultado=unificada" in respuesta.headers["location"]
+    resultado = cliente.get(respuesta.headers["location"])
+    assert "Búsqueda completada: 1 precio(s) encontrado(s)." in resultado.text
 
 
 def test_consulta_automatica_exige_codigo_postal(cliente):
