@@ -15,6 +15,7 @@ from triage.cotizaciones.servicio import (
     referencias_documentos_revisados,
     usar_referencia_automatica,
 )
+from triage.documentos.modelos import EstadoDocumento
 from triage.documentos.servicio import listar_documentos_cotizacion
 from triage.normalizacion.servicio import resumen_normalizacion_cotizacion
 from triage.usuarios.seguridad import (
@@ -38,6 +39,66 @@ def _contexto(request: Request, usuario, **valores):
         "usuario": usuario,
         "csrf_token": obtener_token_csrf(request),
         **valores,
+    }
+
+
+def _siguiente_paso(cotizacion_id: str, documentos, resumen_normalizacion):
+    """Resuelve una única acción operativa usando sólo estado ya persistido."""
+
+    if not documentos:
+        return {
+            "etapa": "Sube y analiza",
+            "accion": "Subir y analizar",
+            "url": f"/cotizaciones/{cotizacion_id}/documentos/nuevo",
+            "ayuda": "Agrega la solicitud para que Triage la lea antes de revisar.",
+        }
+
+    pendiente_revision = next(
+        (
+            documento
+            for documento in documentos
+            if documento.estado
+            in {
+                EstadoDocumento.RECIBIDO.value,
+                EstadoDocumento.ANALIZADO.value,
+            }
+        ),
+        None,
+    )
+    if pendiente_revision is not None:
+        return {
+            "etapa": "Revisa",
+            "accion": "Revisar documento",
+            "url": (
+                f"/cotizaciones/{cotizacion_id}/documentos/{pendiente_revision.id}"
+            ),
+            "ayuda": "Confirma o corrige lo que Triage entendió de la solicitud.",
+        }
+
+    if (
+        resumen_normalizacion.total
+        and resumen_normalizacion.preparados < resumen_normalizacion.total
+    ):
+        return {
+            "etapa": "Confirma producto",
+            "accion": "Confirmar producto",
+            "url": f"/cotizaciones/{cotizacion_id}/normalizacion",
+            "ayuda": "Confirma qué identidad exacta debe utilizarse para buscar precios.",
+        }
+
+    if resumen_normalizacion.preparados:
+        return {
+            "etapa": "Busca precio",
+            "accion": "Buscar precios",
+            "url": f"/cotizaciones/{cotizacion_id}/proveedores",
+            "ayuda": "Consulta las fuentes disponibles para continuar la cotización.",
+        }
+
+    return {
+        "etapa": "Sube y analiza",
+        "accion": "Agregar otro documento",
+        "url": f"/cotizaciones/{cotizacion_id}/documentos/nuevo",
+        "ayuda": "No hay partidas incluidas listas para continuar. Revisa o agrega otra solicitud.",
     }
 
 
@@ -99,6 +160,11 @@ def detalle(
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
 
     referencias_revisadas = referencias_documentos_revisados(sesion, cotizacion.id)
+    documentos = listar_documentos_cotizacion(sesion, cotizacion.id)
+    resumen_normalizacion = resumen_normalizacion_cotizacion(
+        sesion,
+        cotizacion.id,
+    )
     return _plantillas(request).TemplateResponse(
         request=request,
         name="cotizaciones/detalle.html",
@@ -107,15 +173,17 @@ def detalle(
             usuario,
             cotizacion=cotizacion,
             estados=tuple(EstadoCotizacion),
-            documentos=listar_documentos_cotizacion(sesion, cotizacion.id),
+            documentos=documentos,
             referencias_revisadas=referencias_revisadas,
             conflicto_referencias=(
                 not cotizacion.referencia_fijada_manual
                 and len(referencias_revisadas) > 1
             ),
-            resumen_normalizacion=resumen_normalizacion_cotizacion(
-                sesion,
+            resumen_normalizacion=resumen_normalizacion,
+            siguiente_paso=_siguiente_paso(
                 cotizacion.id,
+                documentos,
+                resumen_normalizacion,
             ),
         ),
     )

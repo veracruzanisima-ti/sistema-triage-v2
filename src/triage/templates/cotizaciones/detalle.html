@@ -11,6 +11,16 @@
   <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
 </div>
 
+<section class="tarjeta">
+  <div class="barra">
+    <div>
+      <h2>Siguiente paso: {{ siguiente_paso.etapa }}</h2>
+      <p class="ayuda">{{ siguiente_paso.ayuda }}</p>
+    </div>
+    <a class="boton" href="{{ siguiente_paso.url }}">{{ siguiente_paso.accion }}</a>
+  </div>
+</section>
+
 <section class="tarjeta" id="referencia-cotizacion">
   <h2>Referencia administrativa</h2>
   <form method="post" action="/cotizaciones/{{ cotizacion.id }}/referencia">
@@ -20,7 +30,7 @@
       <label for="referencia">Memorándum / referencia de la cotización</label>
       <input id="referencia" name="referencia" value="{{ cotizacion.referencia or '' }}" placeholder="Ej. DAIS/SSMA/777/2026" required>
     </div>
-    <button class="boton" type="submit">Guardar referencia</button>
+    <button class="boton boton-secundario" type="submit">Guardar referencia</button>
   </form>
 
   {% if cotizacion.referencia_fijada_manual %}
@@ -28,7 +38,7 @@
     <form method="post" action="/cotizaciones/{{ cotizacion.id }}/referencia">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="accion" value="automatica">
-      <button class="boton boton-secundario" type="submit">Volver a detección automática</button>
+      <button class="boton boton-texto" type="submit">Volver a detección automática</button>
     </form>
   {% elif conflicto_referencias %}
     <div class="aviso">
@@ -58,12 +68,12 @@
       <h2>Documentos</h2>
       <p class="ayuda">Sube una foto o PDF y revisa lo que Triage entendió antes de continuar.</p>
     </div>
-    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/documentos/nuevo">Agregar documento</a>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/nuevo">Subir y analizar</a>
   </div>
 
   {% if documentos %}
     {% for documento in documentos %}
-      <div class="tarjeta">
+      <div class="partida">
         <div class="barra">
           <div>
             <div class="referencia">{{ documento.memorandum or documento.nombre_original }}</div>
@@ -82,41 +92,43 @@
         </div>
       </div>
     {% endfor %}
+    {% if not resumen_normalizacion.total %}
+      <p class="ayuda">Primero revisa un documento para confirmar sus partidas y continuar con los productos.</p>
+    {% endif %}
   {% else %}
     <div class="vacio">
       <strong>Aún no hay documentos.</strong>
-      <p class="ayuda">Agrega uno para iniciar la lectura.</p>
+      <p class="ayuda">Sube la solicitud para comenzar.</p>
     </div>
   {% endif %}
 </section>
 
+{% if resumen_normalizacion.total %}
 <section class="tarjeta">
-  <div class="barra">
-    <div>
-      <h2>Preparación, precios y proveedores</h2>
-      {% if resumen_normalizacion.total %}
-        <p class="ayuda">{{ resumen_normalizacion.preparados }} de {{ resumen_normalizacion.total }} partidas incluidas están preparadas para búsqueda.</p>
-      {% else %}
-        <p class="ayuda">Primero revisa un documento y deja incluida al menos una partida.</p>
-      {% endif %}
-    </div>
+  <h2>Progreso de productos</h2>
+  <p>{{ resumen_normalizacion.preparados }} de {{ resumen_normalizacion.total }} partidas incluidas tienen producto confirmado para búsqueda.</p>
+  <p class="ayuda">Triage conserva por separado la solicitud original y el producto utilizado para buscar precios.</p>
+</section>
+{% endif %}
+
+<details class="tarjeta">
+  <summary>Análisis y trazabilidad</summary>
+  <p class="ayuda">Estas herramientas conservan evidencia y permiten revisar decisiones. No necesitas recorrerlas para entender el flujo normal.</p>
+  <div class="grupo-botones">
     {% if resumen_normalizacion.total %}
-      <div class="grupo-botones">
-        <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
-        {% if resumen_normalizacion.preparados %}
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Histórico de precios</a>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/proveedores">Consultar proveedores</a>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/decisiones-precio">Decidir referencias</a>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisión consolidada</a>
-        {% endif %}
-      </div>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Confirmar productos</a>
+    {% endif %}
+    {% if resumen_normalizacion.preparados %}
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Histórico de precios</a>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/proveedores">Consultas de proveedores</a>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/decisiones-precio">Decisiones de precio</a>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisión consolidada</a>
     {% endif %}
   </div>
-  <p>La preparación conserva la solicitud original. El histórico guarda evidencia, las consultas registran intentos y una persona decide qué usar como referencia estable u oportunidad de adquisición.</p>
-</section>
+</details>
 
-<section class="tarjeta">
-  <h2>Estado de trabajo</h2>
+<details class="tarjeta">
+  <summary>Estado y opciones de trabajo</summary>
   <p class="ayuda">El estado sigue siendo una decisión explícita del equipo.</p>
   <div class="grupo-botones">
     {% for estado in estados %}
@@ -129,10 +141,5 @@
       </form>
     {% endfor %}
   </div>
-</section>
-
-<section class="tarjeta">
-  <h2>Después</h2>
-  <p>La revisión consolidada será el punto de entrada a cálculo validado y generación de salidas, evitando mezclar evidencia pendiente con datos listos.</p>
-</section>
+</details>
 {% endblock %}
