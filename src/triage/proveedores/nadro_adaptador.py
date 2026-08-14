@@ -15,6 +15,7 @@ from triage.proveedores.coincidencia_catalogo import (
     seleccionar_candidato,
 )
 from triage.proveedores.nadro_modelos import ArticuloNadro, ImportacionNadro, OfertaNadro
+from triage.proveedores.nadro_servicio import hay_catalogo_nadro, hay_ofertas_nadro
 
 
 class AdaptadorNadro:
@@ -82,6 +83,17 @@ class AdaptadorNadroOferta:
                 ),
                 disponibilidad="EdiNadro no incluye existencia en tiempo real.",
             )
+
+
+def adaptadores_nadro_disponibles(sesion, fabrica_sesiones) -> tuple[object, ...]:
+    """Sólo expone NADRO cuando ya existe un snapshot utilizable."""
+
+    if not hay_catalogo_nadro(sesion):
+        return ()
+    adaptadores: list[object] = [AdaptadorNadro(fabrica_sesiones)]
+    if hay_ofertas_nadro(sesion):
+        adaptadores.append(AdaptadorNadroOferta(fabrica_sesiones))
+    return tuple(adaptadores)
 
 
 def _seleccionar_articulo(sesion, solicitud: SolicitudProveedor) -> ArticuloNadro | None:
@@ -156,33 +168,41 @@ def _descripcion_para_match(descripcion: str) -> str:
 
 
 def _cumple_conteo_presentacion(solicitud: SolicitudProveedor, descripcion: str) -> bool:
-    """Evita mezclar, por ejemplo, caja de 6 jeringas con otra cantidad."""
+    """Evita mezclar cajas con distinta cantidad cuando el envase la declara."""
 
     forma = normalizar_texto(solicitud.forma_dispositivo)
     presentacion = normalizar_texto(solicitud.presentacion)
     grupos = (
-        (("TAB",), ("TAB",)),
-        (("CAP",), ("CAP",)),
-        (("JERINGA",), ("JGA", "JERINGA")),
-        (("PLUMA",), ("PLUMA",)),
-        (("CARTUCHO",), ("CART", "CARTUCHO")),
+        ("TAB", ("TABLETA", "TABLETAS", "TAB"), ("TAB",)),
+        ("CAP", ("CAPSULA", "CAPSULAS", "CAP"), ("CAP",)),
+        ("JERINGA", ("JERINGA", "JERINGAS"), ("JGA", "JERINGA")),
+        ("PLUMA", ("PLUMA", "PLUMAS"), ("PLUMA",)),
+        ("CARTUCHO", ("CARTUCHO", "CARTUCHOS"), ("CART", "CARTUCHO")),
     )
-    for formas_solicitud, formas_catalogo in grupos:
-        if not any(re.search(rf"\b{forma_s}\b", forma) for forma_s in formas_solicitud):
+    for forma_canonica, aliases_solicitud, aliases_catalogo in grupos:
+        if not re.search(rf"\b{forma_canonica}\b", forma):
             continue
-        numeros = re.findall(r"\b(\d{1,3})\b", presentacion)
-        if not numeros:
+        esperado = _conteo_junto_a_forma(presentacion, aliases_solicitud)
+        if esperado is None:
             return True
-        esperado = numeros[-1]
         catalogo = normalizar_texto(descripcion)
         patrones = [
-            rf"\b{re.escape(alias)}\s+(?:PRE\s+)?{re.escape(esperado)}\b"
-            for alias in formas_catalogo
-        ] + [
-            rf"\b{re.escape(esperado)}\s+{re.escape(alias)}\b" for alias in formas_catalogo
-        ]
+            rf"\b{re.escape(alias)}\s+(?:PRE\s+)?{esperado}\b"
+            for alias in aliases_catalogo
+        ] + [rf"\b{esperado}\s+{re.escape(alias)}\b" for alias in aliases_catalogo]
         return any(re.search(patron, catalogo) for patron in patrones)
     return True
+
+
+def _conteo_junto_a_forma(texto: str, aliases: tuple[str, ...]) -> str | None:
+    for alias in aliases:
+        antes = re.search(rf"\b(\d{{1,3}})\s+{re.escape(alias)}\b", texto)
+        if antes:
+            return antes.group(1)
+        despues = re.search(rf"\b{re.escape(alias)}\s+(\d{{1,3}})\b", texto)
+        if despues:
+            return despues.group(1)
+    return None
 
 
 def _oferta_simple(oferta: OfertaNadro) -> bool:
@@ -208,7 +228,11 @@ def _fuente(
     *,
     oferta: bool = False,
 ) -> str:
-    partes = ["EdiNadro", "oferta" if oferta else "catálogo", f"código {articulo.codigo_nadro}"]
+    partes = [
+        "EdiNadro",
+        "oferta" if oferta else "catálogo",
+        f"código {articulo.codigo_nadro}",
+    ]
     if importacion is not None:
         partes.append(f"carga {importacion.cargada_en.isoformat()}")
     return " · ".join(partes)
