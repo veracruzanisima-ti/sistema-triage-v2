@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from triage.cotizaciones.modelos import ahora_utc
+from triage.cotizaciones.modelos import Cotizacion, ahora_utc
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
 from triage.historico.servicio import clave_producto, crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
@@ -144,6 +144,13 @@ def ejecutar_consulta(
         raise ValueError("el producto ya no está preparado o dejó de ser elegible")
     normalizacion, _, _ = fila
 
+    cotizacion = sesion.get(Cotizacion, cotizacion_id)
+    if cotizacion is None:
+        raise ValueError("la cotización ya no existe")
+    codigo_postal = _limpiar(cotizacion.codigo_postal_consulta)
+    if codigo_postal is None:
+        raise ValueError("Configura un código postal antes de consultar proveedores.")
+
     nombre_proveedor = _limpiar(proveedor.nombre)
     if not nombre_proveedor:
         raise ValueError("el adaptador de proveedor no tiene nombre")
@@ -155,6 +162,7 @@ def ejecutar_consulta(
         concentracion=_limpiar(normalizacion.concentracion),
         forma_dispositivo=_limpiar(normalizacion.forma_dispositivo),
         presentacion=_limpiar(normalizacion.presentacion),
+        codigo_postal=codigo_postal,
     )
     criterios = {
         "producto": solicitud.producto,
@@ -162,6 +170,7 @@ def ejecutar_consulta(
         "concentracion": solicitud.concentracion,
         "forma_dispositivo": solicitud.forma_dispositivo,
         "presentacion": solicitud.presentacion,
+        "codigo_postal": solicitud.codigo_postal,
     }
     intento = ConsultaProveedor(
         cotizacion_id=cotizacion_id,
@@ -218,6 +227,7 @@ def ejecutar_consulta(
         condiciones_promocion=resultado.condiciones_promocion,
         disponibilidad=resultado.disponibilidad,
         entrega_viable=resultado.entrega_viable,
+        codigo_postal=codigo_postal,
         guardar=False,
     )
     intento.estado = EstadoConsultaProveedor.EXITOSA.value
