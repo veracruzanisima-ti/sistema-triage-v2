@@ -22,6 +22,9 @@ class Configuracion(BaseSettings):
     openai_model: str = "gpt-5"
     openai_model_lector: str = ""
     openai_model_web: str = ""
+    gemini_api_key: str = ""
+    gemini_model_lector: str = "gemini-3.6-flash"
+    gemini_model_web: str = "gemini-3.6-flash"
     max_documento_bytes: int = 15 * 1024 * 1024
     bootstrap_admin_email: str = ""
     bootstrap_admin_name: str = ""
@@ -67,6 +70,10 @@ class Configuracion(BaseSettings):
             raise ValueError("OPENAI_MODEL u OPENAI_MODEL_LECTOR debe definir el modelo del lector")
         if not self.modelo_openai_web:
             raise ValueError("OPENAI_MODEL u OPENAI_MODEL_WEB debe definir el modelo web")
+        if self.gemini_api_key.strip() and not self.gemini_model_lector.strip():
+            raise ValueError("GEMINI_MODEL_LECTOR no puede estar vacío cuando Gemini está configurado")
+        if self.gemini_api_key.strip() and not self.gemini_model_web.strip():
+            raise ValueError("GEMINI_MODEL_WEB no puede estar vacío cuando Gemini está configurado")
 
         codigo_postal = self.codigo_postal_consulta_default.strip()
         if codigo_postal and (len(codigo_postal) != 5 or not codigo_postal.isdigit()):
