@@ -11,6 +11,7 @@ from triage.historico.decisiones_servicio import (
     referencias_estables_cotizadas_hoy,
 )
 from triage.historico.servicio import listar_productos_historico
+from triage.modelos_ia import obtener_descubridor_web
 from triage.proveedores.descubrimiento_web import ErrorDescubrimientoWeb
 from triage.proveedores.servicio import (
     ErrorConsultaProveedor,
@@ -90,7 +91,7 @@ def _render(
             "todas_con_referencia": bool(productos)
             and con_referencia == len(productos),
             "proveedores": tuple(proveedor.nombre for proveedor in proveedores.values()),
-            "descubrimiento_web_disponible": request.app.state.descubridor_web is not None,
+            "descubrimiento_web_disponible": obtener_descubridor_web(request) is not None,
             "error": error,
             "mensaje": mensaje,
         },
@@ -252,7 +253,7 @@ def buscar_mas_opciones_web(
     cotizacion = obtener_cotizacion(sesion, cotizacion_id)
     if cotizacion is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
-    descubridor = request.app.state.descubridor_web
+    descubridor = obtener_descubridor_web(request)
     if descubridor is None:
         return _render(
             request,
