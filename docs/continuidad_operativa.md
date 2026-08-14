@@ -8,12 +8,14 @@ Este documento conserva el contexto funcional que debe sobrevivir a cambios de c
 
 - PR #23 (`feat: simplificar flujo operativo de cotizaciones`) ya fue integrado a `main` con CI verde.
 - PR #24 (`feat: cerrar flujo de precios a revisión`) ya fue integrado a `main` con CI verde.
+- PR #25 (`feat: conservar contexto de código postal en precios`) ya fue integrado a `main` con CI verde.
 - El recorrido visible ya puede avanzar por `Sube y analiza → Revisa → Confirma producto → Busca precio → Revisa cotización` sin obligar al usuario a recorrer pantallas técnicas.
 - En `Buscar precios`, una observación no promocional puede marcarse como `Usar para cotizar`; se reutiliza la decisión append-only `REFERENCIA_ESTABLE` ya existente.
 - Una promoción no puede convertirse en referencia estable, ni desde el flujo normal ni desde la vista avanzada. Las selecciones promocionales históricas dejan de considerarse vigentes sin borrar su trazabilidad.
+- El CP habitual puede configurarse con `CODIGO_POSTAL_CONSULTA_DEFAULT`; cada cotización puede cambiarlo y cada observación nueva conserva el CP con el que fue obtenida. Las consultas automáticas no corren sin CP.
 - Histórico, consultas, decisiones de precio, revisión consolidada y cambio manual de estado siguen disponibles bajo áreas secundarias; no se eliminaron datos ni rutas.
-- El bloque actualmente en desarrollo (`agent/contexto-cp-consulta`) agrega un CP habitual configurable, CP editable por cotización y conserva el CP en cada observación nueva. Las consultas automáticas requieren CP antes de ejecutarse.
-- Todavía no están implementados el buscador unificado real, sesiones autenticadas por fuente, cadena fría persistente, Excel final, sugerencia de recargo ni descubrimiento web automático.
+- El bloque actualmente en desarrollo (`agent/busqueda-precios-unificada`) agrega una sola acción `Buscar precios` que recorre todos los productos y adaptadores configurados. Un fallo aislado queda registrado y no detiene las demás fuentes. La consulta individual por proveedor permanece como herramienta secundaria.
+- Todavía no están implementadas fuentes reales NADRO/FESA, sesiones autenticadas por fuente, cadena fría persistente, Excel final, sugerencia de recargo ni descubrimiento web automático.
 
 ## 1. Fuente de verdad del proyecto
 
@@ -136,6 +138,14 @@ Usar un motor híbrido:
 
 El objetivo es descubrir opciones que el equipo no conocía sin mantener decenas de scrapers innecesarios.
 
+### Orquestación de consultas
+
+La interfaz normal debe ofrecer una sola acción `Buscar precios` que recorra todos los productos preparados y todos los adaptadores configurados. Por ahora la ejecución es secuencial para mantener comportamiento simple, predecible y trazable.
+
+Un error operativo de una fuente se registra en su intento y no debe detener las demás consultas. Errores de configuración del sistema sí deben hacerse visibles en vez de ocultarse.
+
+La consulta individual por proveedor se conserva como herramienta secundaria para diagnóstico, reintentos o casos excepcionales.
+
 ## 9. Cadena fría
 
 Triage debe investigar y conservar si el producto requiere cadena fría para evitar repetir la misma investigación en futuras cotizaciones.
@@ -227,15 +237,14 @@ No aplicar aprendizaje automático que cambie reglas silenciosamente. Acumular e
 
 Orden recomendado a partir de este documento:
 
-1. completar y validar la persistencia del CP/contexto geográfico de consulta;
-2. conectar `Buscar precio` a una consulta unificada sobre los adaptadores configurados;
-3. integrar fuentes recurrentes empezando por la vía estructurada más estable disponible;
-4. incorporar manejo de sesiones autenticadas por fuente sin guardar secretos en GitHub;
-5. incorporar descubrimiento web de proveedores nuevos;
-6. persistir y reutilizar `Cadena fría: Sí/No` para productos conocidos;
-7. generar Excel limpio con fórmulas;
-8. incorporar sugerencia explicable de recargo 15–30%;
-9. acumular Excel aprobados y correcciones para detectar tendencias.
+1. completar y validar la búsqueda unificada sobre adaptadores configurados;
+2. integrar la primera fuente real mediante la vía estructurada más estable disponible;
+3. incorporar manejo de sesiones autenticadas por fuente sin guardar secretos en GitHub;
+4. incorporar descubrimiento web de proveedores nuevos;
+5. persistir y reutilizar `Cadena fría: Sí/No` para productos conocidos;
+6. generar Excel limpio con fórmulas;
+7. incorporar sugerencia explicable de recargo 15–30%;
+8. acumular Excel aprobados y correcciones para detectar tendencias.
 
 ## 14. Límites actuales
 
