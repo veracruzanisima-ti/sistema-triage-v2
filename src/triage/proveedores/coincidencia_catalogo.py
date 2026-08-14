@@ -39,6 +39,11 @@ def normalizar_texto(texto: str | None) -> str:
     valor = str(texto or "").upper().replace("µ", "U")
     valor = unicodedata.normalize("NFKD", valor)
     valor = "".join(c for c in valor if not unicodedata.combining(c))
+    # En catálogos mexicanos el mismo frasco inyectable puede publicarse como
+    # "vial", "frasco ámpula" o simplemente "ámpula". Canonizamos sólo esa
+    # terminología; plumas, cartuchos y otros dispositivos siguen siendo distintos.
+    valor = re.sub(r"\bFRASCO\s+(?:AMPULA|AMPOLLA)\b", "VIAL", valor)
+    valor = re.sub(r"\b(?:AMPULA|AMPOLLA)\b", "VIAL", valor)
     valor = re.sub(r"[^A-Z0-9./+%-]+", " ", valor)
     return re.sub(r"\s+", " ", valor).strip()
 

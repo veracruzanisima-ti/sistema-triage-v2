@@ -72,3 +72,21 @@ def test_busquedas_de_precio_muestran_estado_visual_inmediato(cliente):
     assert 'aria-live="polite"' in pagina.text
     assert 'boton.textContent = "Buscando…"' in pagina.text
     assert "estado.hidden = false" in pagina.text
+
+
+def test_resultado_web_se_reubica_en_la_tarjeta_del_producto(cliente):
+    cotizacion_id, _ = _crear_producto_consultable(cliente)
+    cliente.app.state.descubridor_web = object()
+
+    pagina = cliente.get(
+        f"/cotizaciones/{cotizacion_id}/proveedores"
+        "?resultado=web&web_guardados=0&web_descartados=5"
+    )
+
+    assert pagina.status_code == 200
+    assert "triage-ultima-busqueda-web" in pagina.text
+    assert "Búsqueda web · ${producto}" in pagina.text
+    assert "La web sí devolvió ${descartados} resultado(s)" in pagina.text
+    assert 'form[action*="/buscar-web"]' in pagina.text
+    assert "mensajeGlobal.remove()" in pagina.text
+    assert "aviso.scrollIntoView" in pagina.text
