@@ -28,7 +28,6 @@ from triage.proveedores.descubrimiento_web import (
     DescubridorWebOpenAI,
 )
 from triage.proveedores.fesa import AdaptadorFesa
-from triage.proveedores.nadro_adaptador import adaptadores_nadro_disponibles
 from triage.proveedores.nadro_rutas import router as router_nadro
 from triage.proveedores.rutas import router as router_proveedores
 from triage.revision_final.rutas import router as router_revision_final
@@ -90,7 +89,11 @@ def crear_app(
         clave_lector_default = "inyectado:lector"
         lectores_ia[clave_lector_default] = lector_documentos
     elif configuracion.openai_api_key.strip():
-        for modelo in _modelos_unicos(configuracion.modelo_openai_lector, "gpt-5", "gpt-5.4-mini"):
+        for modelo in _modelos_unicos(
+            configuracion.modelo_openai_lector,
+            "gpt-5",
+            "gpt-5.4-mini",
+        ):
             lectores_ia[f"openai:{modelo}"] = LectorOpenAI(
                 api_key=configuracion.openai_api_key,
                 modelo=modelo,
@@ -112,7 +115,11 @@ def crear_app(
         clave_web_default = "inyectado:web"
         descubridores_ia[clave_web_default] = descubridor_web
     elif configuracion.openai_api_key.strip():
-        for modelo in _modelos_unicos(configuracion.modelo_openai_web, "gpt-5", "gpt-5.4-mini"):
+        for modelo in _modelos_unicos(
+            configuracion.modelo_openai_web,
+            "gpt-5",
+            "gpt-5.4-mini",
+        ):
             descubridores_ia[f"openai:{modelo}"] = DescubridorWebOpenAI(
                 api_key=configuracion.openai_api_key,
                 modelo=modelo,
@@ -142,7 +149,7 @@ def crear_app(
 
     @asynccontextmanager
     async def ciclo_vida(_aplicacion: FastAPI) -> AsyncIterator[None]:
-        """Prepara administrador y proveedores locales; no ejecuta migraciones."""
+        """Prepara únicamente el administrador inicial; no ejecuta migraciones."""
 
         with fabrica_sesiones() as sesion:
             crear_admin_inicial_si_corresponde(sesion, configuracion)
@@ -150,8 +157,6 @@ def crear_app(
                 raise RuntimeError(
                     "No existe un usuario activo. Configura el administrador inicial."
                 )
-            for adaptador in adaptadores_nadro_disponibles(sesion, fabrica_sesiones):
-                proveedores_por_nombre[adaptador.nombre.casefold()] = adaptador
         yield
 
     aplicacion = FastAPI(
