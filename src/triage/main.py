@@ -28,6 +28,8 @@ from triage.proveedores.descubrimiento_web import (
     DescubridorWebOpenAI,
 )
 from triage.proveedores.fesa import AdaptadorFesa
+from triage.proveedores.nadro_adaptador import adaptadores_nadro_disponibles
+from triage.proveedores.nadro_rutas import router as router_nadro
 from triage.proveedores.rutas import router as router_proveedores
 from triage.revision_final.rutas import router as router_revision_final
 from triage.usuarios.rutas import router as router_usuarios
@@ -52,7 +54,7 @@ def _proveedores_configurados(
     configuracion: Configuracion,
     inyectados: Sequence[ProveedorProducto] | None,
 ) -> tuple[ProveedorProducto, ...]:
-    """Construye proveedores reales sólo cuando el entorno los habilita."""
+    """Construye proveedores externos sólo cuando el entorno los habilita."""
 
     if inyectados is not None:
         return tuple(inyectados)
@@ -140,7 +142,7 @@ def crear_app(
 
     @asynccontextmanager
     async def ciclo_vida(_aplicacion: FastAPI) -> AsyncIterator[None]:
-        """Prepara únicamente el administrador inicial; no ejecuta migraciones."""
+        """Prepara administrador y proveedores locales; no ejecuta migraciones."""
 
         with fabrica_sesiones() as sesion:
             crear_admin_inicial_si_corresponde(sesion, configuracion)
@@ -148,6 +150,8 @@ def crear_app(
                 raise RuntimeError(
                     "No existe un usuario activo. Configura el administrador inicial."
                 )
+            for adaptador in adaptadores_nadro_disponibles(sesion, fabrica_sesiones):
+                proveedores_por_nombre[adaptador.nombre.casefold()] = adaptador
         yield
 
     aplicacion = FastAPI(
@@ -175,9 +179,7 @@ def crear_app(
     aplicacion.state.descubridor_web = buscador_web
     aplicacion.state.descubridores_ia = descubridores_ia
     aplicacion.state.clave_web_default = clave_web_default
-    aplicacion.state.plantillas = Jinja2Templates(
-        directory=str(BASE_DIR / "templates")
-    )
+    aplicacion.state.plantillas = Jinja2Templates(directory=str(BASE_DIR / "templates"))
     aplicacion.include_router(router_usuarios)
     aplicacion.include_router(router_modelos_ia)
     aplicacion.include_router(router_cotizaciones)
@@ -185,6 +187,7 @@ def crear_app(
     aplicacion.include_router(router_normalizacion)
     aplicacion.include_router(router_historico)
     aplicacion.include_router(router_decisiones_precio)
+    aplicacion.include_router(router_nadro)
     aplicacion.include_router(router_proveedores)
     aplicacion.include_router(router_revision_final)
 
