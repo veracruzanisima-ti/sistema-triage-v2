@@ -25,6 +25,7 @@ class Configuracion(BaseSettings):
     bootstrap_admin_name: str = ""
     bootstrap_admin_password: str = ""
     session_max_age_seconds: int = 43_200
+    codigo_postal_consulta_default: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -50,6 +51,11 @@ class Configuracion(BaseSettings):
             raise ValueError("MAX_DOCUMENTO_BYTES debe ser mayor que cero")
         if not self.openai_model.strip():
             raise ValueError("OPENAI_MODEL no puede estar vacío")
+
+        codigo_postal = self.codigo_postal_consulta_default.strip()
+        if codigo_postal and (len(codigo_postal) != 5 or not codigo_postal.isdigit()):
+            raise ValueError("CODIGO_POSTAL_CONSULTA_DEFAULT debe contener 5 dígitos")
+        self.codigo_postal_consulta_default = codigo_postal
 
         if self.es_produccion:
             if not self.database_url.strip():
