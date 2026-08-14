@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block titulo %}Actualizar NADRO · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Actualizar NADRO</h1>
+    <p class="ayuda">Carga la base completa y las ofertas vigentes descargadas de EdiNadro. Triage reemplaza el snapshot sólo si ambos archivos son válidos.</p>
+  </div>
+  {% if cotizacion_id %}
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion_id }}/proveedores">Volver a buscar precios</a>
+  {% else %}
+    <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
+  {% endif %}
+</div>
+
+{% if mensaje %}<p class="exito">{{ mensaje }}</p>{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="tarjeta">
+  <h2>Catálogo actual</h2>
+  {% if ultima_importacion %}
+    <div class="partida">
+      <strong>{{ ultima_importacion.articulos_cargados }} artículos · {{ ultima_importacion.ofertas_cargadas }} ofertas</strong>
+      <p class="ayuda">Actualizado: {{ ultima_importacion.cargada_en }}</p>
+      <p class="ayuda">{{ ultima_importacion.archivo_catalogo }} · {{ ultima_importacion.archivo_ofertas }}</p>
+    </div>
+  {% else %}
+    <div class="vacio">
+      <strong>Aún no hay catálogo NADRO cargado.</strong>
+      <p class="ayuda">Hasta cargarlo, NADRO no participará en las búsquedas automáticas.</p>
+    </div>
+  {% endif %}
+</section>
+
+<section class="tarjeta">
+  <h2>Cargar actualización</h2>
+  <p>Desde EdiNadro selecciona la base <strong>AutoIICX.dat</strong> y el archivo <strong>Oferta.dat</strong> vigente.</p>
+  <p class="ayuda">No subas facturación, pedidos ni credenciales. Si uno de los archivos está incompleto o no coincide con el formato esperado, el catálogo anterior se conserva.</p>
+
+  <form method="post" action="/proveedores/nadro/actualizar" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="cotizacion_id" value="{{ cotizacion_id }}">
+
+    <div class="campo">
+      <label for="catalogo">Base completa · AutoIICX.dat</label>
+      <input id="catalogo" name="catalogo" type="file" accept=".dat,application/octet-stream,text/plain" required>
+    </div>
+
+    <div class="campo">
+      <label for="ofertas">Ofertas vigentes · Oferta.dat</label>
+      <input id="ofertas" name="ofertas" type="file" accept=".dat,application/octet-stream,text/plain" required>
+    </div>
+
+    <button class="boton" type="submit">Actualizar NADRO</button>
+  </form>
+</section>
+{% endblock %}

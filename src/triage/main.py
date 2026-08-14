@@ -28,6 +28,7 @@ from triage.proveedores.descubrimiento_web import (
     DescubridorWebOpenAI,
 )
 from triage.proveedores.fesa import AdaptadorFesa
+from triage.proveedores.nadro_rutas import router as router_nadro
 from triage.proveedores.rutas import router as router_proveedores
 from triage.revision_final.rutas import router as router_revision_final
 from triage.usuarios.rutas import router as router_usuarios
@@ -52,7 +53,7 @@ def _proveedores_configurados(
     configuracion: Configuracion,
     inyectados: Sequence[ProveedorProducto] | None,
 ) -> tuple[ProveedorProducto, ...]:
-    """Construye proveedores reales sólo cuando el entorno los habilita."""
+    """Construye proveedores externos sólo cuando el entorno los habilita."""
 
     if inyectados is not None:
         return tuple(inyectados)
@@ -88,7 +89,11 @@ def crear_app(
         clave_lector_default = "inyectado:lector"
         lectores_ia[clave_lector_default] = lector_documentos
     elif configuracion.openai_api_key.strip():
-        for modelo in _modelos_unicos(configuracion.modelo_openai_lector, "gpt-5", "gpt-5.4-mini"):
+        for modelo in _modelos_unicos(
+            configuracion.modelo_openai_lector,
+            "gpt-5",
+            "gpt-5.4-mini",
+        ):
             lectores_ia[f"openai:{modelo}"] = LectorOpenAI(
                 api_key=configuracion.openai_api_key,
                 modelo=modelo,
@@ -110,7 +115,11 @@ def crear_app(
         clave_web_default = "inyectado:web"
         descubridores_ia[clave_web_default] = descubridor_web
     elif configuracion.openai_api_key.strip():
-        for modelo in _modelos_unicos(configuracion.modelo_openai_web, "gpt-5", "gpt-5.4-mini"):
+        for modelo in _modelos_unicos(
+            configuracion.modelo_openai_web,
+            "gpt-5",
+            "gpt-5.4-mini",
+        ):
             descubridores_ia[f"openai:{modelo}"] = DescubridorWebOpenAI(
                 api_key=configuracion.openai_api_key,
                 modelo=modelo,
@@ -175,9 +184,7 @@ def crear_app(
     aplicacion.state.descubridor_web = buscador_web
     aplicacion.state.descubridores_ia = descubridores_ia
     aplicacion.state.clave_web_default = clave_web_default
-    aplicacion.state.plantillas = Jinja2Templates(
-        directory=str(BASE_DIR / "templates")
-    )
+    aplicacion.state.plantillas = Jinja2Templates(directory=str(BASE_DIR / "templates"))
     aplicacion.include_router(router_usuarios)
     aplicacion.include_router(router_modelos_ia)
     aplicacion.include_router(router_cotizaciones)
@@ -185,6 +192,7 @@ def crear_app(
     aplicacion.include_router(router_normalizacion)
     aplicacion.include_router(router_historico)
     aplicacion.include_router(router_decisiones_precio)
+    aplicacion.include_router(router_nadro)
     aplicacion.include_router(router_proveedores)
     aplicacion.include_router(router_revision_final)
 
