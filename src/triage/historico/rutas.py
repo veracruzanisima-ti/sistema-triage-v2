@@ -124,6 +124,7 @@ def agregar_observacion(
             condiciones_promocion=condiciones_promocion,
             disponibilidad=disponibilidad,
             entrega_viable=_entrega_viable(entrega_viable),
+            codigo_postal=cotizacion.codigo_postal_consulta,
         )
     except ValueError as error:
         return _render_historico(
