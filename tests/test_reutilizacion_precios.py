@@ -1,6 +1,7 @@
 """Regresión de reutilización diaria sin ocultar decisiones humanas."""
 
 import re
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -8,7 +9,10 @@ from sqlalchemy import select
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
 from triage.historico.decisiones_modelos import RolDecisionPrecio
-from triage.historico.decisiones_servicio import registrar_decision_precio
+from triage.historico.decisiones_servicio import (
+    referencias_estables_cotizadas_hoy,
+    registrar_decision_precio,
+)
 from triage.historico.modelos import ObservacionPrecio
 from triage.historico.servicio import crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
@@ -200,6 +204,22 @@ def test_precio_realmente_cotizado_hoy_se_reutiliza_sin_consulta(cliente):
         assert resumen.productos_reutilizados_hoy == 1
         assert sesion.get(ObservacionPrecio, observacion.id) is not None
         assert len(list(sesion.scalars(select(ObservacionPrecio)))) == 1
+
+
+def test_al_dia_siguiente_la_referencia_deja_de_ser_reutilizable(cliente):
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        usuario = sesion.scalar(select(Usuario))
+        assert usuario is not None
+        observacion = _precio_cotizado_hoy(sesion, usuario.id)
+
+        referencias = referencias_estables_cotizadas_hoy(
+            sesion,
+            claves={observacion.clave_producto},
+            codigo_postal="91000",
+            ahora=datetime.now(UTC) + timedelta(days=1),
+        )
+
+        assert referencias == {}
 
 
 def test_cp_distinto_obliga_a_consultar_de_nuevo(cliente):
