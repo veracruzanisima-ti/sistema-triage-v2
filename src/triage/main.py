@@ -20,6 +20,7 @@ from triage.lectores.base import LectorDocumento
 from triage.lectores.openai import LectorOpenAI
 from triage.normalizacion.rutas import router as router_normalizacion
 from triage.proveedores.base import ProveedorProducto
+from triage.proveedores.descubrimiento_web import DescubridorWeb, DescubridorWebOpenAI
 from triage.proveedores.rutas import router as router_proveedores
 from triage.revision_final.rutas import router as router_revision_final
 from triage.usuarios.rutas import router as router_usuarios
@@ -35,6 +36,7 @@ def crear_app(
     motor: Engine | None = None,
     lector_documentos: LectorDocumento | None = None,
     proveedores_productos: Sequence[ProveedorProducto] | None = None,
+    descubridor_web: DescubridorWeb | None = None,
 ) -> FastAPI:
     """Construye la aplicación permitiendo inyectar infraestructura en pruebas."""
 
@@ -44,6 +46,13 @@ def crear_app(
     lector = lector_documentos
     if lector is None and configuracion.openai_api_key.strip():
         lector = LectorOpenAI(
+            api_key=configuracion.openai_api_key,
+            modelo=configuracion.openai_model,
+        )
+
+    buscador_web = descubridor_web
+    if buscador_web is None and configuracion.openai_api_key.strip():
+        buscador_web = DescubridorWebOpenAI(
             api_key=configuracion.openai_api_key,
             modelo=configuracion.openai_model,
         )
@@ -90,6 +99,7 @@ def crear_app(
     aplicacion.state.fabrica_sesiones = fabrica_sesiones
     aplicacion.state.lector_documentos = lector
     aplicacion.state.proveedores_productos = proveedores_por_nombre
+    aplicacion.state.descubridor_web = buscador_web
     aplicacion.state.plantillas = Jinja2Templates(
         directory=str(BASE_DIR / "templates")
     )

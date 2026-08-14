@@ -6,16 +6,19 @@ Este documento conserva el contexto funcional que debe sobrevivir a cambios de c
 
 ## Estado de implementación
 
-- PR #23 (`feat: simplificar flujo operativo de cotizaciones`) ya fue integrado a `main` con CI verde.
-- PR #24 (`feat: cerrar flujo de precios a revisión`) ya fue integrado a `main` con CI verde.
-- PR #25 (`feat: conservar contexto de código postal en precios`) ya fue integrado a `main` con CI verde.
+- PR #23 (`feat: simplificar flujo operativo de cotizaciones`) integrado a `main` con CI verde.
+- PR #24 (`feat: cerrar flujo de precios a revisión`) integrado a `main` con CI verde.
+- PR #25 (`feat: conservar contexto de código postal en precios`) integrado a `main` con CI verde.
+- PR #26 (`feat: unificar búsqueda de precios`) integrado a `main` con CI verde.
 - El recorrido visible ya puede avanzar por `Sube y analiza → Revisa → Confirma producto → Busca precio → Revisa cotización` sin obligar al usuario a recorrer pantallas técnicas.
 - En `Buscar precios`, una observación no promocional puede marcarse como `Usar para cotizar`; se reutiliza la decisión append-only `REFERENCIA_ESTABLE` ya existente.
 - Una promoción no puede convertirse en referencia estable, ni desde el flujo normal ni desde la vista avanzada. Las selecciones promocionales históricas dejan de considerarse vigentes sin borrar su trazabilidad.
 - El CP habitual puede configurarse con `CODIGO_POSTAL_CONSULTA_DEFAULT`; cada cotización puede cambiarlo y cada observación nueva conserva el CP con el que fue obtenida. Las consultas automáticas no corren sin CP.
-- Histórico, consultas, decisiones de precio, revisión consolidada y cambio manual de estado siguen disponibles bajo áreas secundarias; no se eliminaron datos ni rutas.
-- El bloque actualmente en desarrollo (`agent/busqueda-precios-unificada`) agrega una sola acción `Buscar precios` que recorre todos los productos y adaptadores configurados. Un fallo aislado queda registrado y no detiene las demás fuentes. La consulta individual por proveedor permanece como herramienta secundaria.
-- Todavía no están implementadas fuentes reales NADRO/FESA, sesiones autenticadas por fuente, cadena fría persistente, Excel final, sugerencia de recargo ni descubrimiento web automático.
+- La búsqueda unificada ya recorre todos los productos y adaptadores configurados con una sola acción. Un fallo aislado queda registrado y no detiene las demás fuentes.
+- El bloque actualmente en desarrollo (`agent/descubrimiento-web-proveedores`) agrega descubrimiento web opcional por producto. Sólo guarda coincidencias exactas con precio explícito y conserva URL, producto mostrado, CP y origen de evidencia.
+- NADRO no debe integrarse inicialmente mediante scraping de pantalla. La vía preferida es EdiNadro/archivos estructurados oficiales; antes de programar el parser se requiere una muestra real del archivo/layout autorizado para no inventar columnas.
+- Un scraper legado de FESA contiene una credencial real hardcodeada. Esa credencial no está en V2 ni en GitHub; debe rotarse y el secreto legado no debe reutilizarse ni copiarse al repositorio.
+- Todavía no están implementados el adaptador real NADRO/FESA, sesiones autenticadas por fuente, vigencia diaria/reutilización automática de precios, cadena fría persistente, Excel final ni sugerencia de recargo.
 
 ## 1. Fuente de verdad del proyecto
 
@@ -93,6 +96,21 @@ Una oferta puede registrarse como oportunidad de adquisición sin utilizarse com
 
 El sistema no compra automáticamente ni modifica inventario por detectar una oportunidad. Sólo la señala para evaluación humana.
 
+### Vigencia y reutilización de precios
+
+Dirección operativa recomendada para el siguiente bloque:
+
+- Si la misma identidad exacta de producto aparece varias veces en una cotización, consultar esa identidad una sola vez y reutilizar la misma evidencia para las partidas equivalentes.
+- Si una observación estable, no promocional, del mismo producto exacto y mismo CP fue obtenida durante el día actual, Triage puede proponerla nuevamente sin recorrer todas las fuentes.
+- La interfaz debe mostrar claramente la hora de la observación, por ejemplo `Visto hoy a las 10:42`.
+- Antes de cerrar una nueva cotización que reutiliza un precio, ofrecer o ejecutar un recheck corto contra la fuente/proveedor elegido. El recheck exitoso sí crea una nueva observación; reutilizar una existente no debe falsificar una nueva fecha de observación.
+- Al siguiente día, la búsqueda normal vuelve a considerarse necesaria por defecto.
+- Una promoción u oferta debe revalidarse cada vez y no entra en la vigencia estable diaria.
+- Cambiar marca, concentración, forma/dispositivo, presentación o CP invalida la reutilización automática.
+- No adoptar todavía vigencia semanal. Más adelante se podrá medir estabilidad por proveedor y ajustar la política con evidencia real.
+
+Esta política es una recomendación operativa para ahorrar consultas sin sacrificar trazabilidad. Debe medirse durante uso real antes de convertir intervalos mayores en regla fija.
+
 ## 7. Contexto de cada consulta de precio
 
 Los precios pueden cambiar por ubicación, sesión, disponibilidad y momento de consulta. La evidencia interna de Triage debe poder conservar, cuando aplique:
@@ -100,6 +118,7 @@ Los precios pueden cambiar por ubicación, sesión, disponibilidad y momento de 
 - proveedor/fuente;
 - producto exacto observado;
 - precio;
+- origen de la evidencia (`MANUAL`, `ADAPTADOR`, `WEB`);
 - código postal utilizado;
 - fecha/hora;
 - disponibilidad;
@@ -140,11 +159,36 @@ El objetivo es descubrir opciones que el equipo no conocía sin mantener decenas
 
 ### Orquestación de consultas
 
-La interfaz normal debe ofrecer una sola acción `Buscar precios` que recorra todos los productos preparados y todos los adaptadores configurados. Por ahora la ejecución es secuencial para mantener comportamiento simple, predecible y trazable.
+La interfaz normal ofrece una sola acción `Buscar precios` que recorre todos los productos preparados y todos los adaptadores configurados. Por ahora la ejecución es secuencial para mantener comportamiento simple, predecible y trazable.
 
 Un error operativo de una fuente se registra en su intento y no debe detener las demás consultas. Errores de configuración del sistema sí deben hacerse visibles en vez de ocultarse.
 
 La consulta individual por proveedor se conserva como herramienta secundaria para diagnóstico, reintentos o casos excepcionales.
+
+### Descubrimiento web
+
+El descubrimiento web es una ampliación opcional por producto, no parte obligatoria de cada búsqueda masiva. Esto evita hacer búsquedas web costosas cuando los proveedores recurrentes ya resolvieron el producto.
+
+Reglas conservadoras:
+
+- máximo pocos candidatos por búsqueda;
+- sólo se guarda una opción si la fuente muestra un precio numérico explícito;
+- Triage no infiere IVA desde la web;
+- sólo una coincidencia exacta de identidad puede guardarse como observación utilizable;
+- las coincidencias aproximadas se descartan del histórico de precios utilizables;
+- se conserva la URL directa y el texto exacto del producto mostrado por la fuente;
+- una promoción sólo se marca como tal si la fuente lo declara explícitamente;
+- descubrir una opción no la selecciona automáticamente como referencia estable ni como compra.
+
+### NADRO
+
+La primera integración de NADRO debe intentar usar EdiNadro o una vía estructurada oficial equivalente antes que scraping de iNadro. La documentación pública indica que existen descargas periódicas de materiales/cambios de precio/ofertas, pero el layout operativo concreto debe obtenerse de una muestra real autorizada.
+
+No implementar un parser por adivinación. Una muestra EdiNadro real permitirá definir el contrato, pruebas y manejo de cambios de formato.
+
+### FESA y secretos legados
+
+Los scrapers V1 no deben copiarse a V2. Se detectó una credencial real hardcodeada en un archivo legado de FESA. El repositorio V2 fue revisado y no contiene esa cuenta/secreto. La contraseña debe rotarse y cualquier futura integración autenticada usará variables de entorno o un almacén de secretos, nunca código fuente.
 
 ## 9. Cadena fría
 
@@ -237,10 +281,10 @@ No aplicar aprendizaje automático que cambie reglas silenciosamente. Acumular e
 
 Orden recomendado a partir de este documento:
 
-1. completar y validar la búsqueda unificada sobre adaptadores configurados;
-2. integrar la primera fuente real mediante la vía estructurada más estable disponible;
-3. incorporar manejo de sesiones autenticadas por fuente sin guardar secretos en GitHub;
-4. incorporar descubrimiento web de proveedores nuevos;
+1. completar y validar descubrimiento web opcional por producto;
+2. deduplicar identidades repetidas y reutilizar precios estables observados durante el día, con recheck antes del cierre;
+3. obtener una muestra real de EdiNadro y construir el primer adaptador estructurado;
+4. incorporar manejo de sesiones autenticadas para fuentes que realmente lo requieran, sin guardar secretos en GitHub;
 5. persistir y reutilizar `Cadena fría: Sí/No` para productos conocidos;
 6. generar Excel limpio con fórmulas;
 7. incorporar sugerencia explicable de recargo 15–30%;
