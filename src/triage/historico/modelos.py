@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
@@ -9,6 +10,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from triage.base_datos import Base
 from triage.cotizaciones.modelos import ahora_utc
+
+
+class OrigenObservacionPrecio(StrEnum):
+    """Distingue cómo llegó la evidencia sin cambiar su naturaleza append-only."""
+
+    MANUAL = "MANUAL"
+    ADAPTADOR = "ADAPTADOR"
+    WEB = "WEB"
 
 
 class ObservacionPrecio(Base):
@@ -32,6 +41,8 @@ class ObservacionPrecio(Base):
     concentracion: Mapped[str | None] = mapped_column(String(240), nullable=True)
     forma_dispositivo: Mapped[str | None] = mapped_column(String(300), nullable=True)
     presentacion: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    producto_observado: Mapped[str | None] = mapped_column(String(700), nullable=True)
+    origen: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
     proveedor: Mapped[str] = mapped_column(String(240), nullable=False, index=True)
     precio_antes_iva: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     iva_porcentaje: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
