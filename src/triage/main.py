@@ -47,14 +47,14 @@ def crear_app(
     if lector is None and configuracion.openai_api_key.strip():
         lector = LectorOpenAI(
             api_key=configuracion.openai_api_key,
-            modelo=configuracion.openai_model,
+            modelo=configuracion.modelo_openai_lector,
         )
 
     buscador_web = descubridor_web
     if buscador_web is None and configuracion.openai_api_key.strip():
         buscador_web = DescubridorWebOpenAI(
             api_key=configuracion.openai_api_key,
-            modelo=configuracion.openai_model,
+            modelo=configuracion.modelo_openai_web,
         )
 
     proveedores_por_nombre: dict[str, ProveedorProducto] = {}
