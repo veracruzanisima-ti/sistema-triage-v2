@@ -111,21 +111,29 @@ def test_flujo_minimo_del_piloto_permanece_conectado(cliente: TestClient):
     partida_id = _preparar_producto(cliente, cotizacion_id)
     _agregar_precio(cliente, cotizacion_id, partida_id)
 
-    decisiones = cliente.get(f"/cotizaciones/{cotizacion_id}/decisiones-precio")
-    observacion = re.search(r'name="observacion_id" value="([^"]+)"', decisiones.text)
+    proveedores = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    assert proveedores.status_code == 200
+    assert "Aún no hay proveedores automáticos configurados" in proveedores.text
+    assert "Usar para cotizar" in proveedores.text
+
+    observacion = re.search(r'name="observacion_id" value="([^"]+)"', proveedores.text)
     assert observacion is not None
     elegida = cliente.post(
         f"/cotizaciones/{cotizacion_id}/decisiones-precio/{partida_id}",
         data={
-            "csrf_token": _csrf(decisiones.text),
+            "csrf_token": _csrf(proveedores.text),
             "rol": "REFERENCIA_ESTABLE",
             "observacion_id": observacion.group(1),
+            "volver": "proveedores",
         },
         follow_redirects=False,
     )
     assert elegida.status_code == 303
-    assert "Referencia estable" in cliente.get(elegida.headers["location"]).text
+    assert elegida.headers["location"] == f"/cotizaciones/{cotizacion_id}/proveedores"
 
-    proveedores = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
-    assert proveedores.status_code == 200
-    assert "Aún no hay proveedores automáticos configurados" in proveedores.text
+    precios_confirmados = cliente.get(elegida.headers["location"])
+    assert "Usado para cotizar" in precios_confirmados.text
+    assert "Revisar cotización" in precios_confirmados.text
+
+    detalle = cliente.get(f"/cotizaciones/{cotizacion_id}")
+    assert "Siguiente paso: Revisa cotización" in detalle.text
