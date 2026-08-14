@@ -70,7 +70,7 @@
     <div>
       <h2>Progreso</h2>
       <p>{{ con_referencia }} de {{ productos|length }} productos tienen precio confirmado para cotizar.</p>
-      <p class="ayuda">Una promoción se conserva como oportunidad de compra, pero no se propone aquí como referencia estable.</p>
+      <p class="ayuda">Una oferta se conserva como evidencia. Sólo se marca como oportunidad de compra cuando realmente mejora la referencia estable en la misma base de precio.</p>
     </div>
     {% if todas_con_referencia %}
       <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisar cotización</a>
@@ -81,6 +81,7 @@
 {% if productos %}
   {% for producto in productos %}
     {% set seleccion = selecciones.get(producto.partida.id) %}
+    {% set vista = vistas_precios.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     {% set cotizada_hoy = referencias_cotizadas_hoy.get(producto.clave_producto) %}
     {% set estado_busqueda_id = "estado-busqueda-" ~ producto.partida.id %}
@@ -108,7 +109,7 @@
         <span data-texto-busqueda>Buscando opciones…</span>
       </div>
 
-      {% if cotizada_hoy %}
+      {% if cotizada_hoy and (not vista or not vista.referencia) %}
         <div class="aviso">
           <strong>Este producto ya se cotizó hoy.</strong>
           <p>
@@ -118,15 +119,13 @@
           </p>
           <p class="ayuda">Misma identidad exacta y mismo CP. Se reutiliza la observación original; no se inventa una fecha nueva.</p>
           <div class="grupo-botones">
-            {% if not seleccion or seleccion.referencia_estable_id != cotizada_hoy.id %}
-              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="rol" value="REFERENCIA_ESTABLE">
-                <input type="hidden" name="observacion_id" value="{{ cotizada_hoy.id }}">
-                <input type="hidden" name="volver" value="proveedores">
-                <button class="boton" type="submit">Usar precio de hoy</button>
-              </form>
-            {% endif %}
+            <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="rol" value="REFERENCIA_ESTABLE">
+              <input type="hidden" name="observacion_id" value="{{ cotizada_hoy.id }}">
+              <input type="hidden" name="volver" value="proveedores">
+              <button class="boton" type="submit">Usar precio de hoy</button>
+            </form>
             {% if proveedores %}
               <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/revalidar" data-form-busqueda data-estado-busqueda="{{ estado_busqueda_id }}" data-mensaje-busqueda="Revalidando el precio de este producto…">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -137,55 +136,31 @@
         </div>
       {% endif %}
 
-      {% if producto.observaciones %}
-        <h3>Precios encontrados</h3>
-        {% for observacion in producto.observaciones %}
-          <div class="partida">
-            <div class="barra">
-              <div>
-                <strong>{{ observacion.proveedor }}</strong>
-                {% if cotizada_hoy and cotizada_hoy.id == observacion.id %}<span class="estado estado-revisado">Cotizado hoy</span>{% endif %}
-                {% if observacion.origen == "WEB" %}<span class="estado estado-analizado">Web</span>{% endif %}
-                {% if observacion.es_promocion %}
-                  <span class="estado estado-analizado">Oferta / promoción</span>
-                {% elif seleccion and seleccion.referencia_estable_id == observacion.id %}
-                  <span class="estado estado-revisado">Usado para cotizar</span>
-                {% endif %}
-                <p class="ayuda">Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
-              </div>
-              <div>
-                {% if observacion.precio_total is not none %}
-                  <strong>Total: ${{ '%.2f'|format(observacion.precio_total) }}</strong>
-                {% endif %}
-                {% if observacion.precio_antes_iva is not none %}
-                  <div class="ayuda">Antes de IVA: ${{ '%.2f'|format(observacion.precio_antes_iva) }}</div>
-                {% endif %}
-              </div>
-            </div>
+      {% if vista and vista.observaciones %}
+        {% if vista.referencia %}
+          <h3>Precio usado para cotizar</h3>
+          {% set observacion = vista.referencia %}
+          {% set oportunidad = none %}
+          {% include "proveedores/_observacion_precio.html" %}
 
-            {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
-            {% if observacion.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
-            {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
-              <p><a href="{{ observacion.fuente }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
-            {% else %}
-              <p class="ayuda"><strong>Fuente:</strong> {{ observacion.fuente }}</p>
-            {% endif %}
-            {% if observacion.entrega_viable is sameas false %}<p class="aviso"><strong>Entrega marcada como no viable.</strong></p>{% endif %}
-            {% if observacion.es_promocion %}
-              <p class="aviso"><strong>Oportunidad de compra.</strong> No se usa como referencia estable de la cotización.</p>
-            {% elif seleccion and seleccion.referencia_estable_id == observacion.id %}
-              <p class="ayuda">Este es el precio que actualmente alimentará la revisión de la cotización.</p>
-            {% else %}
-              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="rol" value="REFERENCIA_ESTABLE">
-                <input type="hidden" name="observacion_id" value="{{ observacion.id }}">
-                <input type="hidden" name="volver" value="proveedores">
-                <button class="boton" type="submit">Usar para cotizar</button>
-              </form>
-            {% endif %}
-          </div>
-        {% endfor %}
+          {% if vista.alternativas %}
+            <details>
+              <summary>Mostrar otras opciones ({{ vista.alternativas|length }})</summary>
+              <p class="ayuda">Los precios totales se muestran de menor a mayor. Los registros que sólo tienen precio antes de IVA se muestran después y se ordenan entre sí.</p>
+              {% for observacion in vista.alternativas %}
+                {% set oportunidad = vista.oportunidades.get(observacion.id) %}
+                {% include "proveedores/_observacion_precio.html" %}
+              {% endfor %}
+            </details>
+          {% endif %}
+        {% else %}
+          <h3>Precios encontrados</h3>
+          <p class="ayuda">Los precios totales se muestran de menor a mayor. Los registros que sólo tienen precio antes de IVA se muestran después y se ordenan entre sí.</p>
+          {% for observacion in vista.observaciones %}
+            {% set oportunidad = none %}
+            {% include "proveedores/_observacion_precio.html" %}
+          {% endfor %}
+        {% endif %}
       {% else %}
         <div class="vacio">
           <strong>Aún no hay precios observados.</strong>
