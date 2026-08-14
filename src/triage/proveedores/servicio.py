@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 
 from triage.cotizaciones.modelos import Cotizacion, ahora_utc
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
+from triage.historico.modelos import OrigenObservacionPrecio
 from triage.historico.servicio import clave_producto, crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.base import ProveedorProducto, ResultadoProveedor, SolicitudProveedor
+from triage.proveedores.descubrimiento_web import DescubridorWeb
 from triage.proveedores.modelos import ConsultaProveedor, EstadoConsultaProveedor
 
 
@@ -37,6 +39,15 @@ class ResumenConsultaUnificada:
     precios_encontrados: int
     no_encontrados: int
     errores: int
+
+
+@dataclass(frozen=True)
+class ResumenDescubrimientoWeb:
+    """Distingue candidatos útiles de resultados descartados conservadoramente."""
+
+    candidatos: int
+    guardados: int
+    descartados: int
 
 
 def _limpiar(valor: str | None) -> str | None:
@@ -136,6 +147,23 @@ def _validar_resultado(resultado: ResultadoProveedor) -> None:
         raise ValueError("el proveedor devolvió un porcentaje de IVA no válido")
 
 
+def _solicitud_desde_normalizacion(
+    *,
+    partida_documento_id: str,
+    normalizacion: NormalizacionPartida,
+    codigo_postal: str,
+) -> SolicitudProveedor:
+    return SolicitudProveedor(
+        partida_documento_id=partida_documento_id,
+        producto=_limpiar(normalizacion.producto),
+        marca=_limpiar(normalizacion.marca),
+        concentracion=_limpiar(normalizacion.concentracion),
+        forma_dispositivo=_limpiar(normalizacion.forma_dispositivo),
+        presentacion=_limpiar(normalizacion.presentacion),
+        codigo_postal=codigo_postal,
+    )
+
+
 def ejecutar_consulta(
     sesion: Session,
     *,
@@ -166,13 +194,9 @@ def ejecutar_consulta(
     if not nombre_proveedor:
         raise ValueError("el adaptador de proveedor no tiene nombre")
 
-    solicitud = SolicitudProveedor(
+    solicitud = _solicitud_desde_normalizacion(
         partida_documento_id=partida_documento_id,
-        producto=_limpiar(normalizacion.producto),
-        marca=_limpiar(normalizacion.marca),
-        concentracion=_limpiar(normalizacion.concentracion),
-        forma_dispositivo=_limpiar(normalizacion.forma_dispositivo),
-        presentacion=_limpiar(normalizacion.presentacion),
+        normalizacion=normalizacion,
         codigo_postal=codigo_postal,
     )
     criterios = {
@@ -239,6 +263,8 @@ def ejecutar_consulta(
         disponibilidad=resultado.disponibilidad,
         entrega_viable=resultado.entrega_viable,
         codigo_postal=codigo_postal,
+        producto_observado=resultado.producto_exacto,
+        origen=OrigenObservacionPrecio.ADAPTADOR,
         guardar=False,
     )
     intento.estado = EstadoConsultaProveedor.EXITOSA.value
@@ -299,4 +325,77 @@ def ejecutar_consultas_configuradas(
         precios_encontrados=precios_encontrados,
         no_encontrados=no_encontrados,
         errores=errores,
+    )
+
+
+def ejecutar_descubrimiento_web(
+    sesion: Session,
+    *,
+    cotizacion_id: str,
+    partida_documento_id: str,
+    usuario_id: str,
+    descubridor: DescubridorWeb,
+) -> ResumenDescubrimientoWeb:
+    """Busca opciones públicas y guarda sólo coincidencias exactas con precio visible."""
+
+    fila = _normalizacion_elegible(
+        sesion,
+        cotizacion_id=cotizacion_id,
+        partida_documento_id=partida_documento_id,
+    )
+    if fila is None:
+        raise ValueError("el producto ya no está preparado o dejó de ser elegible")
+    normalizacion, _, _ = fila
+
+    cotizacion = sesion.get(Cotizacion, cotizacion_id)
+    if cotizacion is None:
+        raise ValueError("la cotización ya no existe")
+    codigo_postal = _limpiar(cotizacion.codigo_postal_consulta)
+    if codigo_postal is None:
+        raise ValueError("Configura un código postal antes de buscar en la web.")
+
+    solicitud = _solicitud_desde_normalizacion(
+        partida_documento_id=partida_documento_id,
+        normalizacion=normalizacion,
+        codigo_postal=codigo_postal,
+    )
+    candidatos = descubridor.buscar(solicitud)
+    guardados = 0
+    descartados = 0
+    for candidato in candidatos:
+        proveedor = _limpiar(candidato.proveedor)
+        producto_observado = _limpiar(candidato.producto_exacto)
+        if (
+            not candidato.coincidencia_exacta
+            or candidato.precio_total is None
+            or not proveedor
+            or not producto_observado
+        ):
+            descartados += 1
+            continue
+
+        crear_observacion_precio(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_documento_id,
+            usuario_id=usuario_id,
+            proveedor=proveedor,
+            fuente=str(candidato.url),
+            precio_antes_iva=None,
+            iva_porcentaje=None,
+            precio_total=candidato.precio_total,
+            es_promocion=candidato.es_promocion,
+            condiciones_promocion=candidato.condiciones_promocion,
+            disponibilidad=candidato.disponibilidad,
+            entrega_viable=candidato.entrega_viable,
+            codigo_postal=codigo_postal,
+            producto_observado=producto_observado,
+            origen=OrigenObservacionPrecio.WEB,
+        )
+        guardados += 1
+
+    return ResumenDescubrimientoWeb(
+        candidatos=len(candidatos),
+        guardados=guardados,
+        descartados=descartados,
     )
