@@ -14,6 +14,7 @@ def _csrf(html: str) -> str:
 
 
 def _crear_cotizacion(cliente: TestClient) -> str:
+    cliente.app.state.configuracion.codigo_postal_consulta_default = "91000"
     formulario = cliente.get("/cotizaciones/nueva")
     respuesta = cliente.post(
         "/cotizaciones",
@@ -147,8 +148,10 @@ def test_capturas_de_precio_son_append_only(cliente: TestClient):
         assert str(observaciones[0].precio_total) == "116.00"
         assert observaciones[0].es_promocion is True
         assert observaciones[0].entrega_viable is True
+        assert observaciones[0].codigo_postal == "91000"
         assert observaciones[1].proveedor == "Proveedor Dos"
         assert str(observaciones[1].precio_total) == "108.50"
+        assert observaciones[1].codigo_postal == "91000"
         assert observaciones[0].id != observaciones[1].id
         assert observaciones[0].clave_producto == observaciones[1].clave_producto
         assert len(observaciones[0].clave_producto) == 64
@@ -205,6 +208,7 @@ def test_historico_no_infiere_iva_ni_clasificacion_comercial(cliente: TestClient
         assert observacion.precio_antes_iva is None
         assert observacion.iva_porcentaje is None
         assert str(observacion.precio_total) == "250.00"
+        assert observacion.codigo_postal == "91000"
         assert observacion.entrega_viable is False
         assert not hasattr(observacion, "referencia_estable")
         assert not hasattr(observacion, "oportunidad_adquisicion")
