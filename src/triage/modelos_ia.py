@@ -110,6 +110,8 @@ def obtener_lector_documentos(request: Request):
 
     registro = _registro(request, "lector")
     clave = clave_activa(request, "lector")
+    if clave == "inyectado:lector":
+        return getattr(request.app.state, "lector_documentos", None)
     return registro.get(clave) or getattr(request.app.state, "lector_documentos", None)
 
 
@@ -118,4 +120,6 @@ def obtener_descubridor_web(request: Request):
 
     registro = _registro(request, "web")
     clave = clave_activa(request, "web")
+    if clave == "inyectado:web":
+        return getattr(request.app.state, "descubridor_web", None)
     return registro.get(clave) or getattr(request.app.state, "descubridor_web", None)
