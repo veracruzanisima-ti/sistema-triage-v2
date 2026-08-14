@@ -1,5 +1,6 @@
 """Orquestación de consultas actuales sin elegir automáticamente un proveedor ganador."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -26,6 +27,16 @@ class ProductoConsultable:
     partida: PartidaDocumento
     documento: Documento
     consultas: tuple[ConsultaProveedor, ...]
+
+
+@dataclass(frozen=True)
+class ResumenConsultaUnificada:
+    """Conteo simple de una búsqueda sin ocultar fallos parciales."""
+
+    intentos: int
+    precios_encontrados: int
+    no_encontrados: int
+    errores: int
 
 
 def _limpiar(valor: str | None) -> str | None:
@@ -236,3 +247,56 @@ def ejecutar_consulta(
     sesion.commit()
     sesion.refresh(intento)
     return intento
+
+
+def ejecutar_consultas_configuradas(
+    sesion: Session,
+    *,
+    cotizacion_id: str,
+    usuario_id: str,
+    proveedores: Sequence[ProveedorProducto],
+) -> ResumenConsultaUnificada:
+    """Consulta todos los productos y canales secuencialmente sin caer por un fallo aislado."""
+
+    cotizacion = sesion.get(Cotizacion, cotizacion_id)
+    if cotizacion is None:
+        raise ValueError("la cotización ya no existe")
+    if not _limpiar(cotizacion.codigo_postal_consulta):
+        raise ValueError("Configura un código postal antes de consultar proveedores.")
+    if not proveedores:
+        raise ValueError("No hay proveedores automáticos configurados.")
+
+    productos = listar_productos_consultables(sesion, cotizacion_id)
+    if not productos:
+        raise ValueError("No hay productos confirmados para consultar.")
+
+    intentos = 0
+    precios_encontrados = 0
+    no_encontrados = 0
+    errores = 0
+    for producto in productos:
+        for proveedor in proveedores:
+            intentos += 1
+            try:
+                intento = ejecutar_consulta(
+                    sesion,
+                    cotizacion_id=cotizacion_id,
+                    partida_documento_id=producto.partida.id,
+                    usuario_id=usuario_id,
+                    proveedor=proveedor,
+                )
+            except ErrorConsultaProveedor:
+                errores += 1
+                continue
+
+            if intento.estado == EstadoConsultaProveedor.EXITOSA.value:
+                precios_encontrados += 1
+            elif intento.estado == EstadoConsultaProveedor.NO_ENCONTRADO.value:
+                no_encontrados += 1
+
+    return ResumenConsultaUnificada(
+        intentos=intentos,
+        precios_encontrados=precios_encontrados,
+        no_encontrados=no_encontrados,
+        errores=errores,
+    )
