@@ -92,6 +92,9 @@
         </div>
       </div>
     {% endfor %}
+    {% if not resumen_normalizacion.total %}
+      <p class="ayuda">Primero revisa un documento para confirmar sus partidas y continuar con los productos.</p>
+    {% endif %}
   {% else %}
     <div class="vacio">
       <strong>Aún no hay documentos.</strong>
