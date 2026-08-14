@@ -11,6 +11,7 @@ from triage.historico.servicio import listar_productos_historico
 from triage.proveedores.servicio import (
     ErrorConsultaProveedor,
     ejecutar_consulta,
+    ejecutar_consultas_configuradas,
     listar_productos_consultables,
 )
 from triage.usuarios.seguridad import (
@@ -79,6 +80,8 @@ def ver_proveedores(
     sesion: Sesion,
     usuario: UsuarioActual,
     resultado: str = "",
+    precios: int = 0,
+    errores: int = 0,
 ):
     """Muestra productos preparados, precios observados e intentos recientes."""
 
@@ -89,6 +92,10 @@ def ver_proveedores(
     mensajes = {
         "exitosa": "Consulta guardada como una nueva observación de precio.",
         "no_encontrado": "El proveedor no reportó una coincidencia utilizable.",
+        "unificada": (
+            f"Búsqueda completada: {precios} precio(s) encontrado(s)"
+            + (f" y {errores} fuente(s) con error." if errores else ".")
+        ),
     }
     return _render(
         request,
@@ -96,6 +103,48 @@ def ver_proveedores(
         usuario,
         cotizacion,
         mensaje=mensajes.get(resultado, ""),
+    )
+
+
+@router.post("/{cotizacion_id}/proveedores/consultar")
+def consultar_proveedores_configurados(
+    cotizacion_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+):
+    """Consulta todos los productos en todos los canales configurados."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+    if cotizacion is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+
+    try:
+        resumen = ejecutar_consultas_configuradas(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            usuario_id=usuario.id,
+            proveedores=tuple(_proveedores(request).values()),
+        )
+    except ValueError as error:
+        return _render(
+            request,
+            sesion,
+            usuario,
+            cotizacion,
+            error=str(error),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    return RedirectResponse(
+        url=(
+            f"/cotizaciones/{cotizacion_id}/proveedores"
+            f"?resultado=unificada&precios={resumen.precios_encontrados}"
+            f"&errores={resumen.errores}"
+        ),
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
