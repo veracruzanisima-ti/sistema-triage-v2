@@ -1,11 +1,14 @@
 """Adaptador OpenAI para leer fotografías y PDF de solicitudes."""
 
 import base64
+import logging
 
 from openai import OpenAI
 
 from triage.lectores.base import ErrorLecturaDocumento
 from triage.lectores.esquemas import LecturaDocumento
+
+logger = logging.getLogger(__name__)
 
 _INSTRUCCIONES = """
 Lee este archivo únicamente como fuente administrativa para preparar una cotización.
@@ -32,6 +35,21 @@ Reglas obligatorias:
 
 El resultado será revisado y corregido por una persona antes de utilizarse para cotizar.
 """.strip()
+
+
+def _registrar_uso(modelo: str, respuesta) -> None:
+    """Registra sólo métricas de consumo; nunca contenido del documento."""
+
+    uso = getattr(respuesta, "usage", None)
+    if uso is None:
+        return
+    logger.info(
+        "OpenAI lector model=%s input_tokens=%s output_tokens=%s total_tokens=%s",
+        modelo,
+        getattr(uso, "input_tokens", None),
+        getattr(uso, "output_tokens", None),
+        getattr(uso, "total_tokens", None),
+    )
 
 
 class LectorOpenAI:
@@ -89,6 +107,7 @@ class LectorOpenAI:
                 f"OpenAI no pudo procesar el archivo ({type(error).__name__})"
             ) from error
 
+        _registrar_uso(self.modelo, respuesta)
         for salida in respuesta.output:
             if salida.type != "message":
                 continue
