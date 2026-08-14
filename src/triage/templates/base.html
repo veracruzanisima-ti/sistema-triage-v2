@@ -153,5 +153,71 @@
       actualizarVisibilidad();
     })();
   </script>
+  <script>
+    (() => {
+      const clave = "triage-ultima-busqueda-web";
+      const selector = 'form[action*="/buscar-web"]';
+      const formularios = Array.from(document.querySelectorAll(selector));
+      if (!formularios.length) return;
+
+      formularios.forEach((formulario) => {
+        formulario.addEventListener("submit", () => {
+          sessionStorage.setItem(clave, formulario.getAttribute("action") || "");
+        });
+      });
+
+      const parametros = new URLSearchParams(window.location.search);
+      if (parametros.get("resultado") !== "web") return;
+
+      const accion = sessionStorage.getItem(clave);
+      if (!accion) return;
+      const formulario = formularios.find(
+        (candidato) => candidato.getAttribute("action") === accion,
+      );
+      const tarjeta = formulario ? formulario.closest("section.tarjeta") : null;
+      if (!tarjeta) return;
+
+      const mensajeGlobal = Array.from(document.querySelectorAll("main > p.exito")).find(
+        (elemento) => elemento.textContent.includes("Búsqueda web completada:"),
+      );
+      if (mensajeGlobal) mensajeGlobal.remove();
+
+      const guardados = Number.parseInt(parametros.get("web_guardados") || "0", 10) || 0;
+      const descartados = Number.parseInt(parametros.get("web_descartados") || "0", 10) || 0;
+      const producto = tarjeta.querySelector("h2")?.textContent.trim() || "este producto";
+      const aviso = document.createElement("div");
+      aviso.className = guardados > 0 ? "exito" : "aviso";
+      aviso.setAttribute("role", "status");
+      aviso.setAttribute("aria-live", "polite");
+
+      const titulo = document.createElement("strong");
+      titulo.textContent = `Búsqueda web · ${producto}`;
+      const detalle = document.createElement("p");
+      if (guardados > 0) {
+        detalle.textContent = `Se guardaron ${guardados} precio(s) que pasaron la coincidencia exacta.`;
+        if (descartados > 0) {
+          detalle.textContent += ` ${descartados} resultado(s) se descartaron por no coincidir exactamente.`;
+        }
+      } else if (descartados > 0) {
+        detalle.textContent = `La web sí devolvió ${descartados} resultado(s), pero ninguno pasó la coincidencia exacta. Triage no los guardó para evitar mezclar presentación o dispositivo.`;
+      } else {
+        detalle.textContent = "La búsqueda no devolvió candidatos con un precio visible para este producto.";
+      }
+      aviso.append(titulo, detalle);
+
+      const indicador = tarjeta.querySelector(".indicador-lectura");
+      if (indicador) indicador.insertAdjacentElement("afterend", aviso);
+      else tarjeta.prepend(aviso);
+
+      sessionStorage.removeItem(clave);
+      const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)");
+      window.setTimeout(() => {
+        aviso.scrollIntoView({
+          behavior: reducirMovimiento.matches ? "auto" : "smooth",
+          block: "center",
+        });
+      }, 0);
+    })();
+  </script>
 </body>
 </html>
