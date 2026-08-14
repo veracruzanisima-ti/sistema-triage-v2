@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from triage.cotizaciones.modelos import Cotizacion, ahora_utc
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
+from triage.historico.decisiones_servicio import referencias_estables_cotizadas_hoy
 from triage.historico.modelos import OrigenObservacionPrecio
 from triage.historico.servicio import clave_producto, crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
@@ -40,6 +41,8 @@ class ResumenConsultaUnificada:
     precios_encontrados: int
     no_encontrados: int
     errores: int
+    productos_reutilizados_hoy: int = 0
+    partidas_duplicadas_omitidas: int = 0
 
 
 @dataclass(frozen=True)
@@ -276,6 +279,50 @@ def ejecutar_consulta(
     return intento
 
 
+def ejecutar_consultas_partida(
+    sesion: Session,
+    *,
+    cotizacion_id: str,
+    partida_documento_id: str,
+    usuario_id: str,
+    proveedores: Sequence[ProveedorProducto],
+) -> ResumenConsultaUnificada:
+    """Reconsulta una partida contra todos los canales sin aplicar reutilización diaria."""
+
+    if not proveedores:
+        raise ValueError("No hay proveedores automáticos configurados.")
+
+    intentos = 0
+    precios_encontrados = 0
+    no_encontrados = 0
+    errores = 0
+    for proveedor in proveedores:
+        intentos += 1
+        try:
+            intento = ejecutar_consulta(
+                sesion,
+                cotizacion_id=cotizacion_id,
+                partida_documento_id=partida_documento_id,
+                usuario_id=usuario_id,
+                proveedor=proveedor,
+            )
+        except ErrorConsultaProveedor:
+            errores += 1
+            continue
+
+        if intento.estado == EstadoConsultaProveedor.EXITOSA.value:
+            precios_encontrados += 1
+        elif intento.estado == EstadoConsultaProveedor.NO_ENCONTRADO.value:
+            no_encontrados += 1
+
+    return ResumenConsultaUnificada(
+        intentos=intentos,
+        precios_encontrados=precios_encontrados,
+        no_encontrados=no_encontrados,
+        errores=errores,
+    )
+
+
 def ejecutar_consultas_configuradas(
     sesion: Session,
     *,
@@ -283,49 +330,61 @@ def ejecutar_consultas_configuradas(
     usuario_id: str,
     proveedores: Sequence[ProveedorProducto],
 ) -> ResumenConsultaUnificada:
-    """Consulta todos los productos y canales secuencialmente sin caer por un fallo aislado."""
+    """Consulta una vez por identidad y reutiliza referencias estables del día cuando existen."""
 
     cotizacion = sesion.get(Cotizacion, cotizacion_id)
     if cotizacion is None:
         raise ValueError("la cotización ya no existe")
-    if not _limpiar(cotizacion.codigo_postal_consulta):
+    codigo_postal = _limpiar(cotizacion.codigo_postal_consulta)
+    if codigo_postal is None:
         raise ValueError("Configura un código postal antes de consultar proveedores.")
-    if not proveedores:
-        raise ValueError("No hay proveedores automáticos configurados.")
 
     productos = listar_productos_consultables(sesion, cotizacion_id)
     if not productos:
         raise ValueError("No hay productos confirmados para consultar.")
 
+    productos_unicos: dict[str, ProductoConsultable] = {}
+    for producto in productos:
+        productos_unicos.setdefault(clave_producto(producto.normalizacion), producto)
+    duplicadas = len(productos) - len(productos_unicos)
+
+    referencias_hoy = referencias_estables_cotizadas_hoy(
+        sesion,
+        claves=set(productos_unicos),
+        codigo_postal=codigo_postal,
+    )
+    if not proveedores and len(referencias_hoy) < len(productos_unicos):
+        raise ValueError("No hay proveedores automáticos configurados.")
+
     intentos = 0
     precios_encontrados = 0
     no_encontrados = 0
     errores = 0
-    for producto in productos:
-        for proveedor in proveedores:
-            intentos += 1
-            try:
-                intento = ejecutar_consulta(
-                    sesion,
-                    cotizacion_id=cotizacion_id,
-                    partida_documento_id=producto.partida.id,
-                    usuario_id=usuario_id,
-                    proveedor=proveedor,
-                )
-            except ErrorConsultaProveedor:
-                errores += 1
-                continue
+    reutilizados = 0
+    for clave, producto in productos_unicos.items():
+        if clave in referencias_hoy:
+            reutilizados += 1
+            continue
 
-            if intento.estado == EstadoConsultaProveedor.EXITOSA.value:
-                precios_encontrados += 1
-            elif intento.estado == EstadoConsultaProveedor.NO_ENCONTRADO.value:
-                no_encontrados += 1
+        resumen = ejecutar_consultas_partida(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=producto.partida.id,
+            usuario_id=usuario_id,
+            proveedores=proveedores,
+        )
+        intentos += resumen.intentos
+        precios_encontrados += resumen.precios_encontrados
+        no_encontrados += resumen.no_encontrados
+        errores += resumen.errores
 
     return ResumenConsultaUnificada(
         intentos=intentos,
         precios_encontrados=precios_encontrados,
         no_encontrados=no_encontrados,
         errores=errores,
+        productos_reutilizados_hoy=reutilizados,
+        partidas_duplicadas_omitidas=duplicadas,
     )
 
 

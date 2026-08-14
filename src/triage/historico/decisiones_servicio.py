@@ -1,6 +1,8 @@
 """Registro y lectura de decisiones humanas sobre observaciones de precio."""
 
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +12,8 @@ from triage.historico.decisiones_modelos import DecisionPrecio, RolDecisionPreci
 from triage.historico.modelos import ObservacionPrecio
 from triage.historico.servicio import clave_producto
 from triage.normalizacion.modelos import NormalizacionPartida
+
+_ZONA_OPERATIVA = ZoneInfo("America/Mexico_City")
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,20 @@ def _normalizacion_actual(
             PartidaDocumento.incluida_cotizacion.is_(True),
         )
     )
+
+
+def _momento_utc(valor: datetime) -> datetime:
+    """Normaliza timestamps para comparar SQLite y PostgreSQL de forma consistente."""
+
+    if valor.tzinfo is None:
+        return valor.replace(tzinfo=UTC)
+    return valor.astimezone(UTC)
+
+
+def _fecha_operativa(valor: datetime) -> date:
+    """Convierte timestamps al día operativo de México."""
+
+    return _momento_utc(valor).astimezone(_ZONA_OPERATIVA).date()
 
 
 def registrar_decision_precio(
@@ -73,6 +91,62 @@ def registrar_decision_precio(
     sesion.commit()
     sesion.refresh(decision)
     return decision
+
+
+def referencias_estables_cotizadas_hoy(
+    sesion: Session,
+    *,
+    claves: set[str],
+    codigo_postal: str | None,
+    ahora: datetime | None = None,
+) -> dict[str, ObservacionPrecio]:
+    """Devuelve por identidad la referencia realmente usada hoy con el mismo CP."""
+
+    if not claves or not codigo_postal:
+        return {}
+
+    ahora = ahora or datetime.now(UTC)
+    fecha_hoy = _fecha_operativa(ahora)
+
+    ultimas_por_partida: dict[tuple[str, str], DecisionPrecio] = {}
+    for decision in sesion.scalars(
+        select(DecisionPrecio)
+        .where(DecisionPrecio.rol == RolDecisionPrecio.REFERENCIA_ESTABLE.value)
+        .order_by(DecisionPrecio.creada_en.desc())
+    ):
+        if decision.partida_documento_id is None:
+            continue
+        llave = (decision.cotizacion_id, decision.partida_documento_id)
+        ultimas_por_partida.setdefault(llave, decision)
+
+    resultado: dict[str, ObservacionPrecio] = {}
+    for decision in ultimas_por_partida.values():
+        if decision.clave_producto not in claves:
+            continue
+        if decision.observacion_precio_id is None:
+            continue
+        if _fecha_operativa(decision.creada_en) != fecha_hoy:
+            continue
+
+        observacion = sesion.get(ObservacionPrecio, decision.observacion_precio_id)
+        if observacion is None:
+            continue
+        if observacion.clave_producto != decision.clave_producto:
+            continue
+        if observacion.es_promocion or observacion.entrega_viable is False:
+            continue
+        if observacion.codigo_postal != codigo_postal:
+            continue
+        if _fecha_operativa(observacion.observado_en) != fecha_hoy:
+            continue
+
+        actual = resultado.get(decision.clave_producto)
+        if actual is None or _momento_utc(observacion.observado_en) > _momento_utc(
+            actual.observado_en
+        ):
+            resultado[decision.clave_producto] = observacion
+
+    return resultado
 
 
 def listar_selecciones_actuales(

@@ -41,11 +41,11 @@
     <div>
       <h2>Consultar proveedores</h2>
       {% if proveedores %}
-        <p>Buscará {{ productos|length }} producto(s) en {{ proveedores|length }} fuente(s) configurada(s).</p>
-        <p class="ayuda">Si una fuente falla, las demás continúan y el intento queda registrado.</p>
+        <p>Buscará las identidades que realmente necesiten actualización en {{ proveedores|length }} fuente(s) configurada(s).</p>
+        <p class="ayuda">Triage evita repetir la misma identidad y reutiliza referencias estables ya cotizadas hoy con el mismo CP. Si una fuente falla, las demás continúan.</p>
       {% else %}
         <p class="aviso"><strong>Aún no hay proveedores automáticos configurados.</strong></p>
-        <p class="ayuda">Puedes registrar precios manualmente o ampliar un producto con búsqueda web mientras conectamos las primeras fuentes reales.</p>
+        <p class="ayuda">Puedes reutilizar un precio cotizado hoy, registrar uno manualmente o ampliar un producto con búsqueda web.</p>
       {% endif %}
     </div>
     {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
@@ -78,6 +78,7 @@
   {% for producto in productos %}
     {% set seleccion = selecciones.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
+    {% set cotizada_hoy = referencias_cotizadas_hoy.get(producto.clave_producto) %}
     <section class="tarjeta">
       <div class="barra">
         <div>
@@ -97,6 +98,35 @@
         {% endif %}
       </div>
 
+      {% if cotizada_hoy %}
+        <div class="aviso">
+          <strong>Este producto ya se cotizó hoy.</strong>
+          <p>
+            {{ cotizada_hoy.proveedor }}
+            {% if cotizada_hoy.precio_total is not none %} · ${{ '%.2f'|format(cotizada_hoy.precio_total) }} total{% endif %}
+            {% if cotizada_hoy.precio_antes_iva is not none %} · ${{ '%.2f'|format(cotizada_hoy.precio_antes_iva) }} antes de IVA{% endif %}
+          </p>
+          <p class="ayuda">Misma identidad exacta y mismo CP. Se reutiliza la observación original; no se inventa una fecha nueva.</p>
+          <div class="grupo-botones">
+            {% if not seleccion or seleccion.referencia_estable_id != cotizada_hoy.id %}
+              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="rol" value="REFERENCIA_ESTABLE">
+                <input type="hidden" name="observacion_id" value="{{ cotizada_hoy.id }}">
+                <input type="hidden" name="volver" value="proveedores">
+                <button class="boton" type="submit">Usar precio de hoy</button>
+              </form>
+            {% endif %}
+            {% if proveedores %}
+              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/revalidar">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="boton boton-secundario" type="submit">Revalidar precio</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
       {% if producto.observaciones %}
         <h3>Precios encontrados</h3>
         {% for observacion in producto.observaciones %}
@@ -104,6 +134,7 @@
             <div class="barra">
               <div>
                 <strong>{{ observacion.proveedor }}</strong>
+                {% if cotizada_hoy and cotizada_hoy.id == observacion.id %}<span class="estado estado-revisado">Cotizado hoy</span>{% endif %}
                 {% if observacion.origen == "WEB" %}<span class="estado estado-analizado">Web</span>{% endif %}
                 {% if observacion.es_promocion %}
                   <span class="estado estado-analizado">Oferta / promoción</span>
