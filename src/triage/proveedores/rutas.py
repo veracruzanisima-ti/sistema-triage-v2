@@ -6,12 +6,19 @@ from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from triage.cotizaciones.servicio import obtener_cotizacion
+from triage.historico.decisiones_servicio import listar_selecciones_actuales
+from triage.historico.servicio import listar_productos_historico
 from triage.proveedores.servicio import (
     ErrorConsultaProveedor,
     ejecutar_consulta,
     listar_productos_consultables,
 )
-from triage.usuarios.seguridad import Sesion, UsuarioActual, obtener_token_csrf, validar_token_csrf
+from triage.usuarios.seguridad import (
+    Sesion,
+    UsuarioActual,
+    obtener_token_csrf,
+    validar_token_csrf,
+)
 
 router = APIRouter(prefix="/cotizaciones", tags=["proveedores"])
 
@@ -35,6 +42,15 @@ def _render(
     status_code: int = status.HTTP_200_OK,
 ):
     proveedores = _proveedores(request)
+    productos = listar_productos_historico(sesion, cotizacion.id)
+    consultables = listar_productos_consultables(sesion, cotizacion.id)
+    consultas_por_partida = {
+        producto.partida.id: producto.consultas for producto in consultables
+    }
+    selecciones = listar_selecciones_actuales(sesion, cotizacion.id)
+    con_referencia = sum(
+        bool(seleccion.referencia_estable_id) for seleccion in selecciones.values()
+    )
     return _plantillas(request).TemplateResponse(
         request=request,
         name="proveedores/consulta.html",
@@ -42,7 +58,12 @@ def _render(
             "usuario": usuario,
             "csrf_token": obtener_token_csrf(request),
             "cotizacion": cotizacion,
-            "productos": listar_productos_consultables(sesion, cotizacion.id),
+            "productos": productos,
+            "consultas_por_partida": consultas_por_partida,
+            "selecciones": selecciones,
+            "con_referencia": con_referencia,
+            "todas_con_referencia": bool(productos)
+            and con_referencia == len(productos),
             "proveedores": tuple(proveedor.nombre for proveedor in proveedores.values()),
             "error": error,
             "mensaje": mensaje,
@@ -59,14 +80,14 @@ def ver_proveedores(
     usuario: UsuarioActual,
     resultado: str = "",
 ):
-    """Muestra productos preparados, adaptadores disponibles e intentos recientes."""
+    """Muestra productos preparados, precios observados e intentos recientes."""
 
     cotizacion = obtener_cotizacion(sesion, cotizacion_id)
     if cotizacion is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
 
     mensajes = {
-        "exitosa": "Consulta guardada como una nueva observación histórica.",
+        "exitosa": "Consulta guardada como una nueva observación de precio.",
         "no_encontrado": "El proveedor no reportó una coincidencia utilizable.",
     }
     return _render(
