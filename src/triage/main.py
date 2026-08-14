@@ -27,6 +27,7 @@ from triage.proveedores.descubrimiento_web import (
     DescubridorWebGemini,
     DescubridorWebOpenAI,
 )
+from triage.proveedores.fesa import AdaptadorFesa
 from triage.proveedores.rutas import router as router_proveedores
 from triage.revision_final.rutas import router as router_revision_final
 from triage.usuarios.rutas import router as router_usuarios
@@ -45,6 +46,26 @@ def _modelos_unicos(*modelos: str) -> tuple[str, ...]:
         if limpio and limpio not in resultado:
             resultado.append(limpio)
     return tuple(resultado)
+
+
+def _proveedores_configurados(
+    configuracion: Configuracion,
+    inyectados: Sequence[ProveedorProducto] | None,
+) -> tuple[ProveedorProducto, ...]:
+    """Construye proveedores reales sólo cuando el entorno los habilita."""
+
+    if inyectados is not None:
+        return tuple(inyectados)
+
+    proveedores: list[ProveedorProducto] = []
+    if configuracion.fesa_habilitada:
+        proveedores.append(
+            AdaptadorFesa(
+                usuario=configuracion.fesa_usuario,
+                password=configuracion.fesa_password,
+            )
+        )
+    return tuple(proveedores)
 
 
 def crear_app(
@@ -108,7 +129,7 @@ def crear_app(
     )
 
     proveedores_por_nombre: dict[str, ProveedorProducto] = {}
-    for adaptador in proveedores_productos or ():
+    for adaptador in _proveedores_configurados(configuracion, proveedores_productos):
         nombre = adaptador.nombre.strip()
         if not nombre:
             raise ValueError("un proveedor configurado no tiene nombre")
