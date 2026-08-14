@@ -45,7 +45,7 @@
         <p class="ayuda">Si una fuente falla, las demás continúan y el intento queda registrado.</p>
       {% else %}
         <p class="aviso"><strong>Aún no hay proveedores automáticos configurados.</strong></p>
-        <p class="ayuda">Puedes registrar precios manualmente mientras conectamos las primeras fuentes reales.</p>
+        <p class="ayuda">Puedes registrar precios manualmente o ampliar un producto con búsqueda web mientras conectamos las primeras fuentes reales.</p>
       {% endif %}
     </div>
     {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
@@ -79,14 +79,22 @@
     {% set seleccion = selecciones.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     <section class="tarjeta">
-      <div>
-        <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
-        <p class="ayuda">
-          {% if producto.normalizacion.marca %}{{ producto.normalizacion.marca }} · {% endif %}
-          {{ producto.normalizacion.concentracion or "Sin concentración" }} ·
-          {{ producto.normalizacion.forma_dispositivo or "Sin forma/dispositivo" }} ·
-          {{ producto.normalizacion.presentacion or "Sin presentación" }}
-        </p>
+      <div class="barra">
+        <div>
+          <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
+          <p class="ayuda">
+            {% if producto.normalizacion.marca %}{{ producto.normalizacion.marca }} · {% endif %}
+            {{ producto.normalizacion.concentracion or "Sin concentración" }} ·
+            {{ producto.normalizacion.forma_dispositivo or "Sin forma/dispositivo" }} ·
+            {{ producto.normalizacion.presentacion or "Sin presentación" }}
+          </p>
+        </div>
+        {% if descubrimiento_web_disponible and cotizacion.codigo_postal_consulta %}
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/buscar-web">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="boton boton-secundario" type="submit">Buscar más opciones en web</button>
+          </form>
+        {% endif %}
       </div>
 
       {% if producto.observaciones %}
@@ -96,6 +104,7 @@
             <div class="barra">
               <div>
                 <strong>{{ observacion.proveedor }}</strong>
+                {% if observacion.origen == "WEB" %}<span class="estado estado-analizado">Web</span>{% endif %}
                 {% if observacion.es_promocion %}
                   <span class="estado estado-analizado">Oferta / promoción</span>
                 {% elif seleccion and seleccion.referencia_estable_id == observacion.id %}
@@ -113,7 +122,13 @@
               </div>
             </div>
 
+            {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
             {% if observacion.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
+            {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
+              <p><a href="{{ observacion.fuente }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
+            {% else %}
+              <p class="ayuda"><strong>Fuente:</strong> {{ observacion.fuente }}</p>
+            {% endif %}
             {% if observacion.entrega_viable is sameas false %}<p class="aviso"><strong>Entrega marcada como no viable.</strong></p>{% endif %}
             {% if observacion.es_promocion %}
               <p class="aviso"><strong>Oportunidad de compra.</strong> No se usa como referencia estable de la cotización.</p>
@@ -133,7 +148,7 @@
       {% else %}
         <div class="vacio">
           <strong>Aún no hay precios observados.</strong>
-          <p class="ayuda">Usa la búsqueda general o registra manualmente un precio para continuar.</p>
+          <p class="ayuda">Usa la búsqueda general, amplía este producto en web o registra manualmente un precio para continuar.</p>
         </div>
       {% endif %}
 
