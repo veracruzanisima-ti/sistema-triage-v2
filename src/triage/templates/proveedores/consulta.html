@@ -45,19 +45,22 @@
         <p class="ayuda">Triage evita repetir la misma identidad y reutiliza referencias estables ya cotizadas hoy con el mismo CP. Si una fuente falla, las demás continúan.</p>
       {% else %}
         <p class="aviso"><strong>Aún no hay proveedores automáticos configurados.</strong></p>
-        <p class="ayuda">Puedes reutilizar un precio cotizado hoy, registrar uno manualmente o ampliar un producto con búsqueda web.</p>
+        <p class="ayuda">Actualiza NADRO, registra un precio manualmente o amplía un producto con búsqueda web.</p>
       {% endif %}
     </div>
-    {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
-      <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/consultar" data-form-busqueda data-estado-busqueda="estado-busqueda-general" data-mensaje-busqueda="Buscando precios en proveedores configurados…">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="boton" type="submit">Buscar precios</button>
-      </form>
-    {% elif proveedores %}
-      <button class="boton" type="button" disabled>Buscar precios</button>
-    {% else %}
-      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores">Registrar precio manual</a>
-    {% endif %}
+    <div class="grupo-botones">
+      <a class="boton boton-secundario" href="/proveedores/nadro/actualizar?cotizacion_id={{ cotizacion.id }}">Actualizar NADRO</a>
+      {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
+        <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/consultar" data-form-busqueda data-estado-busqueda="estado-busqueda-general" data-mensaje-busqueda="Buscando precios en proveedores configurados…">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="boton" type="submit">Buscar precios</button>
+        </form>
+      {% elif proveedores %}
+        <button class="boton" type="button" disabled>Buscar precios</button>
+      {% else %}
+        <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores">Registrar precio manual</a>
+      {% endif %}
+    </div>
   </div>
   <div id="estado-busqueda-general" class="indicador-lectura" hidden aria-live="polite" aria-atomic="true">
     <span class="spinner" aria-hidden="true"></span>
@@ -217,30 +220,3 @@
     <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Confirmar producto</a>
   </section>
 {% endif %}
-
-<script>
-  (() => {
-    document.querySelectorAll("[data-form-busqueda]").forEach((formulario) => {
-      formulario.addEventListener("submit", () => {
-        const estadoId = formulario.dataset.estadoBusqueda;
-        const estado = estadoId ? document.getElementById(estadoId) : null;
-        const boton = formulario.querySelector('button[type="submit"]');
-
-        if (estado) {
-          const texto = estado.querySelector("[data-texto-busqueda]");
-          if (texto) {
-            texto.textContent = formulario.dataset.mensajeBusqueda || "Buscando…";
-          }
-          estado.hidden = false;
-          estado.setAttribute("aria-busy", "true");
-        }
-
-        if (boton) {
-          boton.disabled = true;
-          boton.textContent = "Buscando…";
-        }
-      });
-    });
-  })();
-</script>
-{% endblock %}
