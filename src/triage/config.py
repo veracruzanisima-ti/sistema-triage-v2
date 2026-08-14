@@ -20,6 +20,8 @@ class Configuracion(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./triage_dev.sqlite3"
     openai_api_key: str = ""
     openai_model: str = "gpt-5"
+    openai_model_lector: str = ""
+    openai_model_web: str = ""
     max_documento_bytes: int = 15 * 1024 * 1024
     bootstrap_admin_email: str = ""
     bootstrap_admin_name: str = ""
@@ -28,6 +30,18 @@ class Configuracion(BaseSettings):
     codigo_postal_consulta_default: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def modelo_openai_lector(self) -> str:
+        """Resuelve el modelo del lector conservando compatibilidad con OPENAI_MODEL."""
+
+        return self.openai_model_lector.strip() or self.openai_model.strip()
+
+    @property
+    def modelo_openai_web(self) -> str:
+        """Resuelve el modelo web conservando compatibilidad con OPENAI_MODEL."""
+
+        return self.openai_model_web.strip() or self.openai_model.strip()
 
     @property
     def es_produccion(self) -> bool:
@@ -49,8 +63,10 @@ class Configuracion(BaseSettings):
             raise ValueError("SESSION_MAX_AGE_SECONDS debe ser mayor que cero")
         if self.max_documento_bytes <= 0:
             raise ValueError("MAX_DOCUMENTO_BYTES debe ser mayor que cero")
-        if not self.openai_model.strip():
-            raise ValueError("OPENAI_MODEL no puede estar vacío")
+        if not self.modelo_openai_lector:
+            raise ValueError("OPENAI_MODEL u OPENAI_MODEL_LECTOR debe definir el modelo del lector")
+        if not self.modelo_openai_web:
+            raise ValueError("OPENAI_MODEL u OPENAI_MODEL_WEB debe definir el modelo web")
 
         codigo_postal = self.codigo_postal_consulta_default.strip()
         if codigo_postal and (len(codigo_postal) != 5 or not codigo_postal.isdigit()):
