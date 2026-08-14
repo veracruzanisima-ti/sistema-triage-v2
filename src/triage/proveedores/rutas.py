@@ -6,13 +6,17 @@ from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from triage.cotizaciones.servicio import obtener_cotizacion
-from triage.historico.decisiones_servicio import listar_selecciones_actuales
+from triage.historico.decisiones_servicio import (
+    listar_selecciones_actuales,
+    referencias_estables_cotizadas_hoy,
+)
 from triage.historico.servicio import listar_productos_historico
 from triage.proveedores.descubrimiento_web import ErrorDescubrimientoWeb
 from triage.proveedores.servicio import (
     ErrorConsultaProveedor,
     ejecutar_consulta,
     ejecutar_consultas_configuradas,
+    ejecutar_consultas_partida,
     ejecutar_descubrimiento_web,
     listar_productos_consultables,
 )
@@ -51,6 +55,11 @@ def _render(
         producto.partida.id: producto.consultas for producto in consultables
     }
     selecciones = listar_selecciones_actuales(sesion, cotizacion.id)
+    referencias_hoy = referencias_estables_cotizadas_hoy(
+        sesion,
+        claves={producto.clave_producto for producto in productos},
+        codigo_postal=cotizacion.codigo_postal_consulta,
+    )
     con_referencia = sum(
         bool(seleccion.referencia_estable_id) for seleccion in selecciones.values()
     )
@@ -64,6 +73,7 @@ def _render(
             "productos": productos,
             "consultas_por_partida": consultas_por_partida,
             "selecciones": selecciones,
+            "referencias_cotizadas_hoy": referencias_hoy,
             "con_referencia": con_referencia,
             "todas_con_referencia": bool(productos)
             and con_referencia == len(productos),
@@ -85,6 +95,8 @@ def ver_proveedores(
     resultado: str = "",
     precios: int = 0,
     errores: int = 0,
+    reutilizados: int = 0,
+    duplicadas: int = 0,
     web_guardados: int = 0,
     web_descartados: int = 0,
 ):
@@ -94,11 +106,21 @@ def ver_proveedores(
     if cotizacion is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
 
+    resumen_unificado = f"Búsqueda completada: {precios} precio(s) encontrado(s)"
+    if reutilizados:
+        resumen_unificado += f", {reutilizados} producto(s) reutilizado(s) de hoy"
+    if duplicadas:
+        resumen_unificado += f", {duplicadas} partida(s) repetida(s) sin consulta duplicada"
+    if errores:
+        resumen_unificado += f" y {errores} fuente(s) con error"
+    resumen_unificado += "."
+
     mensajes = {
         "exitosa": "Consulta guardada como una nueva observación de precio.",
         "no_encontrado": "El proveedor no reportó una coincidencia utilizable.",
-        "unificada": (
-            f"Búsqueda completada: {precios} precio(s) encontrado(s)"
+        "unificada": resumen_unificado,
+        "revalidada": (
+            f"Revalidación completada: {precios} precio(s) nuevo(s) observado(s)"
             + (f" y {errores} fuente(s) con error." if errores else ".")
         ),
         "web": (
@@ -123,7 +145,7 @@ def consultar_proveedores_configurados(
     usuario: UsuarioActual,
     csrf_token: Annotated[str, Form()],
 ):
-    """Consulta todos los productos en todos los canales configurados."""
+    """Consulta identidades nuevas y reutiliza referencias estables observadas hoy."""
 
     validar_token_csrf(request, csrf_token)
     cotizacion = obtener_cotizacion(sesion, cotizacion_id)
@@ -151,6 +173,52 @@ def consultar_proveedores_configurados(
         url=(
             f"/cotizaciones/{cotizacion_id}/proveedores"
             f"?resultado=unificada&precios={resumen.precios_encontrados}"
+            f"&errores={resumen.errores}"
+            f"&reutilizados={resumen.productos_reutilizados_hoy}"
+            f"&duplicadas={resumen.partidas_duplicadas_omitidas}"
+        ),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/{cotizacion_id}/proveedores/{partida_documento_id}/revalidar")
+def revalidar_precio_partida(
+    cotizacion_id: str,
+    partida_documento_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+):
+    """Fuerza un recheck corto del producto contra todos los adaptadores configurados."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+    if cotizacion is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+
+    try:
+        resumen = ejecutar_consultas_partida(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_documento_id,
+            usuario_id=usuario.id,
+            proveedores=tuple(_proveedores(request).values()),
+        )
+    except ValueError as error:
+        return _render(
+            request,
+            sesion,
+            usuario,
+            cotizacion,
+            error=str(error),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    return RedirectResponse(
+        url=(
+            f"/cotizaciones/{cotizacion_id}/proveedores"
+            f"?resultado=revalidada&precios={resumen.precios_encontrados}"
             f"&errores={resumen.errores}"
         ),
         status_code=status.HTTP_303_SEE_OTHER,
