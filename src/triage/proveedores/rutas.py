@@ -13,6 +13,7 @@ from triage.historico.decisiones_servicio import (
 from triage.historico.servicio import listar_productos_historico
 from triage.modelos_ia import obtener_descubridor_web
 from triage.proveedores.descubrimiento_web import ErrorDescubrimientoWeb
+from triage.proveedores.nadro_adaptador import adaptadores_nadro_disponibles
 from triage.proveedores.servicio import (
     ErrorConsultaProveedor,
     ejecutar_consulta,
@@ -36,8 +37,16 @@ def _plantillas(request: Request):
     return request.app.state.plantillas
 
 
-def _proveedores(request: Request) -> dict[str, object]:
-    return request.app.state.proveedores_productos
+def _proveedores(request: Request, sesion: Sesion) -> dict[str, object]:
+    """Combina fuentes externas con el snapshot NADRO vigente de esta petición."""
+
+    proveedores = dict(request.app.state.proveedores_productos)
+    for adaptador in adaptadores_nadro_disponibles(
+        sesion,
+        request.app.state.fabrica_sesiones,
+    ):
+        proveedores[adaptador.nombre.casefold()] = adaptador
+    return proveedores
 
 
 def _render(
@@ -50,7 +59,7 @@ def _render(
     mensaje: str = "",
     status_code: int = status.HTTP_200_OK,
 ):
-    proveedores = _proveedores(request)
+    proveedores = _proveedores(request, sesion)
     productos = listar_productos_historico(sesion, cotizacion.id)
     consultables = listar_productos_consultables(sesion, cotizacion.id)
     consultas_por_partida = {
@@ -138,7 +147,11 @@ def ver_proveedores(
         ),
         "web": (
             f"Búsqueda web completada: {web_guardados} opción(es) exacta(s) guardada(s)"
-            + (f" y {web_descartados} resultado(s) descartado(s)." if web_descartados else ".")
+            + (
+                f" y {web_descartados} resultado(s) descartado(s)."
+                if web_descartados
+                else "."
+            )
         ),
     }
     return _render(
@@ -170,7 +183,7 @@ def consultar_proveedores_configurados(
             sesion,
             cotizacion_id=cotizacion_id,
             usuario_id=usuario.id,
-            proveedores=tuple(_proveedores(request).values()),
+            proveedores=tuple(_proveedores(request, sesion).values()),
         )
     except ValueError as error:
         return _render(
@@ -216,7 +229,7 @@ def revalidar_precio_partida(
             cotizacion_id=cotizacion_id,
             partida_documento_id=partida_documento_id,
             usuario_id=usuario.id,
-            proveedores=tuple(_proveedores(request).values()),
+            proveedores=tuple(_proveedores(request, sesion).values()),
         )
     except ValueError as error:
         return _render(
@@ -317,7 +330,7 @@ def consultar_proveedor(
     if cotizacion is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
 
-    adaptador = _proveedores(request).get(proveedor.casefold())
+    adaptador = _proveedores(request, sesion).get(proveedor.casefold())
     if adaptador is None:
         raise HTTPException(status_code=422, detail="Proveedor no configurado")
 
