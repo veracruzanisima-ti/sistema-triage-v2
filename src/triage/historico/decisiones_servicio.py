@@ -58,6 +58,8 @@ def registrar_decision_precio(
             raise ValueError("la observación seleccionada ya no existe")
         if observacion.clave_producto != clave:
             raise ValueError("la observación pertenece a otra identidad de producto")
+        if rol == RolDecisionPrecio.REFERENCIA_ESTABLE and observacion.es_promocion:
+            raise ValueError("una promoción no puede usarse como referencia estable")
 
     decision = DecisionPrecio(
         cotizacion_id=cotizacion_id,
