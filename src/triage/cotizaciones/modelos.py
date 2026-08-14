@@ -40,6 +40,7 @@ class Cotizacion(Base):
         nullable=False,
         default=False,
     )
+    codigo_postal_consulta: Mapped[str | None] = mapped_column(String(5), nullable=True)
     estado: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
