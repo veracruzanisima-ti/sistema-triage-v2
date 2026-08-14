@@ -160,7 +160,8 @@ class DescubridorWebOpenAI:
                 getattr(error, "request_id", None),
             )
             raise ErrorDescubrimientoWeb(
-                "La búsqueda web no pudo completarse. Intenta de nuevo o registra el precio manualmente."
+                "La búsqueda web no pudo completarse. "
+                "Intenta de nuevo o registra el precio manualmente."
             ) from error
 
         for salida in respuesta.output:
