@@ -25,6 +25,11 @@ class Configuracion(BaseSettings):
     gemini_api_key: str = ""
     gemini_model_lector: str = "gemini-3.6-flash"
     gemini_model_web: str = "gemini-3.6-flash"
+    fesa_habilitada: bool = False
+    fesa_usuario: str = ""
+    fesa_password: str = ""
+    nadro_edi_habilitado: bool = False
+    nadro_edi_archivo: str = ""
     max_documento_bytes: int = 15 * 1024 * 1024
     bootstrap_admin_email: str = ""
     bootstrap_admin_name: str = ""
@@ -58,6 +63,12 @@ class Configuracion(BaseSettings):
 
         return self.app_secret_key or _CLAVE_DESARROLLO
 
+    @property
+    def fesa_autenticada(self) -> bool:
+        """Indica si FESA tiene un par completo de credenciales configuradas."""
+
+        return bool(self.fesa_usuario and self.fesa_password)
+
     @model_validator(mode="after")
     def validar_configuracion(self):
         """Impide configuraciones inseguras y bootstraps incompletos."""
@@ -76,6 +87,17 @@ class Configuracion(BaseSettings):
             )
         if self.gemini_api_key.strip() and not self.gemini_model_web.strip():
             raise ValueError("GEMINI_MODEL_WEB no puede estar vacío cuando Gemini está configurado")
+
+        self.fesa_usuario = self.fesa_usuario.strip()
+        credenciales_fesa = (bool(self.fesa_usuario), bool(self.fesa_password))
+        if any(credenciales_fesa) and not all(credenciales_fesa):
+            raise ValueError("FESA requiere usuario y contraseña juntos o ninguno")
+
+        self.nadro_edi_archivo = self.nadro_edi_archivo.strip()
+        if self.nadro_edi_habilitado and not self.nadro_edi_archivo:
+            raise ValueError(
+                "NADRO_EDI_ARCHIVO es obligatorio cuando la integración EDI está habilitada"
+            )
 
         codigo_postal = self.codigo_postal_consulta_default.strip()
         if codigo_postal and (len(codigo_postal) != 5 or not codigo_postal.isdigit()):
