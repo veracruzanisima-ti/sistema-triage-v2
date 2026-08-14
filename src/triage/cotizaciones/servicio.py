@@ -16,13 +16,31 @@ def limpiar_referencia(referencia: str | None) -> str | None:
     return valor or None
 
 
-def crear_cotizacion(sesion: Session, referencia: str | None = None) -> Cotizacion:
+def limpiar_codigo_postal(codigo_postal: str | None) -> str | None:
+    """Normaliza un CP mexicano sin inventar ubicación cuando no fue proporcionado."""
+
+    if codigo_postal is None:
+        return None
+    valor = codigo_postal.strip()
+    if not valor:
+        return None
+    if len(valor) != 5 or not valor.isdigit():
+        raise ValueError("El código postal debe contener exactamente 5 dígitos.")
+    return valor
+
+
+def crear_cotizacion(
+    sesion: Session,
+    referencia: str | None = None,
+    codigo_postal_consulta: str | None = None,
+) -> Cotizacion:
     """Crea una unidad de trabajo recuperable por futuras sesiones."""
 
     referencia_limpia = limpiar_referencia(referencia)
     cotizacion = Cotizacion(
         referencia=referencia_limpia,
         referencia_fijada_manual=referencia_limpia is not None,
+        codigo_postal_consulta=limpiar_codigo_postal(codigo_postal_consulta),
     )
     sesion.add(cotizacion)
     sesion.commit()
@@ -97,6 +115,24 @@ def actualizar_referencia_manual(
 
     cotizacion.referencia = referencia_limpia
     cotizacion.referencia_fijada_manual = True
+    cotizacion.actualizada_en = ahora_utc()
+    sesion.add(cotizacion)
+    sesion.commit()
+    sesion.refresh(cotizacion)
+    return cotizacion
+
+
+def actualizar_codigo_postal_consulta(
+    sesion: Session,
+    cotizacion: Cotizacion,
+    codigo_postal: str | None,
+) -> Cotizacion:
+    """Cambia el contexto geográfico que usarán las consultas nuevas."""
+
+    valor = limpiar_codigo_postal(codigo_postal)
+    if valor is None:
+        raise ValueError("Escribe un código postal antes de guardarlo.")
+    cotizacion.codigo_postal_consulta = valor
     cotizacion.actualizada_en = ahora_utc()
     sesion.add(cotizacion)
     sesion.commit()

@@ -47,6 +47,49 @@ def test_crear_cotizacion_la_guarda_y_la_muestra(cliente):
     assert "DAIS/SSMA/944/2026" in listado.text
 
 
+def test_cotizacion_hereda_cp_habitual_y_puede_cambiarlo(cliente):
+    cliente.app.state.configuracion.codigo_postal_consulta_default = "91000"
+    formulario = cliente.get("/cotizaciones/nueva")
+    creada = cliente.post(
+        "/cotizaciones",
+        data={
+            "referencia": "CP-PRUEBA",
+            "csrf_token": _csrf(formulario.text),
+        },
+        follow_redirects=False,
+    )
+    cotizacion_id = creada.headers["location"].rsplit("/", 1)[-1]
+
+    precios = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    assert "CP <strong>91000</strong>" in precios.text
+
+    cambio = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/codigo-postal",
+        data={"csrf_token": _csrf(precios.text), "codigo_postal": "94294"},
+        follow_redirects=False,
+    )
+    assert cambio.status_code == 303
+    assert cambio.headers["location"] == f"/cotizaciones/{cotizacion_id}/proveedores"
+    assert "CP <strong>94294</strong>" in cliente.get(cambio.headers["location"]).text
+
+
+def test_codigo_postal_invalido_es_rechazado(cliente):
+    formulario = cliente.get("/cotizaciones/nueva")
+    creada = cliente.post(
+        "/cotizaciones",
+        data={"referencia": "CP-INVALIDO", "csrf_token": _csrf(formulario.text)},
+        follow_redirects=False,
+    )
+    cotizacion_id = creada.headers["location"].rsplit("/", 1)[-1]
+    precios = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+
+    respuesta = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/codigo-postal",
+        data={"csrf_token": _csrf(precios.text), "codigo_postal": "91A00"},
+    )
+    assert respuesta.status_code == 422
+
+
 def test_cotizacion_puede_finalizarse_explicitamente(cliente):
     formulario = cliente.get("/cotizaciones/nueva")
     creada = cliente.post(
@@ -89,6 +132,7 @@ def test_cotizacion_sobrevive_a_otra_instancia_de_la_app(tmp_path):
         bootstrap_admin_email=correo,
         bootstrap_admin_name="Administrador Prueba",
         bootstrap_admin_password=contrasena,
+        codigo_postal_consulta_default="91000",
     )
 
     app_primera = crear_app(configuracion)
@@ -113,6 +157,11 @@ def test_cotizacion_sobrevive_a_otra_instancia_de_la_app(tmp_path):
 
     assert respuesta.status_code == 200
     assert "DAIS/SSMA/951/2026" in respuesta.text
+
+
+def test_configuracion_rechaza_cp_habitual_invalido():
+    with pytest.raises(ValueError, match="5 dígitos"):
+        Configuracion(codigo_postal_consulta_default="9100A")
 
 
 def test_produccion_rechaza_sqlite_local():

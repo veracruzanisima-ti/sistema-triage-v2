@@ -17,6 +17,28 @@
 <section class="tarjeta">
   <div class="barra">
     <div>
+      <h2>Ubicación de consulta</h2>
+      {% if cotizacion.codigo_postal_consulta %}
+        <p>Los precios y la disponibilidad nuevos se consultarán para el CP <strong>{{ cotizacion.codigo_postal_consulta }}</strong>.</p>
+      {% else %}
+        <p class="aviso"><strong>Configura un código postal antes de consultar fuentes automáticas.</strong></p>
+      {% endif %}
+      <p class="ayuda">Cambiarlo afecta sólo consultas nuevas; el histórico conserva el CP con el que se observó cada precio.</p>
+    </div>
+    <form method="post" action="/cotizaciones/{{ cotizacion.id }}/codigo-postal">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="campo">
+        <label for="codigo_postal">Código postal</label>
+        <input id="codigo_postal" name="codigo_postal" value="{{ cotizacion.codigo_postal_consulta or '' }}" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="Ej. 91000" required>
+      </div>
+      <button class="boton boton-secundario" type="submit">Guardar CP</button>
+    </form>
+  </div>
+</section>
+
+<section class="tarjeta">
+  <div class="barra">
+    <div>
       <h2>Progreso</h2>
       <p>{{ con_referencia }} de {{ productos|length }} productos tienen precio confirmado para cotizar.</p>
       <p class="ayuda">Una promoción se conserva como oportunidad de compra, pero no se propone aquí como referencia estable.</p>
@@ -60,11 +82,15 @@
         <div class="grupo-botones">
           {% if proveedores %}
             {% for nombre in proveedores %}
-              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="proveedor" value="{{ nombre }}">
-                <button class="boton boton-secundario" type="submit">Consultar {{ nombre }}</button>
-              </form>
+              {% if cotizacion.codigo_postal_consulta %}
+                <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="proveedor" value="{{ nombre }}">
+                  <button class="boton boton-secundario" type="submit">Consultar {{ nombre }}</button>
+                </form>
+              {% else %}
+                <button class="boton boton-secundario" type="button" disabled>Consultar {{ nombre }}</button>
+              {% endif %}
             {% endfor %}
           {% endif %}
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico">Registrar precio manual</a>
@@ -83,7 +109,7 @@
                 {% elif seleccion and seleccion.referencia_estable_id == observacion.id %}
                   <span class="estado estado-revisado">Usado para cotizar</span>
                 {% endif %}
-                <p class="ayuda">Observado: {{ observacion.observado_en }}</p>
+                <p class="ayuda">Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
               </div>
               <div>
                 {% if observacion.precio_total is not none %}
@@ -128,7 +154,7 @@
                 <div>
                   <strong>{{ intento.proveedor }}</strong>
                   <span class="estado estado-{{ intento.estado | lower | replace('_', '-') }}">{{ intento.estado | replace('_', ' ') | title }}</span>
-                  <p class="ayuda">{{ intento.iniciada_en }}</p>
+                  <p class="ayuda">{{ intento.iniciada_en }} · CP: {{ intento.criterios_busqueda.get("codigo_postal") or "sin registrar" }}</p>
                 </div>
                 <div>
                   {% if intento.precio_total is not none %}<strong>Total observado: ${{ '%.2f'|format(intento.precio_total) }}</strong>{% endif %}

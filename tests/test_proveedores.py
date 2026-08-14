@@ -13,11 +13,14 @@ from triage.proveedores.servicio import ErrorConsultaProveedor, ejecutar_consult
 from triage.usuarios.modelos import Usuario
 
 
-def _preparar_producto(cliente) -> tuple[str, str, str]:
+def _preparar_producto(cliente, codigo_postal: str | None = "91000") -> tuple[str, str, str]:
     with cliente.app.state.fabrica_sesiones() as sesion:
         usuario = sesion.scalar(select(Usuario))
         assert usuario is not None
-        cotizacion = Cotizacion(referencia="PROVEEDORES-PRUEBA")
+        cotizacion = Cotizacion(
+            referencia="PROVEEDORES-PRUEBA",
+            codigo_postal_consulta=codigo_postal,
+        )
         sesion.add(cotizacion)
         sesion.flush()
         documento = Documento(
@@ -58,6 +61,7 @@ class CanalExitoso:
 
     def consultar(self, solicitud: SolicitudProveedor) -> ResultadoProveedor:
         assert solicitud.forma_dispositivo == "vial"
+        assert solicitud.codigo_postal == "91000"
         return ResultadoProveedor(
             encontrado=True,
             fuente="fuente de prueba",
@@ -83,7 +87,7 @@ class CanalConError:
         raise RuntimeError("detalle interno de prueba")
 
 
-def test_consulta_exitosa_crea_observacion_append_only(cliente):
+def test_consulta_exitosa_crea_observacion_append_only_con_cp(cliente):
     cotizacion_id, partida_id, usuario_id = _preparar_producto(cliente)
     with cliente.app.state.fabrica_sesiones() as sesion:
         intento = ejecutar_consulta(
@@ -95,10 +99,29 @@ def test_consulta_exitosa_crea_observacion_append_only(cliente):
         )
         assert intento.estado == EstadoConsultaProveedor.EXITOSA.value
         assert intento.observacion_precio_id is not None
+        assert intento.criterios_busqueda["codigo_postal"] == "91000"
         observacion = sesion.get(ObservacionPrecio, intento.observacion_precio_id)
         assert observacion is not None
         assert observacion.proveedor == "Canal Prueba"
+        assert observacion.codigo_postal == "91000"
         assert str(observacion.precio_total) == "123.45"
+
+
+def test_consulta_automatica_exige_codigo_postal(cliente):
+    cotizacion_id, partida_id, usuario_id = _preparar_producto(
+        cliente,
+        codigo_postal=None,
+    )
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        with pytest.raises(ValueError, match="código postal"):
+            ejecutar_consulta(
+                sesion,
+                cotizacion_id=cotizacion_id,
+                partida_documento_id=partida_id,
+                usuario_id=usuario_id,
+                proveedor=CanalVacio(),
+            )
+        assert list(sesion.scalars(select(ConsultaProveedor))) == []
 
 
 def test_no_encontrado_deja_traza_sin_inventar_precio(cliente):
@@ -112,6 +135,7 @@ def test_no_encontrado_deja_traza_sin_inventar_precio(cliente):
             proveedor=CanalVacio(),
         )
         assert intento.estado == EstadoConsultaProveedor.NO_ENCONTRADO.value
+        assert intento.criterios_busqueda["codigo_postal"] == "91000"
         assert intento.observacion_precio_id is None
         assert list(sesion.scalars(select(ObservacionPrecio))) == []
 
@@ -130,5 +154,6 @@ def test_error_se_sanitiza_y_permanece_trazable(cliente):
         intento = sesion.scalar(select(ConsultaProveedor))
         assert intento is not None
         assert intento.estado == EstadoConsultaProveedor.ERROR.value
+        assert intento.criterios_busqueda["codigo_postal"] == "91000"
         assert intento.mensaje_error == "El proveedor no pudo completar la consulta."
         assert "detalle interno" not in intento.mensaje_error
