@@ -13,8 +13,9 @@ from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.base import SolicitudProveedor
 from triage.proveedores.descubrimiento_web import (
     CandidatoWeb,
+    CandidatoWebRespuesta,
     DescubridorWebOpenAI,
-    ResultadoDescubrimientoWeb,
+    ResultadoDescubrimientoWebRespuesta,
 )
 from triage.proveedores.servicio import ejecutar_descubrimiento_web
 from triage.usuarios.modelos import Usuario
@@ -156,13 +157,13 @@ class RespuestasFalsas:
 
     def parse(self, **argumentos):
         self.argumentos = argumentos
-        resultado = ResultadoDescubrimientoWeb(
+        resultado = ResultadoDescubrimientoWebRespuesta(
             candidatos=[
-                CandidatoWeb(
+                CandidatoWebRespuesta(
                     proveedor="Farmacia Web",
                     producto_exacto="Lantus 100 U/mL vial 10 mL",
                     url="https://ejemplo.invalid/producto",
-                    precio_total=Decimal("999.00"),
+                    precio_total=999.0,
                     coincidencia_exacta=True,
                 )
             ]
@@ -195,11 +196,23 @@ def test_openai_web_search_no_almacena_y_solo_recibe_contexto_operativo():
     )
 
     assert len(candidatos) == 1
+    assert str(candidatos[0].precio_total) == "999.0"
     argumentos = cliente.responses.argumentos
     assert argumentos is not None
     assert argumentos["store"] is False
     assert argumentos["tools"][0]["type"] == "web_search"
     assert argumentos["tools"][0]["user_location"]["country"] == "MX"
+    assert argumentos["text_format"] is ResultadoDescubrimientoWebRespuesta
     assert "LANTUS" in argumentos["input"]
     assert "91000" in argumentos["input"]
     assert "paciente" not in argumentos["input"].casefold()
+
+
+def test_schema_externo_no_usa_formatos_ni_restricciones_innecesarias():
+    schema = ResultadoDescubrimientoWebRespuesta.model_json_schema()
+    serializado = str(schema)
+
+    assert "format" not in serializado
+    assert "exclusiveMinimum" not in serializado
+    assert "maxItems" not in serializado
+    assert "pattern" not in serializado
