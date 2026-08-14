@@ -23,7 +23,7 @@ _RUIDO = {"CON", "DE", "DEL", "EL", "EN", "LA", "LAS", "LOS", "PARA", "POR"}
 class CandidatoCatalogo:
     descripcion: str
     precio_observado: Decimal
-    stock: int
+    stock: int | None
     fuente: str
 
 
@@ -77,7 +77,7 @@ def evaluar_candidato(
 
     if candidato.precio_observado <= 0:
         motivos.append("precio no utilizable")
-    if candidato.stock <= 0:
+    if candidato.stock is not None and candidato.stock <= 0:
         motivos.append("sin disponibilidad")
     if tokens_marca and not tokens_marca.issubset(tokens_candidato):
         motivos.append("marca distinta")
