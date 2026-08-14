@@ -40,6 +40,7 @@ class ObservacionPrecio(Base):
     condiciones_promocion: Mapped[str | None] = mapped_column(Text, nullable=True)
     disponibilidad: Mapped[str | None] = mapped_column(String(200), nullable=True)
     entrega_viable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    codigo_postal: Mapped[str | None] = mapped_column(String(5), nullable=True)
     fuente: Mapped[str] = mapped_column(String(500), nullable=False)
     observado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
