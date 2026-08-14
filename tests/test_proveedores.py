@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 import pytest
@@ -15,6 +16,13 @@ from triage.proveedores.servicio import (
     ejecutar_consultas_configuradas,
 )
 from triage.usuarios.modelos import Usuario
+
+
+def _csrf(html: str) -> str:
+    coincidencia = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    if coincidencia is None:
+        raise AssertionError("no se encontró token CSRF")
+    return coincidencia.group(1)
 
 
 def _preparar_producto(cliente, codigo_postal: str | None = "91000") -> tuple[str, str, str]:
@@ -142,19 +150,9 @@ def test_busqueda_unificada_se_expone_como_accion_principal(cliente):
 
     respuesta = cliente.post(
         f"/cotizaciones/{cotizacion_id}/proveedores/consultar",
-        data={"csrf_token": pagina.cookies.get("csrf_token", "") or ""},
+        data={"csrf_token": _csrf(pagina.text)},
         follow_redirects=False,
     )
-    if respuesta.status_code == 422:
-        import re
-
-        token = re.search(r'name="csrf_token" value="([^"]+)"', pagina.text)
-        assert token is not None
-        respuesta = cliente.post(
-            f"/cotizaciones/{cotizacion_id}/proveedores/consultar",
-            data={"csrf_token": token.group(1)},
-            follow_redirects=False,
-        )
     assert respuesta.status_code == 303
     assert "resultado=unificada" in respuesta.headers["location"]
     resultado = cliente.get(respuesta.headers["location"])
