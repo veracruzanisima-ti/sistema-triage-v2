@@ -87,6 +87,10 @@
     .indicador-lectura { display: flex; align-items: center; gap: 10px; margin: 14px 0; padding: 11px 13px; border: 1px solid #dfe4ec; border-radius: 10px; background: #fafbfe; }
     .indicador-lectura[hidden] { display: none; }
     .spinner { width: 18px; height: 18px; border: 2px solid #c9d0dc; border-top-color: #172033; border-radius: 50%; animation: girar .8s linear infinite; flex-shrink: 0; }
+    .volver-arriba { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); z-index: 30; padding: 10px 14px; border: 1px solid #cfd6e2; border-radius: 999px; background: rgba(255, 255, 255, .96); color: #172033; font: inherit; font-size: .9rem; font-weight: 700; box-shadow: 0 6px 20px rgba(23, 32, 51, .14); cursor: pointer; }
+    .volver-arriba:hover { background: #f3f5f9; }
+    .volver-arriba:focus-visible { outline: 3px solid #9fb4d1; outline-offset: 2px; }
+    .volver-arriba[hidden] { display: none; }
     @keyframes girar { to { transform: rotate(360deg); } }
     details { margin-top: 14px; }
     summary { cursor: pointer; font-weight: 700; }
@@ -100,6 +104,7 @@
       .archivo-tarjeta { align-items: flex-start; }
       .archivo-acciones { flex-direction: column-reverse; align-items: flex-end; }
       .estado-partida-excluida { align-items: flex-start; flex-direction: column; }
+      .volver-arriba { right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); padding: 9px 12px; }
     }
   </style>
 </head>
@@ -124,5 +129,29 @@
   <main>
     {% block contenido %}{% endblock %}
   </main>
+  <button id="volver-arriba" class="volver-arriba" type="button" hidden aria-label="Volver al inicio de la página">↑ Volver arriba</button>
+  <script>
+    (() => {
+      const boton = document.getElementById("volver-arriba");
+      if (!boton) return;
+
+      const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const actualizarVisibilidad = () => {
+        const paginaLarga = document.documentElement.scrollHeight > window.innerHeight * 1.35;
+        const desplazamientoMinimo = Math.min(600, window.innerHeight * 0.7);
+        boton.hidden = !paginaLarga || window.scrollY < desplazamientoMinimo;
+      };
+
+      boton.addEventListener("click", () => {
+        window.scrollTo({
+          top: 0,
+          behavior: reducirMovimiento.matches ? "auto" : "smooth",
+        });
+      });
+      window.addEventListener("scroll", actualizarVisibilidad, { passive: true });
+      window.addEventListener("resize", actualizarVisibilidad);
+      actualizarVisibilidad();
+    })();
+  </script>
 </body>
 </html>

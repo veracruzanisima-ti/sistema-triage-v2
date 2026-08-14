@@ -71,3 +71,13 @@ def test_siguiente_paso_revisa_cotizacion_cuando_todas_tienen_referencia():
     assert paso["etapa"] == "Revisa cotización"
     assert paso["accion"] == "Revisar cotización"
     assert paso["url"] == "/cotizaciones/cot-1/revision-final"
+
+
+def test_interfaces_operativas_incluyen_control_para_volver_arriba(cliente):
+    pagina = cliente.get("/cotizaciones/nueva")
+
+    assert pagina.status_code == 200
+    assert 'id="volver-arriba"' in pagina.text
+    assert "↑ Volver arriba" in pagina.text
+    assert "window.scrollTo" in pagina.text
+    assert "prefers-reduced-motion" in pagina.text
