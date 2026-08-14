@@ -1,0 +1,54 @@
+<div class="partida">
+  <div class="barra">
+    <div>
+      <strong>{{ observacion.proveedor }}</strong>
+      {% if cotizada_hoy and cotizada_hoy.id == observacion.id %}<span class="estado estado-revisado">Cotizado hoy</span>{% endif %}
+      {% if observacion.origen == "WEB" %}<span class="estado estado-analizado">Web</span>{% endif %}
+      {% if observacion.es_promocion %}<span class="estado estado-analizado">Oferta / promoción</span>{% endif %}
+      {% if seleccion and seleccion.referencia_estable_id == observacion.id %}<span class="estado estado-revisado">Usado para cotizar</span>{% endif %}
+      <p class="ayuda">Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
+    </div>
+    <div>
+      {% if observacion.precio_total is not none %}
+        <strong>Total: ${{ '%.2f'|format(observacion.precio_total) }}</strong>
+      {% endif %}
+      {% if observacion.precio_antes_iva is not none %}
+        <div class="ayuda">Antes de IVA: ${{ '%.2f'|format(observacion.precio_antes_iva) }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
+  {% if observacion.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
+  {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
+    <p><a href="{{ observacion.fuente }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
+  {% else %}
+    <p class="ayuda"><strong>Fuente:</strong> {{ observacion.fuente }}</p>
+  {% endif %}
+
+  {% if observacion.entrega_viable is sameas false %}
+    <p class="aviso"><strong>Entrega marcada como no viable.</strong></p>
+  {% endif %}
+
+  {% if oportunidad %}
+    <p class="aviso">
+      <strong>Oportunidad de compra.</strong>
+      Está {{ '%.1f'|format(oportunidad.porcentaje) }}% debajo de la referencia actual
+      (ahorro de ${{ '%.2f'|format(oportunidad.ahorro) }} comparando {{ oportunidad.base }}).
+    </p>
+  {% endif %}
+
+  {% if seleccion and seleccion.referencia_estable_id == observacion.id %}
+    <p class="ayuda">Este es el precio que actualmente alimentará la revisión de la cotización.</p>
+  {% elif observacion.es_promocion %}
+    <p class="ayuda">La fuente la marca como oferta. Se conserva como evidencia, pero no se usa automáticamente como referencia estable.</p>
+  {% else %}
+    <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="rol" value="REFERENCIA_ESTABLE">
+      <input type="hidden" name="observacion_id" value="{{ observacion.id }}">
+      <input type="hidden" name="volver" value="proveedores">
+      <button class="boton" type="submit">Usar para cotizar</button>
+    </form>
+  {% endif %}
+</div>
