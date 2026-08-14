@@ -7,10 +7,13 @@ Este documento conserva el contexto funcional que debe sobrevivir a cambios de c
 ## Estado de implementación
 
 - PR #23 (`feat: simplificar flujo operativo de cotizaciones`) ya fue integrado a `main` con CI verde.
-- Ya existe una acción primaria contextual en el detalle de cotización para avanzar por `Sube y analiza → Revisa → Confirma producto → Busca precio`.
+- PR #24 (`feat: cerrar flujo de precios a revisión`) ya fue integrado a `main` con CI verde.
+- El recorrido visible ya puede avanzar por `Sube y analiza → Revisa → Confirma producto → Busca precio → Revisa cotización` sin obligar al usuario a recorrer pantallas técnicas.
+- En `Buscar precios`, una observación no promocional puede marcarse como `Usar para cotizar`; se reutiliza la decisión append-only `REFERENCIA_ESTABLE` ya existente.
+- Una promoción no puede convertirse en referencia estable, ni desde el flujo normal ni desde la vista avanzada. Las selecciones promocionales históricas dejan de considerarse vigentes sin borrar su trazabilidad.
 - Histórico, consultas, decisiones de precio, revisión consolidada y cambio manual de estado siguen disponibles bajo áreas secundarias; no se eliminaron datos ni rutas.
-- El siguiente bloque en desarrollo conecta la selección de una referencia estable directamente desde `Buscar precios` y hace que la acción primaria avance a `Revisar cotización` cuando todas las partidas tengan referencia.
-- Todavía no están implementados el buscador unificado real, CP/sesiones por fuente, cadena fría persistente, Excel final, sugerencia de recargo ni descubrimiento web automático.
+- El bloque actualmente en desarrollo (`agent/contexto-cp-consulta`) agrega un CP habitual configurable, CP editable por cotización y conserva el CP en cada observación nueva. Las consultas automáticas requieren CP antes de ejecutarse.
+- Todavía no están implementados el buscador unificado real, sesiones autenticadas por fuente, cadena fría persistente, Excel final, sugerencia de recargo ni descubrimiento web automático.
 
 ## 1. Fuente de verdad del proyecto
 
@@ -108,6 +111,12 @@ Estas referencias sirven para double check dentro de Triage y no deben saturar e
 
 - Mantener un código postal habitual configurable para las consultas.
 - Permitir cambiarlo para una cotización excepcional.
+- El CP operativo actual se guarda en la cotización; cada observación de precio conserva el CP usado en el momento en que se obtuvo.
+- Los intentos de proveedor conservan el CP dentro de `criterios_busqueda`, evitando duplicar otra columna de base de datos.
+- El CP habitual se configura con `CODIGO_POSTAL_CONSULTA_DEFAULT`; no existe una tabla de configuración empresarial sólo para este dato.
+- Mientras el sistema opere con ubicaciones mexicanas, el CP aceptado es de exactamente 5 dígitos.
+- Una consulta automática a proveedor no debe ejecutarse sin CP; una cotización existente sí puede mantenerse temporalmente sin él.
+- Cambiar el CP de una cotización sólo afecta consultas nuevas; nunca reescribe observaciones históricas.
 - Cuando una fuente cambia precio/disponibilidad al iniciar sesión, consultar preferentemente con la sesión real autorizada de la empresa.
 - Reutilizar sesiones mientras sigan vigentes; pedir intervención sólo cuando caduquen o exista MFA/CAPTCHA.
 - Credenciales, cookies y estados autenticados nunca deben guardarse en GitHub ni hardcodearse.
@@ -218,14 +227,15 @@ No aplicar aprendizaje automático que cambie reglas silenciosamente. Acumular e
 
 Orden recomendado a partir de este documento:
 
-1. completar el recorrido visible hasta `Revisar cotización` sin obligar a pasar por pantallas técnicas;
-2. conectar `Buscar precio` a un buscador unificado;
-3. modelar contexto de consulta (CP, sesión, promoción, disponibilidad);
-4. integrar fuentes recurrentes empezando por la vía estructurada más estable disponible;
+1. completar y validar la persistencia del CP/contexto geográfico de consulta;
+2. conectar `Buscar precio` a una consulta unificada sobre los adaptadores configurados;
+3. integrar fuentes recurrentes empezando por la vía estructurada más estable disponible;
+4. incorporar manejo de sesiones autenticadas por fuente sin guardar secretos en GitHub;
 5. incorporar descubrimiento web de proveedores nuevos;
-6. generar Excel limpio con fórmulas;
-7. incorporar sugerencia explicable de recargo 15–30%;
-8. acumular Excel aprobados y correcciones para detectar tendencias.
+6. persistir y reutilizar `Cadena fría: Sí/No` para productos conocidos;
+7. generar Excel limpio con fórmulas;
+8. incorporar sugerencia explicable de recargo 15–30%;
+9. acumular Excel aprobados y correcciones para detectar tendencias.
 
 ## 14. Límites actuales
 
