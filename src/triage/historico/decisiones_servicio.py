@@ -112,7 +112,12 @@ def listar_selecciones_actuales(
         decision = ultimas.get((partida_id, rol.value))
         if decision is None or decision.clave_producto != claves[partida_id]:
             return None
-        return decision.observacion_precio_id
+        observacion_id = decision.observacion_precio_id
+        if observacion_id and rol == RolDecisionPrecio.REFERENCIA_ESTABLE:
+            observacion = sesion.get(ObservacionPrecio, observacion_id)
+            if observacion is None or observacion.es_promocion:
+                return None
+        return observacion_id
 
     return {
         partida_id: SeleccionActual(
