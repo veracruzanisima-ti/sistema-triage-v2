@@ -208,11 +208,25 @@ def test_openai_web_search_no_almacena_y_solo_recibe_contexto_operativo():
     assert "paciente" not in argumentos["input"].casefold()
 
 
+def _claves_json(valor) -> set[str]:
+    if isinstance(valor, dict):
+        claves = set(valor)
+        for hijo in valor.values():
+            claves.update(_claves_json(hijo))
+        return claves
+    if isinstance(valor, list):
+        claves: set[str] = set()
+        for hijo in valor:
+            claves.update(_claves_json(hijo))
+        return claves
+    return set()
+
+
 def test_schema_externo_no_usa_formatos_ni_restricciones_innecesarias():
     schema = ResultadoDescubrimientoWebRespuesta.model_json_schema()
-    serializado = str(schema)
+    claves = _claves_json(schema)
 
-    assert "format" not in serializado
-    assert "exclusiveMinimum" not in serializado
-    assert "maxItems" not in serializado
-    assert "pattern" not in serializado
+    assert "format" not in claves
+    assert "exclusiveMinimum" not in claves
+    assert "maxItems" not in claves
+    assert "pattern" not in claves
