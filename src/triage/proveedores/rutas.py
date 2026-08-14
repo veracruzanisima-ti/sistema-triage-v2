@@ -8,10 +8,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from triage.cotizaciones.servicio import obtener_cotizacion
 from triage.historico.decisiones_servicio import listar_selecciones_actuales
 from triage.historico.servicio import listar_productos_historico
+from triage.proveedores.descubrimiento_web import ErrorDescubrimientoWeb
 from triage.proveedores.servicio import (
     ErrorConsultaProveedor,
     ejecutar_consulta,
     ejecutar_consultas_configuradas,
+    ejecutar_descubrimiento_web,
     listar_productos_consultables,
 )
 from triage.usuarios.seguridad import (
@@ -66,6 +68,7 @@ def _render(
             "todas_con_referencia": bool(productos)
             and con_referencia == len(productos),
             "proveedores": tuple(proveedor.nombre for proveedor in proveedores.values()),
+            "descubrimiento_web_disponible": request.app.state.descubridor_web is not None,
             "error": error,
             "mensaje": mensaje,
         },
@@ -82,6 +85,8 @@ def ver_proveedores(
     resultado: str = "",
     precios: int = 0,
     errores: int = 0,
+    web_guardados: int = 0,
+    web_descartados: int = 0,
 ):
     """Muestra productos preparados, precios observados e intentos recientes."""
 
@@ -95,6 +100,10 @@ def ver_proveedores(
         "unificada": (
             f"Búsqueda completada: {precios} precio(s) encontrado(s)"
             + (f" y {errores} fuente(s) con error." if errores else ".")
+        ),
+        "web": (
+            f"Búsqueda web completada: {web_guardados} opción(es) exacta(s) guardada(s)"
+            + (f" y {web_descartados} resultado(s) descartado(s)." if web_descartados else ".")
         ),
     }
     return _render(
@@ -143,6 +152,68 @@ def consultar_proveedores_configurados(
             f"/cotizaciones/{cotizacion_id}/proveedores"
             f"?resultado=unificada&precios={resumen.precios_encontrados}"
             f"&errores={resumen.errores}"
+        ),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/{cotizacion_id}/proveedores/{partida_documento_id}/buscar-web")
+def buscar_mas_opciones_web(
+    cotizacion_id: str,
+    partida_documento_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+):
+    """Busca candidatos públicos sólo cuando la persona necesita ampliar opciones."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+    if cotizacion is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    descubridor = request.app.state.descubridor_web
+    if descubridor is None:
+        return _render(
+            request,
+            sesion,
+            usuario,
+            cotizacion,
+            error="La búsqueda web no está configurada en este entorno.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    try:
+        resumen = ejecutar_descubrimiento_web(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_documento_id,
+            usuario_id=usuario.id,
+            descubridor=descubridor,
+        )
+    except ValueError as error:
+        return _render(
+            request,
+            sesion,
+            usuario,
+            cotizacion,
+            error=str(error),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    except ErrorDescubrimientoWeb as error:
+        return _render(
+            request,
+            sesion,
+            usuario,
+            cotizacion,
+            error=str(error),
+            status_code=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    return RedirectResponse(
+        url=(
+            f"/cotizaciones/{cotizacion_id}/proveedores?resultado=web"
+            f"&web_guardados={resumen.guardados}&web_descartados={resumen.descartados}"
         ),
         status_code=status.HTTP_303_SEE_OTHER,
     )
