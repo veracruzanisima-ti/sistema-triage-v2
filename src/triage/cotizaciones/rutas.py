@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from triage.cotizaciones.modelos import EstadoCotizacion
 from triage.cotizaciones.servicio import (
+    actualizar_codigo_postal_consulta,
     actualizar_estado,
     actualizar_referencia_manual,
     crear_cotizacion,
@@ -160,7 +161,11 @@ def crear(
     """Guarda inmediatamente una cotización para que no dependa del navegador."""
 
     validar_token_csrf(request, csrf_token)
-    cotizacion = crear_cotizacion(sesion, referencia)
+    cotizacion = crear_cotizacion(
+        sesion,
+        referencia,
+        request.app.state.configuracion.codigo_postal_consulta_default,
+    )
     return RedirectResponse(
         url=f"/cotizaciones/{cotizacion.id}",
         status_code=status.HTTP_303_SEE_OTHER,
@@ -241,6 +246,31 @@ def cambiar_referencia(
 
     return RedirectResponse(
         url=f"/cotizaciones/{cotizacion.id}#referencia-cotizacion",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/{cotizacion_id}/codigo-postal", name="cambiar_codigo_postal_cotizacion")
+def cambiar_codigo_postal(
+    cotizacion_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+    codigo_postal: Annotated[str, Form()],
+):
+    """Cambia el CP usado por nuevas consultas sin alterar observaciones anteriores."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+    if cotizacion is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    try:
+        actualizar_codigo_postal_consulta(sesion, cotizacion, codigo_postal)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return RedirectResponse(
+        url=f"/cotizaciones/{cotizacion.id}/proveedores",
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
