@@ -4,6 +4,8 @@ import logging
 from decimal import Decimal
 from typing import Protocol
 
+from google import genai
+from google.genai import types
 from openai import OpenAI
 from pydantic import BaseModel, Field, HttpUrl, ValidationError
 
@@ -31,7 +33,7 @@ class ResultadoDescubrimientoWeb(BaseModel):
 
 
 class CandidatoWebRespuesta(BaseModel):
-    """Contrato deliberadamente simple para Structured Outputs de OpenAI."""
+    """Contrato simple y portable para salida estructurada de modelos externos."""
 
     proveedor: str
     producto_exacto: str
@@ -51,7 +53,9 @@ class ResultadoDescubrimientoWebRespuesta(BaseModel):
 
 
 class DescubridorWeb(Protocol):
-    """Contrato pequeño para poder sustituir OpenAI en pruebas."""
+    """Contrato pequeño para poder sustituir el proveedor de IA en pruebas."""
+
+    modelo: str
 
     def buscar(self, solicitud: SolicitudProveedor) -> tuple[CandidatoWeb, ...]:
         """Busca candidatos públicos sin tomar una decisión comercial."""
@@ -86,6 +90,19 @@ Reglas obligatorias:
 """.strip()
 
 
+def _descripcion_solicitud(solicitud: SolicitudProveedor) -> str:
+    return "\n".join(
+        (
+            f"Producto: {solicitud.producto or 'sin nombre'}",
+            f"Marca: {solicitud.marca or 'no especificada'}",
+            f"Concentración: {solicitud.concentracion or 'no especificada'}",
+            f"Forma/dispositivo: {solicitud.forma_dispositivo or 'no especificado'}",
+            f"Presentación: {solicitud.presentacion or 'no especificada'}",
+            f"Código postal de consulta: {solicitud.codigo_postal or 'no configurado'}",
+        )
+    )
+
+
 def _convertir_candidato(candidato: CandidatoWebRespuesta) -> CandidatoWeb | None:
     """Aplica validación local fuerte después de recibir un esquema externo simple."""
 
@@ -109,7 +126,16 @@ def _convertir_candidato(candidato: CandidatoWebRespuesta) -> CandidatoWeb | Non
         return None
 
 
-def _registrar_uso(modelo: str, respuesta) -> None:
+def _convertir_resultado(resultado: ResultadoDescubrimientoWebRespuesta) -> tuple[CandidatoWeb, ...]:
+    candidatos: list[CandidatoWeb] = []
+    for candidato_respuesta in resultado.candidatos[:5]:
+        candidato = _convertir_candidato(candidato_respuesta)
+        if candidato is not None:
+            candidatos.append(candidato)
+    return tuple(candidatos)
+
+
+def _registrar_uso_openai(modelo: str, respuesta) -> None:
     """Registra métricas de consumo sin registrar la consulta ni sus resultados."""
 
     uso = getattr(respuesta, "usage", None)
@@ -121,6 +147,21 @@ def _registrar_uso(modelo: str, respuesta) -> None:
         getattr(uso, "input_tokens", None),
         getattr(uso, "output_tokens", None),
         getattr(uso, "total_tokens", None),
+    )
+
+
+def _registrar_uso_gemini(modelo: str, respuesta) -> None:
+    """Registra métricas Gemini sin registrar consulta, producto ni resultados."""
+
+    uso = getattr(respuesta, "usage_metadata", None)
+    if uso is None:
+        return
+    logger.info(
+        "Gemini web model=%s input_tokens=%s output_tokens=%s total_tokens=%s",
+        modelo,
+        getattr(uso, "prompt_token_count", None),
+        getattr(uso, "candidates_token_count", None),
+        getattr(uso, "total_token_count", None),
     )
 
 
@@ -138,16 +179,7 @@ class DescubridorWebOpenAI:
     def buscar(self, solicitud: SolicitudProveedor) -> tuple[CandidatoWeb, ...]:
         """Busca sólo con datos operativos del producto, sin datos personales."""
 
-        descripcion = "\n".join(
-            (
-                f"Producto: {solicitud.producto or 'sin nombre'}",
-                f"Marca: {solicitud.marca or 'no especificada'}",
-                f"Concentración: {solicitud.concentracion or 'no especificada'}",
-                f"Forma/dispositivo: {solicitud.forma_dispositivo or 'no especificado'}",
-                f"Presentación: {solicitud.presentacion or 'no especificada'}",
-                f"Código postal de consulta: {solicitud.codigo_postal or 'no configurado'}",
-            )
-        )
+        descripcion = _descripcion_solicitud(solicitud)
         try:
             respuesta = self._cliente.responses.parse(
                 model=self.modelo,
@@ -179,18 +211,68 @@ class DescubridorWebOpenAI:
                 "Intenta de nuevo o registra el precio manualmente."
             ) from error
 
-        _registrar_uso(self.modelo, respuesta)
+        _registrar_uso_openai(self.modelo, respuesta)
         for salida in respuesta.output:
             if salida.type != "message":
                 continue
             for parte in salida.content:
-                if parte.type != "output_text" or parte.parsed is None:
-                    continue
-                candidatos: list[CandidatoWeb] = []
-                for candidato_respuesta in parte.parsed.candidatos[:5]:
-                    candidato = _convertir_candidato(candidato_respuesta)
-                    if candidato is not None:
-                        candidatos.append(candidato)
-                return tuple(candidatos)
+                if parte.type == "output_text" and parte.parsed is not None:
+                    return _convertir_resultado(parte.parsed)
 
         raise ErrorDescubrimientoWeb("La búsqueda web no devolvió candidatos estructurados")
+
+
+class DescubridorWebGemini:
+    """Usa Gemini con Google Search y el mismo contrato de candidatos que OpenAI."""
+
+    def __init__(self, *, api_key: str, modelo: str) -> None:
+        if not api_key.strip():
+            raise ValueError("GEMINI_API_KEY es obligatoria para búsqueda web")
+        if not modelo.strip():
+            raise ValueError("GEMINI_MODEL_WEB no puede estar vacío")
+        self.modelo = modelo.strip()
+        self._cliente = genai.Client(
+            api_key=api_key,
+            http_options={"timeout": 80_000},
+        )
+
+    def buscar(self, solicitud: SolicitudProveedor) -> tuple[CandidatoWeb, ...]:
+        """Busca con Google Search usando sólo la identidad operativa y el CP."""
+
+        descripcion = _descripcion_solicitud(solicitud)
+        try:
+            respuesta = self._cliente.models.generate_content(
+                model=self.modelo,
+                contents=f"{_INSTRUCCIONES}\n\n{descripcion}",
+                config=types.GenerateContentConfig(
+                    tools=[{"google_search": {}}],
+                    response_mime_type="application/json",
+                    response_schema=ResultadoDescubrimientoWebRespuesta,
+                ),
+            )
+        except Exception as error:
+            logger.warning(
+                "Fallo de Google Search Gemini tipo=%s",
+                type(error).__name__,
+            )
+            raise ErrorDescubrimientoWeb(
+                "La búsqueda web no pudo completarse con Gemini. "
+                "Intenta de nuevo o registra el precio manualmente."
+            ) from error
+
+        _registrar_uso_gemini(self.modelo, respuesta)
+        parsed = getattr(respuesta, "parsed", None)
+        if isinstance(parsed, ResultadoDescubrimientoWebRespuesta):
+            return _convertir_resultado(parsed)
+
+        texto = getattr(respuesta, "text", None)
+        if texto:
+            try:
+                resultado = ResultadoDescubrimientoWebRespuesta.model_validate_json(texto)
+            except ValidationError as error:
+                raise ErrorDescubrimientoWeb(
+                    "Gemini devolvió resultados web con una estructura no válida."
+                ) from error
+            return _convertir_resultado(resultado)
+
+        raise ErrorDescubrimientoWeb("Gemini no devolvió candidatos web estructurados")
