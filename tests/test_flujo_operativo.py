@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from triage.cotizaciones.rutas import _siguiente_paso
 from triage.documentos.modelos import EstadoDocumento
+from triage.historico.decisiones_servicio import SeleccionActual
 from triage.normalizacion.servicio import ResumenNormalizacion
 
 
@@ -54,3 +55,19 @@ def test_siguiente_paso_busca_precio_cuando_productos_estan_confirmados():
     assert paso["etapa"] == "Busca precio"
     assert paso["accion"] == "Buscar precios"
     assert paso["url"] == "/cotizaciones/cot-1/proveedores"
+
+
+def test_siguiente_paso_revisa_cotizacion_cuando_todas_tienen_referencia():
+    paso = _siguiente_paso(
+        "cot-1",
+        [_documento(EstadoDocumento.REVISADO)],
+        ResumenNormalizacion(total=2, preparados=2),
+        {
+            "partida-1": SeleccionActual(referencia_estable_id="obs-1"),
+            "partida-2": SeleccionActual(referencia_estable_id="obs-2"),
+        },
+    )
+
+    assert paso["etapa"] == "Revisa cotización"
+    assert paso["accion"] == "Revisar cotización"
+    assert paso["url"] == "/cotizaciones/cot-1/revision-final"
