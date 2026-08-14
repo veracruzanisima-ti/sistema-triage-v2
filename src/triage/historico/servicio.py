@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from triage.cotizaciones.servicio import limpiar_codigo_postal
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
-from triage.historico.modelos import ObservacionPrecio
+from triage.historico.modelos import ObservacionPrecio, OrigenObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
 
 
@@ -134,6 +134,8 @@ def crear_observacion_precio(
     disponibilidad: str | None,
     entrega_viable: bool | None,
     codigo_postal: str | None = None,
+    producto_observado: str | None = None,
+    origen: OrigenObservacionPrecio = OrigenObservacionPrecio.MANUAL,
     guardar: bool = True,
 ) -> ObservacionPrecio:
     """Agrega una observación nueva; nunca modifica una observación anterior."""
@@ -172,6 +174,8 @@ def crear_observacion_precio(
         concentracion=_limpiar(normalizacion.concentracion),
         forma_dispositivo=_limpiar(normalizacion.forma_dispositivo),
         presentacion=_limpiar(normalizacion.presentacion),
+        producto_observado=_limpiar(producto_observado),
+        origen=origen.value,
         proveedor=proveedor_limpio,
         precio_antes_iva=precio_antes_iva,
         iva_porcentaje=iva_porcentaje,
