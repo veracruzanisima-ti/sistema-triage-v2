@@ -33,7 +33,7 @@
       <select id="modelo_lector" name="modelo_lector" required>
         {% for opcion in lectores %}
           <option value="{{ opcion.clave }}" {% if opcion.seleccionada %}selected{% endif %} {% if not opcion.disponible %}disabled{% endif %}>
-            {{ opcion.etiqueta }}{% if not opcion.disponible %} · No disponible{% endif %}
+            {{ opcion.etiqueta }}{% if opcion.clave == "openai:gpt-5.4-mini" %} · Recomendado{% endif %}{% if not opcion.disponible %} · No disponible{% endif %}
           </option>
         {% endfor %}
       </select>
@@ -42,11 +42,16 @@
       <div class="partida">
         <div class="barra">
           <strong>{{ opcion.etiqueta }}</strong>
-          {% if opcion.disponible %}
-            <span class="estado estado-revisado">Disponible</span>
-          {% else %}
-            <span class="estado estado-pendiente-revision">Falta API key</span>
-          {% endif %}
+          <div class="grupo-botones">
+            {% if opcion.clave == "openai:gpt-5.4-mini" %}
+              <span class="estado estado-revisado">Recomendado para este piloto</span>
+            {% endif %}
+            {% if opcion.disponible %}
+              <span class="estado estado-revisado">Disponible</span>
+            {% else %}
+              <span class="estado estado-pendiente-revision">Falta API key</span>
+            {% endif %}
+          </div>
         </div>
         <p class="ayuda">{{ opcion.descripcion }}</p>
       </div>
@@ -61,7 +66,7 @@
       <select id="modelo_web" name="modelo_web" required>
         {% for opcion in buscadores %}
           <option value="{{ opcion.clave }}" {% if opcion.seleccionada %}selected{% endif %} {% if not opcion.disponible %}disabled{% endif %}>
-            {{ opcion.etiqueta }}{% if not opcion.disponible %} · No disponible{% endif %}
+            {{ opcion.etiqueta }}{% if opcion.clave == "gemini:gemini-3.6-flash" %} · Recomendado{% endif %}{% if not opcion.disponible %} · No disponible{% endif %}
           </option>
         {% endfor %}
       </select>
@@ -70,11 +75,16 @@
       <div class="partida">
         <div class="barra">
           <strong>{{ opcion.etiqueta }}</strong>
-          {% if opcion.disponible %}
-            <span class="estado estado-revisado">Disponible</span>
-          {% else %}
-            <span class="estado estado-pendiente-revision">Falta API key</span>
-          {% endif %}
+          <div class="grupo-botones">
+            {% if opcion.clave == "gemini:gemini-3.6-flash" %}
+              <span class="estado estado-revisado">Recomendado para este piloto</span>
+            {% endif %}
+            {% if opcion.disponible %}
+              <span class="estado estado-revisado">Disponible</span>
+            {% else %}
+              <span class="estado estado-pendiente-revision">Falta API key</span>
+            {% endif %}
+          </div>
         </div>
         <p class="ayuda">{{ opcion.descripcion }}</p>
       </div>
