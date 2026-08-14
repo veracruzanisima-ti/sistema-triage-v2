@@ -49,7 +49,7 @@
       {% endif %}
     </div>
     {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
-      <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/consultar">
+      <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/consultar" data-form-busqueda data-estado-busqueda="estado-busqueda-general" data-mensaje-busqueda="Buscando precios en proveedores configurados…">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="boton" type="submit">Buscar precios</button>
       </form>
@@ -58,6 +58,10 @@
     {% else %}
       <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores">Registrar precio manual</a>
     {% endif %}
+  </div>
+  <div id="estado-busqueda-general" class="indicador-lectura" hidden aria-live="polite" aria-atomic="true">
+    <span class="spinner" aria-hidden="true"></span>
+    <span data-texto-busqueda>Buscando precios…</span>
   </div>
 </section>
 
@@ -79,6 +83,7 @@
     {% set seleccion = selecciones.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     {% set cotizada_hoy = referencias_cotizadas_hoy.get(producto.clave_producto) %}
+    {% set estado_busqueda_id = "estado-busqueda-" ~ producto.partida.id %}
     <section class="tarjeta">
       <div class="barra">
         <div>
@@ -91,11 +96,16 @@
           </p>
         </div>
         {% if descubrimiento_web_disponible and cotizacion.codigo_postal_consulta %}
-          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/buscar-web">
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/buscar-web" data-form-busqueda data-estado-busqueda="{{ estado_busqueda_id }}" data-mensaje-busqueda="Buscando más opciones en web para este producto…">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="boton boton-secundario" type="submit">Buscar más opciones en web</button>
           </form>
         {% endif %}
+      </div>
+
+      <div id="{{ estado_busqueda_id }}" class="indicador-lectura" hidden aria-live="polite" aria-atomic="true">
+        <span class="spinner" aria-hidden="true"></span>
+        <span data-texto-busqueda>Buscando opciones…</span>
       </div>
 
       {% if cotizada_hoy %}
@@ -118,7 +128,7 @@
               </form>
             {% endif %}
             {% if proveedores %}
-              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/revalidar">
+              <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/revalidar" data-form-busqueda data-estado-busqueda="{{ estado_busqueda_id }}" data-mensaje-busqueda="Revalidando el precio de este producto…">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button class="boton boton-secundario" type="submit">Revalidar precio</button>
               </form>
@@ -189,7 +199,7 @@
           {% if proveedores %}
             {% for nombre in proveedores %}
               {% if cotizacion.codigo_postal_consulta %}
-                <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar">
+                <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/consultar" data-form-busqueda data-estado-busqueda="{{ estado_busqueda_id }}" data-mensaje-busqueda="Consultando {{ nombre }}…">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="proveedor" value="{{ nombre }}">
                   <button class="boton boton-secundario" type="submit">Consultar {{ nombre }}</button>
@@ -232,4 +242,30 @@
     <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Confirmar producto</a>
   </section>
 {% endif %}
+
+<script>
+  (() => {
+    document.querySelectorAll("[data-form-busqueda]").forEach((formulario) => {
+      formulario.addEventListener("submit", () => {
+        const estadoId = formulario.dataset.estadoBusqueda;
+        const estado = estadoId ? document.getElementById(estadoId) : null;
+        const boton = formulario.querySelector('button[type="submit"]');
+
+        if (estado) {
+          const texto = estado.querySelector("[data-texto-busqueda]");
+          if (texto) {
+            texto.textContent = formulario.dataset.mensajeBusqueda || "Buscando…";
+          }
+          estado.hidden = false;
+          estado.setAttribute("aria-busy", "true");
+        }
+
+        if (boton) {
+          boton.disabled = true;
+          boton.textContent = "Buscando…";
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}
