@@ -20,6 +20,7 @@ from triage.proveedores.servicio import (
     ejecutar_descubrimiento_web,
     listar_productos_consultables,
 )
+from triage.proveedores.vista_precios import preparar_vista_precios
 from triage.usuarios.seguridad import (
     Sesion,
     UsuarioActual,
@@ -55,6 +56,16 @@ def _render(
         producto.partida.id: producto.consultas for producto in consultables
     }
     selecciones = listar_selecciones_actuales(sesion, cotizacion.id)
+    vistas_precios = {}
+    for producto in productos:
+        seleccion = selecciones.get(producto.partida.id)
+        referencia_id = seleccion.referencia_estable_id if seleccion else None
+        vistas_precios[producto.partida.id] = preparar_vista_precios(
+            producto.observaciones,
+            referencia_id=referencia_id,
+            codigo_postal=cotizacion.codigo_postal_consulta,
+        )
+
     referencias_hoy = referencias_estables_cotizadas_hoy(
         sesion,
         claves={producto.clave_producto for producto in productos},
@@ -73,6 +84,7 @@ def _render(
             "productos": productos,
             "consultas_por_partida": consultas_por_partida,
             "selecciones": selecciones,
+            "vistas_precios": vistas_precios,
             "referencias_cotizadas_hoy": referencias_hoy,
             "con_referencia": con_referencia,
             "todas_con_referencia": bool(productos)
