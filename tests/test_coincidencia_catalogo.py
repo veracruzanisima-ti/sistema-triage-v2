@@ -45,6 +45,24 @@ def test_catalogo_rechaza_dispositivo_distinto():
     assert "forma o dispositivo distinto" in resultado.motivos
 
 
+def test_catalogo_reconoce_ampula_como_vial():
+    solicitud_lantus = SolicitudProveedor(
+        partida_documento_id="lantus-1",
+        producto="Insulina glargina",
+        marca="LANTUS",
+        concentracion="100 UI/mL",
+        forma_dispositivo="Solución inyectable - vial",
+        presentacion="Frasco vial de 10 mL",
+    )
+    resultado = evaluar_candidato(
+        solicitud_lantus,
+        candidato("Lantus 100UI/ml Solución Inyectable Ámpula, 10 ml"),
+    )
+
+    assert resultado.coincide is True
+    assert resultado.motivos == ()
+
+
 def test_catalogo_prefiere_marca_explicita_para_busqueda():
     assert termino_busqueda(solicitud()) == "MARCA ALFA"
 
