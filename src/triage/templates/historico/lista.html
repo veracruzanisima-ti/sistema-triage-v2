@@ -9,8 +9,8 @@
     <p class="ayuda">{{ cotizacion.referencia or "Cotización sin referencia" }}</p>
   </div>
   <div class="grupo-botones">
-    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
-    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a la cotización</a>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Confirmar productos</a>
+    <a class="boton boton-secundario" href="{{ url_volver }}">{{ texto_volver }}</a>
   </div>
 </div>
 
@@ -96,6 +96,7 @@
         <summary>Agregar observación de precio</summary>
         <form method="post" action="/cotizaciones/{{ cotizacion.id }}/historico/{{ producto.partida.id }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="volver" value="{{ volver }}">
           <div class="rejilla">
             <div class="campo">
               <label for="proveedor_{{ loop.index }}">Proveedor / establecimiento</label>
@@ -148,9 +149,9 @@
   {% endfor %}
 {% else %}
   <section class="tarjeta vacio">
-    <h2>Aún no hay productos preparados</h2>
-    <p>Primero confirma la preparación de al menos una partida. El histórico nunca trabaja directamente sobre una lectura sin revisar.</p>
-    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
+    <h2>Aún no hay productos confirmados</h2>
+    <p>Primero confirma al menos una partida. El histórico nunca trabaja directamente sobre una lectura sin revisar.</p>
+    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Confirmar productos</a>
   </section>
 {% endif %}
 {% endblock %}
