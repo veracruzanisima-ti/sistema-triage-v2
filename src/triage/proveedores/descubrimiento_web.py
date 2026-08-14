@@ -109,6 +109,21 @@ def _convertir_candidato(candidato: CandidatoWebRespuesta) -> CandidatoWeb | Non
         return None
 
 
+def _registrar_uso(modelo: str, respuesta) -> None:
+    """Registra métricas de consumo sin registrar la consulta ni sus resultados."""
+
+    uso = getattr(respuesta, "usage", None)
+    if uso is None:
+        return
+    logger.info(
+        "OpenAI web model=%s input_tokens=%s output_tokens=%s total_tokens=%s",
+        modelo,
+        getattr(uso, "input_tokens", None),
+        getattr(uso, "output_tokens", None),
+        getattr(uso, "total_tokens", None),
+    )
+
+
 class DescubridorWebOpenAI:
     """Usa Responses API con web_search y devuelve candidatos estructurados."""
 
@@ -164,6 +179,7 @@ class DescubridorWebOpenAI:
                 "Intenta de nuevo o registra el precio manualmente."
             ) from error
 
+        _registrar_uso(self.modelo, respuesta)
         for salida in respuesta.output:
             if salida.type != "message":
                 continue
