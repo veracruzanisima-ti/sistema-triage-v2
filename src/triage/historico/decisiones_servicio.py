@@ -1,7 +1,7 @@
 """Registro y lectura de decisiones humanas sobre observaciones de precio."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -40,12 +40,18 @@ def _normalizacion_actual(
     )
 
 
-def _fecha_operativa(valor: datetime) -> object:
-    """Convierte timestamps de SQLite/PostgreSQL al día operativo de México."""
+def _momento_utc(valor: datetime) -> datetime:
+    """Normaliza timestamps para comparar SQLite y PostgreSQL de forma consistente."""
 
     if valor.tzinfo is None:
-        valor = valor.replace(tzinfo=UTC)
-    return valor.astimezone(_ZONA_OPERATIVA).date()
+        return valor.replace(tzinfo=UTC)
+    return valor.astimezone(UTC)
+
+
+def _fecha_operativa(valor: datetime) -> date:
+    """Convierte timestamps al día operativo de México."""
+
+    return _momento_utc(valor).astimezone(_ZONA_OPERATIVA).date()
 
 
 def registrar_decision_precio(
@@ -135,7 +141,9 @@ def referencias_estables_cotizadas_hoy(
             continue
 
         actual = resultado.get(decision.clave_producto)
-        if actual is None or observacion.observado_en > actual.observado_en:
+        if actual is None or _momento_utc(observacion.observado_en) > _momento_utc(
+            actual.observado_en
+        ):
             resultado[decision.clave_producto] = observacion
 
     return resultado
