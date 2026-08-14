@@ -19,6 +19,7 @@ from triage.historico.rutas import router as router_historico
 from triage.lectores.base import LectorDocumento
 from triage.lectores.gemini import LectorGemini
 from triage.lectores.openai import LectorOpenAI
+from triage.modelos_ia_rutas import router as router_modelos_ia
 from triage.normalizacion.rutas import router as router_normalizacion
 from triage.proveedores.base import ProveedorProducto
 from triage.proveedores.descubrimiento_web import (
@@ -157,6 +158,7 @@ def crear_app(
         directory=str(BASE_DIR / "templates")
     )
     aplicacion.include_router(router_usuarios)
+    aplicacion.include_router(router_modelos_ia)
     aplicacion.include_router(router_cotizaciones)
     aplicacion.include_router(router_documentos)
     aplicacion.include_router(router_normalizacion)
