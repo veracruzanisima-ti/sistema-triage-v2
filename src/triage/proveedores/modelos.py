@@ -149,9 +149,9 @@ class CandidatoWebDescartado(Base):
         nullable=False,
         index=True,
     )
-    proveedor: Mapped[str | None] = mapped_column(String(240), nullable=True)
-    producto_observado: Mapped[str | None] = mapped_column(String(700), nullable=True)
-    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    proveedor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    producto_observado: Mapped[str | None] = mapped_column(Text, nullable=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
     precio_observado: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     motivos: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     intento_busqueda: Mapped[int] = mapped_column(Integer, nullable=False)

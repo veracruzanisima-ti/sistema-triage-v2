@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 from triage.cotizaciones.modelos import Cotizacion, ahora_utc
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
 from triage.historico.decisiones_servicio import referencias_estables_cotizadas_hoy
-from triage.historico.modelos import OrigenObservacionPrecio
+from triage.historico.modelos import (
+    LIMITE_FUENTE_OBSERVACION,
+    LIMITE_PRODUCTO_OBSERVADO,
+    LIMITE_PROVEEDOR_OBSERVACION,
+    OrigenObservacionPrecio,
+)
 from triage.historico.servicio import clave_producto, crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.base import ProveedorProducto, ResultadoProveedor, SolicitudProveedor
@@ -469,11 +474,18 @@ def _motivos_descarte_web(
 ) -> tuple[str | None, str | None, tuple[str, ...]]:
     proveedor = _limpiar(candidato.proveedor)
     producto_observado = _limpiar(candidato.producto_exacto)
+    url = str(candidato.url)
     motivos: list[str] = []
     if proveedor is None:
         motivos.append("proveedor o fuente no identificada")
+    elif len(proveedor) > LIMITE_PROVEEDOR_OBSERVACION:
+        motivos.append("proveedor excede el límite del histórico cotizable")
     if producto_observado is None:
         motivos.append("faltan datos suficientes para comprobar coincidencia")
+    elif len(producto_observado) > LIMITE_PRODUCTO_OBSERVADO:
+        motivos.append("producto observado excede el límite del histórico cotizable")
+    if len(url) > LIMITE_FUENTE_OBSERVACION:
+        motivos.append("URL excede el límite del histórico cotizable")
     if candidato.precio_total is None:
         motivos.append("precio no visible")
 

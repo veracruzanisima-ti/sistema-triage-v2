@@ -172,7 +172,7 @@
         </div>
       {% endif %}
 
-      {% if trazabilidad_web %}
+      {% if trazabilidad_web and (trazabilidad_web.descartados or trazabilidad_web.consulta.mensaje_error or trazabilidad_web.consulta.intentos > 1) %}
         <details>
           <summary>Ver resultados descartados ({{ trazabilidad_web.descartados|length }})</summary>
           <p class="ayuda">

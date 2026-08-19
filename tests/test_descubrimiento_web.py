@@ -4,7 +4,7 @@ import re
 from decimal import Decimal
 from types import SimpleNamespace
 
-from sqlalchemy import select
+from sqlalchemy import Text, select
 
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
@@ -149,6 +149,105 @@ def test_descubrimiento_web_guarda_solo_coincidencias_exactas(cliente):
         assert len(descartados) == 2
         assert all(resultado.motivos for resultado in descartados)
         assert all(resultado.precio_observado is not None for resultado in descartados)
+
+
+class DescubridorConDescarteLargo:
+    modelo = "web-texto-largo"
+    proveedor_largo = "P" * 300
+    producto_largo = "X" * 800
+    url_larga = "https://ejemplo.invalid/" + ("ruta" * 300)
+
+    def buscar(self, _solicitud: SolicitudProveedor, *, terminos_adicionales=()):
+        assert terminos_adicionales == ()
+        return (
+            CandidatoWeb(
+                proveedor="Farmacia Exacta",
+                producto_exacto="Lantus 100 U/mL vial 10 mL",
+                url="https://ejemplo.invalid/lantus-valido",
+                precio_total=Decimal("1234.50"),
+                coincidencia_exacta=True,
+            ),
+            CandidatoWeb(
+                proveedor=self.proveedor_largo,
+                producto_exacto=self.producto_largo,
+                url=self.url_larga,
+                precio_total=Decimal("999.00"),
+                coincidencia_exacta=False,
+            ),
+        )
+
+
+def test_descarte_largo_no_impide_guardar_candidato_valido(cliente):
+    cotizacion_id, partida_id, usuario_id = _preparar_producto(cliente)
+    descubridor = DescubridorConDescarteLargo()
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        resumen = ejecutar_descubrimiento_web(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_id,
+            usuario_id=usuario_id,
+            descubridor=descubridor,
+        )
+
+        assert resumen.guardados == 1
+        assert resumen.descartados == 1
+        observaciones = list(sesion.scalars(select(ObservacionPrecio)))
+        assert len(observaciones) == 1
+        assert observaciones[0].proveedor == "Farmacia Exacta"
+
+        descartado = sesion.scalar(select(CandidatoWebDescartado))
+        assert descartado is not None
+        assert descartado.proveedor == descubridor.proveedor_largo
+        assert descartado.producto_observado == descubridor.producto_largo
+        assert descartado.url == descubridor.url_larga
+        assert "proveedor excede el límite del histórico cotizable" in descartado.motivos
+        assert "producto observado excede el límite del histórico cotizable" in (
+            descartado.motivos
+        )
+        assert "URL excede el límite del histórico cotizable" in descartado.motivos
+
+    for columna in (
+        CandidatoWebDescartado.__table__.c.proveedor,
+        CandidatoWebDescartado.__table__.c.producto_observado,
+        CandidatoWebDescartado.__table__.c.url,
+    ):
+        assert isinstance(columna.type, Text)
+
+
+class DescubridorSoloExacto:
+    modelo = "web-solo-exacto"
+
+    def buscar(self, _solicitud: SolicitudProveedor, *, terminos_adicionales=()):
+        assert terminos_adicionales == ()
+        return (
+            CandidatoWeb(
+                proveedor="Farmacia Exacta",
+                producto_exacto="Lantus 100 U/mL vial 10 mL",
+                url="https://ejemplo.invalid/lantus-unico",
+                precio_total=Decimal("1200.00"),
+                coincidencia_exacta=True,
+            ),
+        )
+
+
+def test_busqueda_totalmente_exitosa_no_muestra_detalle_vacio(cliente):
+    cotizacion_id, partida_id, usuario_id = _preparar_producto(cliente)
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        resumen = ejecutar_descubrimiento_web(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_id,
+            usuario_id=usuario_id,
+            descubridor=DescubridorSoloExacto(),
+        )
+        assert resumen.guardados == 1
+        assert resumen.descartados == 0
+        assert resumen.intentos == 1
+
+    pagina = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    assert pagina.status_code == 200
+    assert "Ver resultados descartados" not in pagina.text
 
 
 def test_descubrimiento_web_aparece_como_accion_secundaria(cliente):
