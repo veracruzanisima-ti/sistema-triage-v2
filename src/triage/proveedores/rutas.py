@@ -16,6 +16,7 @@ from triage.proveedores.descubrimiento_web import ErrorDescubrimientoWeb
 from triage.proveedores.nadro_adaptador import adaptadores_nadro_disponibles
 from triage.proveedores.servicio import (
     ErrorConsultaProveedor,
+    confirmar_presentacion_alternativa_web,
     ejecutar_consulta,
     ejecutar_consultas_configuradas,
     ejecutar_consultas_partida,
@@ -161,6 +162,10 @@ def ver_proveedores(
                 if web_descartados
                 else "."
             )
+        ),
+        "presentacion_actualizada": (
+            "Presentación de búsqueda actualizada. La solicitud original no cambió. "
+            "Busca precios nuevamente para comprobar la coincidencia."
         ),
     }
     return _render(
@@ -367,5 +372,51 @@ def consultar_proveedor(
     resultado = "exitosa" if intento.observacion_precio_id else "no_encontrado"
     return RedirectResponse(
         url=f"/cotizaciones/{cotizacion_id}/proveedores?resultado={resultado}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post(
+    "/{cotizacion_id}/proveedores/{partida_documento_id}"
+    "/presentacion-alternativa/{candidato_descartado_id}"
+)
+def usar_presentacion_alternativa_web(
+    cotizacion_id: str,
+    partida_documento_id: str,
+    candidato_descartado_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+):
+    """Confirma una presentación web sin tocar la evidencia documental."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+    if cotizacion is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    try:
+        confirmar_presentacion_alternativa_web(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_documento_id,
+            candidato_descartado_id=candidato_descartado_id,
+            usuario_id=usuario.id,
+        )
+    except ValueError as error:
+        return _render(
+            request,
+            sesion,
+            usuario,
+            cotizacion,
+            error=str(error),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    return RedirectResponse(
+        url=(
+            f"/cotizaciones/{cotizacion_id}/proveedores"
+            "?resultado=presentacion_actualizada"
+        ),
         status_code=status.HTTP_303_SEE_OTHER,
     )

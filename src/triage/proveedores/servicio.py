@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ from triage.proveedores.base import ProveedorProducto, ResultadoProveedor, Solic
 from triage.proveedores.coincidencia_catalogo import (
     CandidatoCatalogo,
     evaluar_candidato,
+    extraer_presentacion_comercial,
     terminos_busqueda_ampliada,
 )
 from triage.proveedores.descubrimiento_web import (
@@ -75,11 +77,23 @@ class ResumenDescubrimientoWeb:
 
 
 @dataclass(frozen=True)
+class PresentacionAlternativaWeb:
+    """Presentación convergente que todavía requiere confirmación humana."""
+
+    valor: str
+    descripcion_corta: str
+    fuentes: tuple[str, ...]
+    candidatos_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class TrazabilidadWebPartida:
     """Última consulta web y sus descartes, sin mezclarlos con precios históricos."""
 
     consulta: ConsultaWeb
     descartados: tuple[CandidatoWebDescartado, ...]
+    presentacion_alternativa: PresentacionAlternativaWeb | None = None
+    presentacion_alternativa_ambigua: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,6 +110,57 @@ def _limpiar(valor: str | None) -> str | None:
         return None
     limpio = " ".join(valor.split())
     return limpio or None
+
+
+_MOTIVOS_ADMITIDOS_PRESENTACION = {
+    "presentación distinta",
+    "precio no visible",
+}
+
+
+def _fuente_independiente(candidato: CandidatoWebDescartado) -> tuple[str, str]:
+    proveedor = _limpiar(candidato.proveedor)
+    if proveedor:
+        return f"proveedor:{proveedor.casefold()}", proveedor
+    dominio = (urlsplit(candidato.url).hostname or candidato.url).casefold()
+    return f"url:{dominio}", dominio
+
+
+def _presentacion_alternativa_web(
+    descartados: Sequence[CandidatoWebDescartado],
+) -> tuple[PresentacionAlternativaWeb | None, bool]:
+    candidatos = [
+        candidato
+        for candidato in descartados
+        if "presentación distinta" in candidato.motivos
+        and set(candidato.motivos).issubset(_MOTIVOS_ADMITIDOS_PRESENTACION)
+    ]
+    if not candidatos:
+        return None, False
+
+    por_presentacion: dict[str, list[CandidatoWebDescartado]] = {}
+    for candidato in candidatos:
+        presentacion = extraer_presentacion_comercial(candidato.producto_observado)
+        if presentacion is None:
+            return None, True
+        por_presentacion.setdefault(presentacion, []).append(candidato)
+    if len(por_presentacion) != 1:
+        return None, True
+
+    presentacion, coincidencias = next(iter(por_presentacion.items()))
+    fuentes: dict[str, str] = {}
+    for candidato in coincidencias:
+        clave, etiqueta = _fuente_independiente(candidato)
+        fuentes.setdefault(clave, etiqueta)
+    return (
+        PresentacionAlternativaWeb(
+            valor=presentacion,
+            descripcion_corta=presentacion.removeprefix("Caja con "),
+            fuentes=tuple(fuentes.values()),
+            candidatos_ids=tuple(candidato.id for candidato in coincidencias),
+        ),
+        False,
+    )
 
 
 def _normalizacion_elegible(
@@ -205,13 +270,81 @@ def listar_trazabilidad_web(
     for candidato in descartados:
         descartados_por_consulta[candidato.consulta_web_id].append(candidato)
 
-    return {
-        partida_id: TrazabilidadWebPartida(
-            consulta=consulta,
-            descartados=tuple(descartados_por_consulta[consulta.id]),
+    normalizaciones = {
+        normalizacion.partida_documento_id: normalizacion
+        for normalizacion in sesion.scalars(
+            select(NormalizacionPartida).where(
+                NormalizacionPartida.partida_documento_id.in_(tuple(ultimas))
+            )
         )
-        for partida_id, consulta in ultimas.items()
     }
+
+    resultado: dict[str, TrazabilidadWebPartida] = {}
+    for partida_id, consulta in ultimas.items():
+        descartados_consulta = tuple(descartados_por_consulta[consulta.id])
+        normalizacion = normalizaciones.get(partida_id)
+        presentacion_buscada = consulta.criterios_busqueda.get("presentacion")
+        criterio_valido = presentacion_buscada is None or isinstance(
+            presentacion_buscada, str
+        )
+        busqueda_vigente = (
+            normalizacion is not None
+            and criterio_valido
+            and _limpiar(normalizacion.presentacion) == _limpiar(presentacion_buscada)
+        )
+        alternativa, ambigua = (
+            _presentacion_alternativa_web(descartados_consulta)
+            if busqueda_vigente
+            else (None, False)
+        )
+        if alternativa and _limpiar(alternativa.valor) == _limpiar(
+            normalizacion.presentacion if normalizacion else None
+        ):
+            alternativa, ambigua = None, True
+        resultado[partida_id] = TrazabilidadWebPartida(
+            consulta=consulta,
+            descartados=descartados_consulta,
+            presentacion_alternativa=alternativa,
+            presentacion_alternativa_ambigua=ambigua,
+        )
+    return resultado
+
+
+def confirmar_presentacion_alternativa_web(
+    sesion: Session,
+    *,
+    cotizacion_id: str,
+    partida_documento_id: str,
+    candidato_descartado_id: str,
+    usuario_id: str,
+) -> str:
+    """Actualiza sólo la copia operativa tras revalidar la sugerencia persistida."""
+
+    fila = _normalizacion_elegible(
+        sesion,
+        cotizacion_id=cotizacion_id,
+        partida_documento_id=partida_documento_id,
+    )
+    if fila is None:
+        raise ValueError("el producto ya no está preparado o dejó de ser elegible")
+    normalizacion, _, _ = fila
+    trazabilidad = listar_trazabilidad_web(sesion, cotizacion_id).get(
+        partida_documento_id
+    )
+    alternativa = trazabilidad.presentacion_alternativa if trazabilidad else None
+    if alternativa is None or candidato_descartado_id not in alternativa.candidatos_ids:
+        raise ValueError(
+            "La presentación alternativa ya no es inequívoca. Edita la preparación manualmente."
+        )
+    if _limpiar(normalizacion.presentacion) == _limpiar(alternativa.valor):
+        raise ValueError("La presentación de búsqueda ya usa esa alternativa.")
+
+    normalizacion.presentacion = alternativa.valor
+    normalizacion.confirmada_por_usuario_id = usuario_id
+    normalizacion.actualizada_en = ahora_utc()
+    sesion.add(normalizacion)
+    sesion.commit()
+    return alternativa.valor
 
 
 def _validar_resultado(resultado: ResultadoProveedor) -> None:
