@@ -21,6 +21,7 @@ from triage.proveedores.servicio import (
     ejecutar_consultas_partida,
     ejecutar_descubrimiento_web,
     listar_productos_consultables,
+    listar_trazabilidad_web,
 )
 from triage.proveedores.vista_precios import preparar_vista_precios
 from triage.usuarios.seguridad import (
@@ -65,6 +66,7 @@ def _render(
     consultas_por_partida = {
         producto.partida.id: producto.consultas for producto in consultables
     }
+    trazabilidad_web_por_partida = listar_trazabilidad_web(sesion, cotizacion.id)
     selecciones = listar_selecciones_actuales(sesion, cotizacion.id)
     vistas_precios = {}
     for producto in productos:
@@ -93,6 +95,7 @@ def _render(
             "cotizacion": cotizacion,
             "productos": productos,
             "consultas_por_partida": consultas_por_partida,
+            "trazabilidad_web_por_partida": trazabilidad_web_por_partida,
             "selecciones": selecciones,
             "vistas_precios": vistas_precios,
             "referencias_cotizadas_hoy": referencias_hoy,
@@ -121,6 +124,7 @@ def ver_proveedores(
     duplicadas: int = 0,
     web_guardados: int = 0,
     web_descartados: int = 0,
+    web_intentos: int = 0,
 ):
     """Muestra productos preparados, precios observados e intentos recientes."""
 
@@ -146,7 +150,12 @@ def ver_proveedores(
             + (f" y {errores} fuente(s) con error." if errores else ".")
         ),
         "web": (
-            f"Búsqueda web completada: {web_guardados} opción(es) exacta(s) guardada(s)"
+            (
+                f"Búsqueda web completada: {web_guardados} opción(es) exacta(s) guardada(s)"
+                if web_guardados
+                else "Búsqueda web completada sin coincidencias exactas"
+            )
+            + (f" después de {web_intentos} búsqueda(s)" if web_intentos else "")
             + (
                 f" y {web_descartados} resultado(s) descartado(s)."
                 if web_descartados
@@ -308,6 +317,7 @@ def buscar_mas_opciones_web(
         url=(
             f"/cotizaciones/{cotizacion_id}/proveedores?resultado=web"
             f"&web_guardados={resumen.guardados}&web_descartados={resumen.descartados}"
+            f"&web_intentos={resumen.intentos}"
         ),
         status_code=status.HTTP_303_SEE_OTHER,
     )

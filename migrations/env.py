@@ -12,7 +12,11 @@ from triage.documentos.modelos import Documento, PartidaDocumento
 from triage.historico.decisiones_modelos import DecisionPrecio
 from triage.historico.modelos import ObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
-from triage.proveedores.modelos import ConsultaProveedor
+from triage.proveedores.modelos import (
+    CandidatoWebDescartado,
+    ConsultaProveedor,
+    ConsultaWeb,
+)
 from triage.proveedores.nadro_modelos import ArticuloNadro, ImportacionNadro, OfertaNadro
 from triage.usuarios.modelos import Usuario
 
@@ -30,6 +34,8 @@ _MODELOS_REGISTRADOS = (
     NormalizacionPartida,
     ObservacionPrecio,
     ConsultaProveedor,
+    ConsultaWeb,
+    CandidatoWebDescartado,
     DecisionPrecio,
     ImportacionNadro,
     ArticuloNadro,

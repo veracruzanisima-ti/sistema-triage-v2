@@ -14,9 +14,11 @@ from triage.proveedores.base import SolicitudProveedor
 from triage.proveedores.descubrimiento_web import (
     CandidatoWeb,
     CandidatoWebRespuesta,
+    DescubridorWebGemini,
     DescubridorWebOpenAI,
     ResultadoDescubrimientoWebRespuesta,
 )
+from triage.proveedores.modelos import CandidatoWebDescartado, ConsultaWeb
 from triage.proveedores.servicio import ejecutar_descubrimiento_web
 from triage.usuarios.modelos import Usuario
 
@@ -28,7 +30,15 @@ def _csrf(html: str) -> str:
     return coincidencia.group(1)
 
 
-def _preparar_producto(cliente) -> tuple[str, str, str]:
+def _preparar_producto(
+    cliente,
+    *,
+    producto: str = "LANTUS",
+    marca: str | None = "Lantus",
+    concentracion: str = "100 U/mL",
+    forma_dispositivo: str = "vial",
+    presentacion: str = "10 mL",
+) -> tuple[str, str, str]:
     with cliente.app.state.fabrica_sesiones() as sesion:
         usuario = sesion.scalar(select(Usuario))
         assert usuario is not None
@@ -51,7 +61,7 @@ def _preparar_producto(cliente) -> tuple[str, str, str]:
         partida = PartidaDocumento(
             documento_id=documento.id,
             orden=1,
-            producto_solicitado="LANTUS",
+            producto_solicitado=producto,
             incluida_cotizacion=True,
         )
         sesion.add(partida)
@@ -59,11 +69,11 @@ def _preparar_producto(cliente) -> tuple[str, str, str]:
         sesion.add(
             NormalizacionPartida(
                 partida_documento_id=partida.id,
-                producto="LANTUS",
-                marca="Lantus",
-                concentracion="100 U/mL",
-                forma_dispositivo="vial",
-                presentacion="10 mL",
+                producto=producto,
+                marca=marca,
+                concentracion=concentracion,
+                forma_dispositivo=forma_dispositivo,
+                presentacion=presentacion,
                 confirmada_por_usuario_id=usuario.id,
             )
         )
@@ -72,9 +82,12 @@ def _preparar_producto(cliente) -> tuple[str, str, str]:
 
 
 class DescubridorFalso:
-    def buscar(self, solicitud: SolicitudProveedor):
+    modelo = "web-falso"
+
+    def buscar(self, solicitud: SolicitudProveedor, *, terminos_adicionales=()):
         assert solicitud.producto == "LANTUS"
         assert solicitud.codigo_postal == "91000"
+        assert terminos_adicionales == ()
         return (
             CandidatoWeb(
                 proveedor="Farmacia Exacta",
@@ -114,6 +127,7 @@ def test_descubrimiento_web_guarda_solo_coincidencias_exactas(cliente):
         assert resumen.candidatos == 3
         assert resumen.guardados == 1
         assert resumen.descartados == 2
+        assert resumen.intentos == 1
 
         observaciones = list(sesion.scalars(select(ObservacionPrecio)))
         assert len(observaciones) == 1
@@ -126,6 +140,15 @@ def test_descubrimiento_web_guarda_solo_coincidencias_exactas(cliente):
         assert observacion.precio_antes_iva is None
         assert str(observacion.precio_total) == "1234.50"
         assert observacion.fuente.startswith("https://ejemplo.invalid/lantus")
+
+        consulta = sesion.scalar(select(ConsultaWeb))
+        assert consulta is not None
+        assert consulta.modelo == "web-falso"
+        assert consulta.intentos == 1
+        descartados = list(sesion.scalars(select(CandidatoWebDescartado)))
+        assert len(descartados) == 2
+        assert all(resultado.motivos for resultado in descartados)
+        assert all(resultado.precio_observado is not None for resultado in descartados)
 
 
 def test_descubrimiento_web_aparece_como_accion_secundaria(cliente):
@@ -149,6 +172,151 @@ def test_descubrimiento_web_aparece_como_accion_secundaria(cliente):
     assert "Farmacia Exacta" in resultado.text
     assert "La fuente mostró:" in resultado.text
     assert "Ver fuente" in resultado.text
+    assert "Ver resultados descartados (2)" in resultado.text
+    assert "No pasó porque:" in resultado.text
+    assert "forma o dispositivo distinto" in resultado.text
+
+
+class DescubridorAmantadinaFalso:
+    modelo = "gemini-prueba"
+
+    def __init__(self) -> None:
+        self.llamadas: list[tuple[str, ...]] = []
+
+    def buscar(self, solicitud: SolicitudProveedor, *, terminos_adicionales=()):
+        self.llamadas.append(tuple(terminos_adicionales))
+        assert solicitud.producto == "Amantadina"
+        if not terminos_adicionales:
+            return (
+                CandidatoWeb(
+                    proveedor="Farmacia Caja 20",
+                    producto_exacto="Amantadina 100 mg tabletas caja con 20 tabletas",
+                    url="https://ejemplo.invalid/amantadina-20",
+                    precio_total=Decimal("110.00"),
+                    coincidencia_exacta=True,
+                ),
+                CandidatoWeb(
+                    proveedor="Farmacia 50 mg",
+                    producto_exacto="Amantadina 50 mg tabletas caja con 30 tabletas",
+                    url="https://ejemplo.invalid/amantadina-50",
+                    precio_total=Decimal("90.00"),
+                    coincidencia_exacta=True,
+                ),
+            )
+        assert "tableta | tabletas | tab" in terminos_adicionales
+        assert "100 mg | 0.1 g" in terminos_adicionales
+        return (
+            CandidatoWeb(
+                proveedor="Farmacia Exacta Amantadina",
+                producto_exacto="Amantadina 0.1 g tab caja con 30 tab",
+                url="https://ejemplo.invalid/amantadina-30",
+                precio_total=Decimal("120.00"),
+                coincidencia_exacta=True,
+            ),
+        )
+
+
+def test_amantadina_hace_un_solo_intento_ampliado_y_conserva_descartes(cliente):
+    cotizacion_id, partida_id, usuario_id = _preparar_producto(
+        cliente,
+        producto="Amantadina",
+        marca=None,
+        concentracion="100 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 30 tabletas de 100 mg",
+    )
+    descubridor = DescubridorAmantadinaFalso()
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        resumen = ejecutar_descubrimiento_web(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_id,
+            usuario_id=usuario_id,
+            descubridor=descubridor,
+        )
+
+        assert resumen.intentos == 2
+        assert resumen.candidatos == 3
+        assert resumen.guardados == 1
+        assert resumen.descartados == 2
+        assert len(descubridor.llamadas) == 2
+        observaciones = list(sesion.scalars(select(ObservacionPrecio)))
+        assert len(observaciones) == 1
+        assert observaciones[0].producto_observado == "Amantadina 0.1 g tab caja con 30 tab"
+
+        descartados = list(
+            sesion.scalars(
+                select(CandidatoWebDescartado).order_by(
+                    CandidatoWebDescartado.precio_observado.desc()
+                )
+            )
+        )
+        assert len(descartados) == 2
+        assert "presentación distinta" in descartados[0].motivos
+        assert "concentración distinta" in descartados[1].motivos
+        assert all(resultado.intento_busqueda == 1 for resultado in descartados)
+
+
+class DescubridorSiempreDescartado:
+    modelo = "web-sin-exactos"
+
+    def __init__(self) -> None:
+        self.llamadas = 0
+
+    def buscar(self, _solicitud: SolicitudProveedor, *, terminos_adicionales=()):
+        self.llamadas += 1
+        sufijo = "ampliada" if terminos_adicionales else "original"
+        return (
+            CandidatoWeb(
+                proveedor=f"Farmacia {sufijo}",
+                producto_exacto="Amantadina 100 mg tabletas caja con 20 tabletas",
+                url=f"https://ejemplo.invalid/{sufijo}",
+                precio_total=Decimal("80.00"),
+                coincidencia_exacta=True,
+            ),
+        )
+
+
+def test_descartados_no_crean_historico_y_la_busqueda_se_detiene_en_dos(cliente):
+    cotizacion_id, partida_id, usuario_id = _preparar_producto(
+        cliente,
+        producto="Amantadina",
+        marca=None,
+        concentracion="100 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 30 tabletas de 100 mg",
+    )
+    descubridor = DescubridorSiempreDescartado()
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        resumen = ejecutar_descubrimiento_web(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_id,
+            usuario_id=usuario_id,
+            descubridor=descubridor,
+        )
+
+        assert descubridor.llamadas == 2
+        assert resumen.intentos == 2
+        assert resumen.guardados == 0
+        assert resumen.descartados == 2
+        assert list(sesion.scalars(select(ObservacionPrecio))) == []
+        consulta = sesion.scalar(select(ConsultaWeb))
+        assert consulta is not None
+        assert consulta.criterios_busqueda["presentacion"] == (
+            "Caja con 30 tabletas de 100 mg"
+        )
+        assert consulta.terminos_ampliados
+
+    pagina = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    assert pagina.status_code == 200
+    assert "Ver resultados descartados (2)" in pagina.text
+    assert "Se buscó:" in pagina.text
+    assert "Se realizaron 2 búsqueda(s)." in pagina.text
+    assert "tableta | tabletas | tab" in pagina.text
+    assert "Estos resultados son sólo trazabilidad" in pagina.text
 
 
 class RespuestasFalsas:
@@ -206,6 +374,58 @@ def test_openai_web_search_no_almacena_y_solo_recibe_contexto_operativo():
     assert "LANTUS" in argumentos["input"]
     assert "91000" in argumentos["input"]
     assert "paciente" not in argumentos["input"].casefold()
+
+
+class ModelosGeminiFalsos:
+    def __init__(self) -> None:
+        self.argumentos = None
+
+    def generate_content(self, **argumentos):
+        self.argumentos = argumentos
+        return SimpleNamespace(
+            parsed=ResultadoDescubrimientoWebRespuesta(
+                candidatos=[
+                    CandidatoWebRespuesta(
+                        proveedor="Farmacia Gemini",
+                        producto_exacto="Amantadina 0.1 g tab caja con 30 tab",
+                        url="https://ejemplo.invalid/gemini",
+                        precio_total=101.0,
+                        coincidencia_exacta=True,
+                    )
+                ]
+            ),
+            usage_metadata=None,
+        )
+
+
+def test_gemini_recibe_los_mismos_terminos_de_busqueda_ampliada():
+    descubridor = DescubridorWebGemini(
+        api_key="gemini-prueba-no-real",
+        modelo="gemini-prueba",
+    )
+    modelos = ModelosGeminiFalsos()
+    descubridor._cliente = SimpleNamespace(models=modelos)
+
+    candidatos = descubridor.buscar(
+        SolicitudProveedor(
+            partida_documento_id="amantadina-1",
+            producto="Amantadina",
+            marca=None,
+            concentracion="100 mg",
+            forma_dispositivo="tabletas",
+            presentacion="Caja con 30 tabletas de 100 mg",
+            codigo_postal="91000",
+        ),
+        terminos_adicionales=("tableta | tabletas | tab", "100 mg | 0.1 g"),
+    )
+
+    assert len(candidatos) == 1
+    assert modelos.argumentos is not None
+    assert "segunda y última búsqueda" in modelos.argumentos["contents"]
+    assert "tableta | tabletas | tab" in modelos.argumentos["contents"]
+    assert modelos.argumentos["config"].response_schema is (
+        ResultadoDescubrimientoWebRespuesta
+    )
 
 
 def _claves_json(valor) -> set[str]:

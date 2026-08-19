@@ -86,6 +86,7 @@
     {% set seleccion = selecciones.get(producto.partida.id) %}
     {% set vista = vistas_precios.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
+    {% set trazabilidad_web = trazabilidad_web_por_partida.get(producto.partida.id) %}
     {% set cotizada_hoy = referencias_cotizadas_hoy.get(producto.clave_producto) %}
     {% set estado_busqueda_id = "estado-busqueda-" ~ producto.partida.id %}
     <section class="tarjeta">
@@ -169,6 +170,47 @@
           <strong>Aún no hay precios observados.</strong>
           <p class="ayuda">Usa la búsqueda general, amplía este producto en web o registra manualmente un precio para continuar.</p>
         </div>
+      {% endif %}
+
+      {% if trazabilidad_web %}
+        <details>
+          <summary>Ver resultados descartados ({{ trazabilidad_web.descartados|length }})</summary>
+          <p class="ayuda">
+            Se buscó:
+            {{ trazabilidad_web.consulta.criterios_busqueda.get("producto") or "producto sin nombre" }} ·
+            {{ trazabilidad_web.consulta.criterios_busqueda.get("concentracion") or "sin concentración" }} ·
+            {{ trazabilidad_web.consulta.criterios_busqueda.get("forma_dispositivo") or "sin forma/dispositivo" }} ·
+            {{ trazabilidad_web.consulta.criterios_busqueda.get("presentacion") or "sin presentación" }}.
+            Se realizaron {{ trazabilidad_web.consulta.intentos }} búsqueda(s).
+          </p>
+          {% if trazabilidad_web.consulta.terminos_ampliados and trazabilidad_web.consulta.intentos > 1 %}
+            <p class="ayuda"><strong>Segunda búsqueda:</strong> {{ trazabilidad_web.consulta.terminos_ampliados|join("; ") }}.</p>
+          {% endif %}
+          {% if trazabilidad_web.consulta.mensaje_error %}
+            <p class="error">{{ trazabilidad_web.consulta.mensaje_error }}</p>
+          {% endif %}
+          {% if trazabilidad_web.descartados %}
+            <p class="ayuda">Estos resultados son sólo trazabilidad: no son precios utilizables ni referencias para cotizar.</p>
+            {% for descartado in trazabilidad_web.descartados %}
+              <div class="partida">
+                <div class="barra">
+                  <div>
+                    <strong>{{ descartado.proveedor or "Fuente no identificada" }}</strong>
+                    <p>{{ descartado.producto_observado or "Producto no identificado" }}</p>
+                    <p class="ayuda">Búsqueda {{ descartado.intento_busqueda }}</p>
+                  </div>
+                  {% if descartado.precio_observado is not none %}
+                    <strong>Precio observado: ${{ '%.2f'|format(descartado.precio_observado) }}</strong>
+                  {% endif %}
+                </div>
+                <p><a href="{{ descartado.url }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
+                <p><strong>No pasó porque:</strong> {{ descartado.motivos|join("; ") }}.</p>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="ayuda">La fuente no devolvió candidatos que Triage pudiera revisar.</p>
+          {% endif %}
+        </details>
       {% endif %}
 
       <details>
