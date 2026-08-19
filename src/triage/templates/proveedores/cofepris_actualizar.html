@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block titulo %}Actualizar COFEPRIS · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Actualizar COFEPRIS</h1>
+    <p class="ayuda">Carga la exportación pública de registros sanitarios. Triage la usa sólo para comprobar identidad; no decide sustituciones clínicas, comerciales ni fiscales.</p>
+  </div>
+  {% if cotizacion_id %}
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion_id }}/proveedores">Volver a buscar precios</a>
+  {% else %}
+    <a class="boton boton-secundario" href="/cotizaciones">Volver</a>
+  {% endif %}
+</div>
+
+{% if mensaje %}<p class="exito">{{ mensaje }}</p>{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="tarjeta">
+  <h2>Catálogo actual</h2>
+  {% if ultima_importacion %}
+    <div class="partida">
+      <strong>{{ ultima_importacion.registros_vigentes }} registros vigentes · {{ total_registros }} registros totales</strong>
+      <p class="ayuda">Actualizado: {{ ultima_importacion.cargada_en }}</p>
+      <p class="ayuda">{{ ultima_importacion.archivo }}</p>
+    </div>
+  {% else %}
+    <div class="vacio">
+      <strong>Aún no hay catálogo COFEPRIS cargado.</strong>
+      <p class="ayuda">La búsqueda de precios seguirá funcionando con la validación actual.</p>
+    </div>
+  {% endif %}
+</section>
+
+<section class="tarjeta">
+  <h2>Cargar actualización</h2>
+  <p>Selecciona el archivo <strong>Visor_Registros_Medicamentos.xlsx</strong> obtenido de la fuente pública.</p>
+  <p class="ayuda">El snapshot anterior se conserva si la hoja, las columnas o cualquier registro no son válidos. El archivo original no se almacena.</p>
+  <form method="post" action="/proveedores/cofepris/actualizar" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="cotizacion_id" value="{{ cotizacion_id }}">
+    <div class="campo">
+      <label for="catalogo">Registros de medicamentos · XLSX</label>
+      <input id="catalogo" name="catalogo" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+    </div>
+    <button class="boton" type="submit">Actualizar COFEPRIS</button>
+  </form>
+</section>
+{% endblock %}

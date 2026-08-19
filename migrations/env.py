@@ -12,6 +12,7 @@ from triage.documentos.modelos import Documento, PartidaDocumento
 from triage.historico.decisiones_modelos import DecisionPrecio
 from triage.historico.modelos import ObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
+from triage.proveedores.cofepris_modelos import ImportacionCofepris, RegistroCofepris
 from triage.proveedores.modelos import (
     CandidatoWebDescartado,
     ConsultaProveedor,
@@ -40,6 +41,8 @@ _MODELOS_REGISTRADOS = (
     ImportacionNadro,
     ArticuloNadro,
     OfertaNadro,
+    ImportacionCofepris,
+    RegistroCofepris,
 )
 target_metadata = Base.metadata
 

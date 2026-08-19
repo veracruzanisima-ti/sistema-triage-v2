@@ -22,6 +22,7 @@ from triage.lectores.openai import LectorOpenAI
 from triage.modelos_ia_rutas import router as router_modelos_ia
 from triage.normalizacion.rutas import router as router_normalizacion
 from triage.proveedores.base import ProveedorProducto
+from triage.proveedores.cofepris_rutas import router as router_cofepris
 from triage.proveedores.descubrimiento_web import (
     DescubridorWeb,
     DescubridorWebGemini,
@@ -193,6 +194,7 @@ def crear_app(
     aplicacion.include_router(router_historico)
     aplicacion.include_router(router_decisiones_precio)
     aplicacion.include_router(router_nadro)
+    aplicacion.include_router(router_cofepris)
     aplicacion.include_router(router_proveedores)
     aplicacion.include_router(router_revision_final)
 

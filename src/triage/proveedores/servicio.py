@@ -20,6 +20,7 @@ from triage.historico.modelos import (
 from triage.historico.servicio import clave_producto, crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.base import ProveedorProducto, ResultadoProveedor, SolicitudProveedor
+from triage.proveedores.cofepris_servicio import resolver_identidad_cofepris
 from triage.proveedores.coincidencia_catalogo import (
     CandidatoCatalogo,
     evaluar_candidato,
@@ -103,6 +104,7 @@ class _EvaluacionWeb:
     proveedor: str | None
     producto_observado: str | None
     motivos: tuple[str, ...]
+    evidencia_identidad: dict[str, object] | None = None
 
 
 def _limpiar(valor: str | None) -> str | None:
@@ -602,13 +604,15 @@ def ejecutar_consultas_configuradas(
 
 
 def _motivos_descarte_web(
+    sesion: Session,
     solicitud: SolicitudProveedor,
     candidato: CandidatoWeb,
-) -> tuple[str | None, str | None, tuple[str, ...]]:
+) -> tuple[str | None, str | None, tuple[str, ...], dict[str, object] | None]:
     proveedor = _limpiar(candidato.proveedor)
     producto_observado = _limpiar(candidato.producto_exacto)
     url = str(candidato.url)
     motivos: list[str] = []
+    evidencia_identidad: dict[str, object] | None = None
     if proveedor is None:
         motivos.append("proveedor o fuente no identificada")
     elif len(proveedor) > LIMITE_PROVEEDOR_OBSERVACION:
@@ -633,23 +637,42 @@ def _motivos_descarte_web(
             ),
         )
         motivos.extend(evaluacion.motivos)
-    if not candidato.coincidencia_exacta and not any(
-        motivo
-        in {
-            "marca distinta",
-            "producto distinto",
-            "forma o dispositivo distinto",
-            "concentración distinta",
-            "presentación distinta",
-            "faltan datos suficientes para comprobar coincidencia",
-        }
-        for motivo in motivos
+        if not _limpiar(solicitud.marca) and "producto distinto" in motivos:
+            evidencia = resolver_identidad_cofepris(
+                sesion,
+                producto_solicitado=solicitud.producto,
+                producto_observado=producto_observado,
+            )
+            if evidencia is not None:
+                motivos = [motivo for motivo in motivos if motivo != "producto distinto"]
+                evidencia_identidad = evidencia.como_json()
+    if (
+        not candidato.coincidencia_exacta
+        and evidencia_identidad is None
+        and not any(
+            motivo
+            in {
+                "marca distinta",
+                "producto distinto",
+                "forma o dispositivo distinto",
+                "concentración distinta",
+                "presentación distinta",
+                "faltan datos suficientes para comprobar coincidencia",
+            }
+            for motivo in motivos
+        )
     ):
         motivos.append("faltan datos suficientes para comprobar coincidencia")
-    return proveedor, producto_observado, tuple(dict.fromkeys(motivos))
+    return (
+        proveedor,
+        producto_observado,
+        tuple(dict.fromkeys(motivos)),
+        evidencia_identidad,
+    )
 
 
 def _evaluar_candidatos_web(
+    sesion: Session,
     solicitud: SolicitudProveedor,
     candidatos: Sequence[CandidatoWeb],
     *,
@@ -662,9 +685,10 @@ def _evaluar_candidatos_web(
             proveedor=resultado[0],
             producto_observado=resultado[1],
             motivos=resultado[2],
+            evidencia_identidad=resultado[3],
         )
         for candidato in candidatos
-        for resultado in (_motivos_descarte_web(solicitud, candidato),)
+        for resultado in (_motivos_descarte_web(sesion, solicitud, candidato),)
     )
 
 
@@ -772,7 +796,7 @@ def ejecutar_descubrimiento_web(
         )
         raise
     evaluaciones.extend(
-        _evaluar_candidatos_web(solicitud, primeros, intento_busqueda=1)
+        _evaluar_candidatos_web(sesion, solicitud, primeros, intento_busqueda=1)
     )
 
     validos = [evaluacion for evaluacion in evaluaciones if not evaluacion.motivos]
@@ -794,6 +818,7 @@ def ejecutar_descubrimiento_web(
             )
             raise
         segundas_evaluaciones = _evaluar_candidatos_web(
+            sesion,
             solicitud,
             segundos,
             intento_busqueda=2,
@@ -826,6 +851,7 @@ def ejecutar_descubrimiento_web(
             codigo_postal=codigo_postal,
             producto_observado=evaluacion.producto_observado,
             origen=OrigenObservacionPrecio.WEB,
+            evidencia_identidad=evaluacion.evidencia_identidad,
             guardar=False,
         )
         guardados += 1

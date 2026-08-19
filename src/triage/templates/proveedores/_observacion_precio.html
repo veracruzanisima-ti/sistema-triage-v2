@@ -19,6 +19,9 @@
   </div>
 
   {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
+  {% if observacion.evidencia_identidad and observacion.evidencia_identidad.get("fuente") == "COFEPRIS" %}
+    <p class="ayuda">Identidad verificada con COFEPRIS · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}</p>
+  {% endif %}
   {% if observacion.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
   {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
     <p><a href="{{ observacion.fuente }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
