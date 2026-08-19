@@ -75,6 +75,15 @@ class EvidenciaIdentidadCofepris:
         }
 
 
+@dataclass(frozen=True)
+class ResultadoParseoCofepris:
+    """Filas oficiales y señales de calidad que no deben ocultarse."""
+
+    registros: list[dict[str, object]]
+    registros_sin_identidad_util: int
+    numeros_registro_duplicados: int
+
+
 def _limpiar(valor: object) -> str | None:
     if valor is None:
         return None
@@ -101,7 +110,7 @@ def _componentes_genericos(valor: str) -> list[str]:
     return list(dict.fromkeys(componentes))
 
 
-def _parsear_xlsx(datos: bytes) -> list[dict[str, object]]:
+def _parsear_xlsx(datos: bytes) -> ResultadoParseoCofepris:
     if not datos:
         raise ErrorImportacionCofepris("El catálogo COFEPRIS está vacío")
     if len(datos) > _MAX_XLSX_BYTES:
@@ -135,6 +144,8 @@ def _parsear_xlsx(datos: bytes) -> list[dict[str, object]]:
 
         registros: list[dict[str, object]] = []
         numeros_vistos: set[str] = set()
+        numeros_duplicados: set[str] = set()
+        registros_sin_identidad_util = 0
         for numero_fila, fila in enumerate(filas, start=2):
             if not any(_limpiar(valor) for valor in fila):
                 continue
@@ -153,9 +164,7 @@ def _parsear_xlsx(datos: bytes) -> list[dict[str, object]]:
             numero_registro = str(valores["numero_registro"])
             clave_registro = numero_registro.casefold()
             if clave_registro in numeros_vistos:
-                raise ErrorImportacionCofepris(
-                    f"Número de Registro duplicado en la fila {numero_fila}: {numero_registro}"
-                )
+                numeros_duplicados.add(clave_registro)
             numeros_vistos.add(clave_registro)
             if len(numero_registro) > _MAX_NUMERO_REGISTRO:
                 raise ErrorImportacionCofepris(
@@ -165,23 +174,18 @@ def _parsear_xlsx(datos: bytes) -> list[dict[str, object]]:
             distintiva_normalizada = normalizar_texto(
                 str(valores["denominacion_distintiva"])
             )
-            if not distintiva_normalizada:
-                raise ErrorImportacionCofepris(
-                    f"La fila {numero_fila} no contiene una denominación distintiva útil"
-                )
             if len(distintiva_normalizada) > _MAX_DENOMINACION_NORMALIZADA:
                 raise ErrorImportacionCofepris(
                     f"La denominación distintiva de la fila {numero_fila} excede el límite"
                 )
             componentes = _componentes_genericos(str(valores["denominacion_generica"]))
-            if not componentes:
-                raise ErrorImportacionCofepris(
-                    f"La fila {numero_fila} no contiene una denominación genérica útil"
-                )
+            if not distintiva_normalizada or not componentes:
+                registros_sin_identidad_util += 1
 
             registros.append(
                 {
                     **valores,
+                    "id": str(uuid4()),
                     "numero_registro": numero_registro,
                     "denominacion_distintiva_normalizada": distintiva_normalizada,
                     "componentes_genericos_normalizados": componentes,
@@ -193,7 +197,11 @@ def _parsear_xlsx(datos: bytes) -> list[dict[str, object]]:
 
     if not registros:
         raise ErrorImportacionCofepris("El catálogo COFEPRIS no contiene registros")
-    return registros
+    return ResultadoParseoCofepris(
+        registros=registros,
+        registros_sin_identidad_util=registros_sin_identidad_util,
+        numeros_registro_duplicados=len(numeros_duplicados),
+    )
 
 
 def importar_snapshot_cofepris(
@@ -206,7 +214,8 @@ def importar_snapshot_cofepris(
     """Valida todo el XLSX antes de reemplazar el snapshot en una transacción."""
 
     archivo = _nombre_archivo(nombre_archivo)
-    registros = _parsear_xlsx(datos)
+    resultado = _parsear_xlsx(datos)
+    registros = resultado.registros
     importacion_id = str(uuid4())
     importacion = ImportacionCofepris(
         id=importacion_id,
@@ -217,6 +226,8 @@ def importar_snapshot_cofepris(
         registros_vigentes=sum(
             registro["estado"] == ESTADO_VIGENTE for registro in registros
         ),
+        registros_sin_identidad_util=resultado.registros_sin_identidad_util,
+        numeros_registro_duplicados=resultado.numeros_registro_duplicados,
     )
     filas = [{**registro, "importacion_id": importacion_id} for registro in registros]
 

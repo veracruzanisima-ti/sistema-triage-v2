@@ -25,6 +25,8 @@ def upgrade() -> None:
         sa.Column("sha256", sa.String(length=64), nullable=False),
         sa.Column("registros_cargados", sa.Integer(), nullable=False),
         sa.Column("registros_vigentes", sa.Integer(), nullable=False),
+        sa.Column("registros_sin_identidad_util", sa.Integer(), nullable=False),
+        sa.Column("numeros_registro_duplicados", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["cargada_por_usuario_id"], ["usuarios.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -36,6 +38,7 @@ def upgrade() -> None:
     )
     op.create_table(
         "registros_cofepris",
+        sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("numero_registro", sa.String(length=255), nullable=False),
         sa.Column("importacion_id", sa.String(length=36), nullable=False),
         sa.Column("denominacion_distintiva", sa.Text(), nullable=False),
@@ -57,7 +60,13 @@ def upgrade() -> None:
         sa.Column("titular", sa.Text(), nullable=True),
         sa.Column("fecha_emision", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(["importacion_id"], ["importaciones_cofepris.id"]),
-        sa.PrimaryKeyConstraint("numero_registro"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_registros_cofepris_numero_registro",
+        "registros_cofepris",
+        ["numero_registro"],
+        unique=False,
     )
     op.create_index(
         "ix_registros_cofepris_importacion_id",
@@ -85,6 +94,10 @@ def downgrade() -> None:
         table_name="registros_cofepris",
     )
     op.drop_index("ix_registros_cofepris_estado", table_name="registros_cofepris")
+    op.drop_index(
+        "ix_registros_cofepris_numero_registro",
+        table_name="registros_cofepris",
+    )
     op.drop_index(
         "ix_registros_cofepris_importacion_id",
         table_name="registros_cofepris",

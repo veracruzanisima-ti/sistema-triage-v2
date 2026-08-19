@@ -218,10 +218,16 @@ def test_importacion_valida_normaliza_y_no_persiste_el_xlsx(cliente, tmp_path, m
 
     assert importacion.registros_cargados == 2
     assert importacion.registros_vigentes == 1
+    assert importacion.registros_sin_identidad_util == 0
+    assert importacion.numeros_registro_duplicados == 0
     assert importacion.archivo == "Visor_Registros_Medicamentos.xlsx"
     assert len(importacion.sha256) == 64
     with cliente.app.state.fabrica_sesiones() as sesion:
-        trayenta = sesion.get(RegistroCofepris, "159M2011 SSA")
+        trayenta = sesion.scalar(
+            select(RegistroCofepris).where(
+                RegistroCofepris.numero_registro == "159M2011 SSA"
+            )
+        )
         assert trayenta is not None
         assert trayenta.denominacion_distintiva_normalizada == "TRAYENTA"
         assert trayenta.componentes_genericos_normalizados == ["LINAGLIPTINA"]
@@ -245,20 +251,19 @@ def test_importacion_valida_normaliza_y_no_persiste_el_xlsx(cliente, tmp_path, m
             ),
             "Denominacion Generica",
         ),
-        (
-            _xlsx([_registro(), _registro(distintiva="TRAYENTA DOS")]),
-            "duplicado",
-        ),
         (_xlsx([_registro(generica="")]), "Denominacion Generica"),
     ],
     ids=(
         "hoja-incorrecta",
         "columna-faltante",
-        "registro-duplicado",
         "dato-obligatorio-vacio",
     ),
 )
-def test_importacion_rechaza_hoja_columnas_y_duplicados(cliente, datos, mensaje):
+def test_importacion_rechaza_hoja_columnas_y_dato_obligatorio_vacio(
+    cliente,
+    datos,
+    mensaje,
+):
     with cliente.app.state.fabrica_sesiones() as sesion:
         with pytest.raises(ErrorImportacionCofepris, match=mensaje):
             importar_snapshot_cofepris(
@@ -267,6 +272,43 @@ def test_importacion_rechaza_hoja_columnas_y_duplicados(cliente, datos, mensaje)
                 nombre_archivo="catalogo.xlsx",
                 datos=datos,
             )
+
+
+def test_importacion_conserva_filas_imperfectas_y_duplicados_sin_resolverlos(cliente):
+    importacion = _importar(
+        cliente,
+        [
+            _registro(numero="DUP-1"),
+            _registro(numero="DUP-1"),
+            _registro(numero="SIN-MARCA", distintiva="."),
+            _registro(numero="SIN-GENERICA", distintiva="INCOMPLETO", generica="/ / /"),
+        ],
+    )
+
+    assert importacion.registros_cargados == 4
+    assert importacion.registros_vigentes == 4
+    assert importacion.registros_sin_identidad_util == 2
+    assert importacion.numeros_registro_duplicados == 1
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        registros = list(sesion.scalars(select(RegistroCofepris)))
+        assert len(registros) == 4
+        assert sum(registro.numero_registro == "DUP-1" for registro in registros) == 2
+        assert (
+            resolver_identidad_cofepris(
+                sesion,
+                producto_solicitado="LINAGLIPTINA",
+                producto_observado="TRAYENTA 5 mg 30 tabletas",
+            )
+            is None
+        )
+        assert (
+            resolver_identidad_cofepris(
+                sesion,
+                producto_solicitado="LINAGLIPTINA",
+                producto_observado="INCOMPLETO 5 mg 30 tabletas",
+            )
+            is None
+        )
 
 
 def test_archivo_invalido_conserva_snapshot_anterior(cliente):
@@ -279,7 +321,14 @@ def test_archivo_invalido_conserva_snapshot_anterior(cliente):
                 nombre_archivo="catalogo.xlsx",
                 datos=_xlsx([]),
             )
-        assert sesion.get(RegistroCofepris, "159M2011 SSA") is not None
+        assert (
+            sesion.scalar(
+                select(RegistroCofepris).where(
+                    RegistroCofepris.numero_registro == "159M2011 SSA"
+                )
+            )
+            is not None
+        )
         importaciones = list(sesion.scalars(select(ImportacionCofepris)))
         assert [importacion.id for importacion in importaciones] == [anterior.id]
 

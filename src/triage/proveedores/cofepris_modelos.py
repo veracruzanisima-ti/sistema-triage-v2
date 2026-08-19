@@ -34,6 +34,14 @@ class ImportacionCofepris(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     registros_cargados: Mapped[int] = mapped_column(Integer, nullable=False)
     registros_vigentes: Mapped[int] = mapped_column(Integer, nullable=False)
+    registros_sin_identidad_util: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    numeros_registro_duplicados: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
 
 
 class RegistroCofepris(Base):
@@ -41,7 +49,16 @@ class RegistroCofepris(Base):
 
     __tablename__ = "registros_cofepris"
 
-    numero_registro: Mapped[str] = mapped_column(String(255), primary_key=True)
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    numero_registro: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
     importacion_id: Mapped[str] = mapped_column(
         ForeignKey("importaciones_cofepris.id"),
         nullable=False,
