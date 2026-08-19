@@ -62,6 +62,10 @@ def _preparar_producto(
             documento_id=documento.id,
             orden=1,
             producto_solicitado=producto,
+            marca_solicitada=marca,
+            concentracion=concentracion,
+            forma_farmaceutica_dispositivo=forma_dispositivo,
+            presentacion_solicitada=presentacion,
             incluida_cotizacion=True,
         )
         sesion.add(partida)
@@ -274,6 +278,221 @@ def test_descubrimiento_web_aparece_como_accion_secundaria(cliente):
     assert "Ver resultados descartados (2)" in resultado.text
     assert "No pasó porque:" in resultado.text
     assert "forma o dispositivo distinto" in resultado.text
+
+
+def _buscar_web_desde_ui(cliente, cotizacion_id: str, partida_id: str):
+    pagina = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    respuesta = cliente.post(
+        f"/cotizaciones/{cotizacion_id}/proveedores/{partida_id}/buscar-web",
+        data={"csrf_token": _csrf(pagina.text)},
+        follow_redirects=False,
+    )
+    assert respuesta.status_code == 303
+    return cliente.get(respuesta.headers["location"])
+
+
+class DescubridorLinagliptinaAlternativa:
+    modelo = "web-linagliptina-alternativa"
+
+    def __init__(self) -> None:
+        self.presentaciones: list[str | None] = []
+
+    def buscar(self, solicitud: SolicitudProveedor, *, terminos_adicionales=()):
+        self.presentaciones.append(solicitud.presentacion)
+        assert solicitud.producto == "LINAGLIPTINA"
+        candidato = CandidatoWeb(
+            proveedor="Farmacia Uno",
+            producto_exacto="Trayenta 5Mg 30 Tab (Linagliptina)",
+            url="https://uno.invalid/trayenta-30",
+            precio_total=Decimal("850.00"),
+            coincidencia_exacta=True,
+        )
+        if solicitud.presentacion == "Caja con 30 tabletas":
+            return (candidato,)
+        return (
+            candidato,
+            CandidatoWeb(
+                proveedor="Farmacia Dos",
+                producto_exacto="LINAGLIPTINA Trayenta 5 mg 30 tabletas",
+                url="https://dos.invalid/trayenta-30",
+                precio_total=Decimal("860.00"),
+                coincidencia_exacta=True,
+            ),
+        )
+
+
+def test_presentacion_alternativa_requiere_confirmacion_y_nueva_busqueda(cliente):
+    cotizacion_id, partida_id, usuario_id = _preparar_producto(
+        cliente,
+        producto="LINAGLIPTINA",
+        marca=None,
+        concentracion="5 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 28 tabletas",
+    )
+    descubridor = DescubridorLinagliptinaAlternativa()
+    cliente.app.state.descubridor_web = descubridor
+
+    resultado = _buscar_web_desde_ui(cliente, cotizacion_id, partida_id)
+    assert "Posible presentación comercial encontrada: Caja con 30 tabletas" in (
+        resultado.text
+    )
+    assert "Solicitud original: Caja con 28 tabletas" in resultado.text
+    assert "2 fuentes independientes señalan la misma presentación" in resultado.text
+    assert "Usar 30 tabletas para buscar" in resultado.text
+    coincidencia_accion = re.search(
+        r'action="([^"]+/presentacion-alternativa/[^"]+)"', resultado.text
+    )
+    assert coincidencia_accion is not None
+    accion = coincidencia_accion.group(1)
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        partida = sesion.get(PartidaDocumento, partida_id)
+        normalizacion = sesion.get(NormalizacionPartida, partida_id)
+        assert partida is not None
+        assert normalizacion is not None
+        actualizada_antes = normalizacion.actualizada_en
+        assert partida.presentacion_solicitada == "Caja con 28 tabletas"
+        assert normalizacion.presentacion == "Caja con 28 tabletas"
+        assert list(sesion.scalars(select(ObservacionPrecio))) == []
+
+    csrf_invalido = cliente.post(
+        accion,
+        data={"csrf_token": "token-incorrecto"},
+        follow_redirects=False,
+    )
+    assert csrf_invalido.status_code == 403
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        normalizacion = sesion.get(NormalizacionPartida, partida_id)
+        assert normalizacion is not None
+        assert normalizacion.presentacion == "Caja con 28 tabletas"
+
+    confirmacion = cliente.post(
+        accion,
+        data={"csrf_token": _csrf(resultado.text)},
+        follow_redirects=False,
+    )
+    assert confirmacion.status_code == 303
+    assert "resultado=presentacion_actualizada" in confirmacion.headers["location"]
+    confirmada = cliente.get(confirmacion.headers["location"])
+    assert "La solicitud original no cambió" in confirmada.text
+    assert "Busca precios nuevamente para comprobar la coincidencia" in confirmada.text
+    assert "Posible presentación comercial encontrada" not in confirmada.text
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        partida = sesion.get(PartidaDocumento, partida_id)
+        normalizacion = sesion.get(NormalizacionPartida, partida_id)
+        assert partida is not None
+        assert normalizacion is not None
+        assert partida.presentacion_solicitada == "Caja con 28 tabletas"
+        assert normalizacion.presentacion == "Caja con 30 tabletas"
+        assert normalizacion.confirmada_por_usuario_id == usuario_id
+        assert normalizacion.actualizada_en != actualizada_antes
+        assert list(sesion.scalars(select(ObservacionPrecio))) == []
+
+    segunda_busqueda = _buscar_web_desde_ui(cliente, cotizacion_id, partida_id)
+    assert "1 opción(es) exacta(s) guardada(s)" in segunda_busqueda.text
+    assert descubridor.presentaciones[-1] == "Caja con 30 tabletas"
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        assert len(list(sesion.scalars(select(ObservacionPrecio)))) == 1
+        partida = sesion.get(PartidaDocumento, partida_id)
+        assert partida is not None
+        assert partida.presentacion_solicitada == "Caja con 28 tabletas"
+
+
+class DescubridorConConflictosAdicionales:
+    modelo = "web-conflictos-adicionales"
+
+    def buscar(self, _solicitud: SolicitudProveedor, *, terminos_adicionales=()):
+        return (
+            CandidatoWeb(
+                proveedor="Farmacia Concentración",
+                producto_exacto="Trayenta 10 mg 30 tab (Linagliptina)",
+                url="https://concentracion.invalid/trayenta",
+                precio_total=Decimal("800.00"),
+                coincidencia_exacta=True,
+            ),
+            CandidatoWeb(
+                proveedor="Farmacia Forma",
+                producto_exacto="Trayenta 5 mg 30 cápsulas (Linagliptina)",
+                url="https://forma.invalid/trayenta",
+                precio_total=Decimal("810.00"),
+                coincidencia_exacta=True,
+            ),
+        )
+
+
+def test_conflicto_de_concentracion_o_forma_no_ofrece_alternativa(cliente):
+    cotizacion_id, partida_id, _ = _preparar_producto(
+        cliente,
+        producto="LINAGLIPTINA",
+        marca=None,
+        concentracion="5 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 28 tabletas",
+    )
+    cliente.app.state.descubridor_web = DescubridorConConflictosAdicionales()
+
+    resultado = _buscar_web_desde_ui(cliente, cotizacion_id, partida_id)
+    assert "Posible presentación comercial encontrada" not in resultado.text
+    assert "presentacion-alternativa" not in resultado.text
+    assert "Usar 30 tabletas para buscar" not in resultado.text
+
+
+class DescubridorConPresentacionAmbigua:
+    modelo = "web-presentacion-ambigua"
+
+    def buscar(self, _solicitud: SolicitudProveedor, *, terminos_adicionales=()):
+        return (
+            CandidatoWeb(
+                proveedor="Farmacia Ambigua",
+                producto_exacto=(
+                    "Trayenta 5 mg 30 tabletas o 60 tabletas (Linagliptina)"
+                ),
+                url="https://ambigua.invalid/trayenta",
+                precio_total=Decimal("820.00"),
+                coincidencia_exacta=True,
+            ),
+        )
+
+
+def test_presentacion_ambigua_solo_permite_edicion_manual(cliente):
+    cotizacion_id, partida_id, _ = _preparar_producto(
+        cliente,
+        producto="LINAGLIPTINA",
+        marca=None,
+        concentracion="5 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 28 tabletas",
+    )
+    cliente.app.state.descubridor_web = DescubridorConPresentacionAmbigua()
+
+    resultado = _buscar_web_desde_ui(cliente, cotizacion_id, partida_id)
+    assert "Posible presentación comercial encontrada" not in resultado.text
+    assert "Usar 30 tabletas para buscar" not in resultado.text
+    assert "Editar preparación" in resultado.text
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        descartado = sesion.scalar(select(CandidatoWebDescartado))
+        assert descartado is not None
+        candidato_id = descartado.id
+
+    intento_forzado = cliente.post(
+        (
+            f"/cotizaciones/{cotizacion_id}/proveedores/{partida_id}"
+            f"/presentacion-alternativa/{candidato_id}"
+        ),
+        data={"csrf_token": _csrf(resultado.text)},
+    )
+    assert intento_forzado.status_code == 409
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        normalizacion = sesion.get(NormalizacionPartida, partida_id)
+        partida = sesion.get(PartidaDocumento, partida_id)
+        assert normalizacion is not None
+        assert partida is not None
+        assert normalizacion.presentacion == "Caja con 28 tabletas"
+        assert partida.presentacion_solicitada == "Caja con 28 tabletas"
+        assert list(sesion.scalars(select(ObservacionPrecio))) == []
 
 
 class DescubridorAmantadinaFalso:
