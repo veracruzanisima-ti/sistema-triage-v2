@@ -40,6 +40,7 @@ _FORMAS_CONOCIDAS = {
     "VIAL",
 }
 _UNIDADES_PRESENTACION = (
+    "CAJA",
     "TABLETA",
     "CAPSULA",
     "AMPOLLA",

@@ -93,7 +93,7 @@ def test_catalogo_acepta_amantadina_con_unidad_y_abreviatura_exactas():
 
     assert resultado.coincide is True
     assert extraer_conteos_presentacion(solicitud_amantadina.presentacion) == frozenset(
-        {("TABLETA", 30)}
+        {("CAJA", 30), ("TABLETA", 30)}
     )
     terminos = terminos_busqueda_ampliada(solicitud_amantadina)
     assert "tableta | tabletas | tab" in terminos
@@ -148,6 +148,24 @@ def test_catalogo_extrae_presentacion_comercial_solo_si_es_inequivoca():
         )
         is None
     )
+
+
+def test_catalogo_no_acepta_caja_de_20_cuando_se_solicitan_30():
+    solicitud_caja_30 = SolicitudProveedor(
+        partida_documento_id="producto-caja-30",
+        producto="PRODUCTO COMPATIBLE",
+        marca=None,
+        concentracion="100 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 30",
+    )
+
+    resultado = evaluar_candidato(
+        solicitud_caja_30,
+        candidato("PRODUCTO COMPATIBLE 100 mg TABLETAS 20 TABLETAS"),
+    )
+
+    assert resultado.coincide is False
 
 
 def test_catalogo_prefiere_marca_explicita_para_busqueda():

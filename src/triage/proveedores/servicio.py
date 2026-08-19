@@ -81,7 +81,7 @@ class PresentacionAlternativaWeb:
     """Presentación convergente que todavía requiere confirmación humana."""
 
     valor: str
-    descripcion_corta: str
+    valor_busqueda: str
     fuentes: tuple[str, ...]
     candidatos_ids: tuple[str, ...]
 
@@ -155,7 +155,7 @@ def _presentacion_alternativa_web(
     return (
         PresentacionAlternativaWeb(
             valor=presentacion,
-            descripcion_corta=presentacion.removeprefix("Caja con "),
+            valor_busqueda=presentacion.removeprefix("Caja con "),
             fuentes=tuple(fuentes.values()),
             candidatos_ids=tuple(candidato.id for candidato in coincidencias),
         ),
@@ -297,7 +297,7 @@ def listar_trazabilidad_web(
             if busqueda_vigente
             else (None, False)
         )
-        if alternativa and _limpiar(alternativa.valor) == _limpiar(
+        if alternativa and _limpiar(alternativa.valor_busqueda) == _limpiar(
             normalizacion.presentacion if normalizacion else None
         ):
             alternativa, ambigua = None, True
@@ -336,15 +336,15 @@ def confirmar_presentacion_alternativa_web(
         raise ValueError(
             "La presentación alternativa ya no es inequívoca. Edita la preparación manualmente."
         )
-    if _limpiar(normalizacion.presentacion) == _limpiar(alternativa.valor):
+    if _limpiar(normalizacion.presentacion) == _limpiar(alternativa.valor_busqueda):
         raise ValueError("La presentación de búsqueda ya usa esa alternativa.")
 
-    normalizacion.presentacion = alternativa.valor
+    normalizacion.presentacion = alternativa.valor_busqueda
     normalizacion.confirmada_por_usuario_id = usuario_id
     normalizacion.actualizada_en = ahora_utc()
     sesion.add(normalizacion)
     sesion.commit()
-    return alternativa.valor
+    return alternativa.valor_busqueda
 
 
 def _validar_resultado(resultado: ResultadoProveedor) -> None:

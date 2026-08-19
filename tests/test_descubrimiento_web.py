@@ -307,7 +307,7 @@ class DescubridorLinagliptinaAlternativa:
             precio_total=Decimal("850.00"),
             coincidencia_exacta=True,
         )
-        if solicitud.presentacion == "Caja con 30 tabletas":
+        if solicitud.presentacion == "30 tabletas":
             return (candidato,)
         return (
             candidato,
@@ -385,14 +385,14 @@ def test_presentacion_alternativa_requiere_confirmacion_y_nueva_busqueda(cliente
         assert partida is not None
         assert normalizacion is not None
         assert partida.presentacion_solicitada == "Caja con 28 tabletas"
-        assert normalizacion.presentacion == "Caja con 30 tabletas"
+        assert normalizacion.presentacion == "30 tabletas"
         assert normalizacion.confirmada_por_usuario_id == usuario_id
         assert normalizacion.actualizada_en != actualizada_antes
         assert list(sesion.scalars(select(ObservacionPrecio))) == []
 
     segunda_busqueda = _buscar_web_desde_ui(cliente, cotizacion_id, partida_id)
     assert "1 opción(es) exacta(s) guardada(s)" in segunda_busqueda.text
-    assert descubridor.presentaciones[-1] == "Caja con 30 tabletas"
+    assert descubridor.presentaciones[-1] == "30 tabletas"
     with cliente.app.state.fabrica_sesiones() as sesion:
         assert len(list(sesion.scalars(select(ObservacionPrecio)))) == 1
         partida = sesion.get(PartidaDocumento, partida_id)
