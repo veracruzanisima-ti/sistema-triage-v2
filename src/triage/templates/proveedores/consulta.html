@@ -172,6 +172,27 @@
         </div>
       {% endif %}
 
+      {% if trazabilidad_web and trazabilidad_web.presentacion_alternativa %}
+        {% set alternativa = trazabilidad_web.presentacion_alternativa %}
+        <div class="aviso">
+          <strong>Posible presentación comercial encontrada: {{ alternativa.valor }}</strong>
+          <p>Solicitud original: {{ producto.partida.presentacion_solicitada or "Sin presentación documentada" }}</p>
+          {% if alternativa.fuentes|length > 1 %}
+            <p class="ayuda">
+              {{ alternativa.fuentes|length }} fuentes independientes señalan la misma presentación:
+              {{ alternativa.fuentes|join("; ") }}.
+            </p>
+          {% endif %}
+          <p class="ayuda">La alternativa no es todavía un precio utilizable. Requiere confirmación y una búsqueda nueva.</p>
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/presentacion-alternativa/{{ alternativa.candidatos_ids[0] }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="boton boton-secundario" type="submit">Usar {{ alternativa.valor_busqueda }} para buscar</button>
+          </form>
+        </div>
+      {% elif trazabilidad_web and trazabilidad_web.presentacion_alternativa_ambigua %}
+        <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Editar preparación</a>
+      {% endif %}
+
       {% if trazabilidad_web and (trazabilidad_web.descartados or trazabilidad_web.consulta.mensaje_error or trazabilidad_web.consulta.intentos > 1) %}
         <details>
           <summary>Ver resultados descartados ({{ trazabilidad_web.descartados|length }})</summary>

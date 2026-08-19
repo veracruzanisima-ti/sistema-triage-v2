@@ -55,6 +55,15 @@ _ALIASES_BUSQUEDA = {
     "AMPOLLA": ("ampolla", "amp"),
     "JERINGA PRELLENADA": ("jeringa prellenada", "jga pre"),
 }
+_ETIQUETAS_PRESENTACION = {
+    "TABLETA": ("tableta", "tabletas"),
+    "CAPSULA": ("cápsula", "cápsulas"),
+    "AMPOLLA": ("ampolla", "ampollas"),
+    "VIAL": ("frasco ámpula", "frascos ámpula"),
+    "JERINGA": ("jeringa", "jeringas"),
+    "PLUMA": ("pluma", "plumas"),
+    "CARTUCHO": ("cartucho", "cartuchos"),
+}
 
 
 @dataclass(frozen=True)
@@ -125,6 +134,22 @@ def extraer_conteos_presentacion(texto: str | None) -> frozenset[tuple[str, int]
             for cantidad in re.findall(patron, normalizado):
                 conteos.add((unidad, int(cantidad)))
     return frozenset(conteos)
+
+
+def extraer_presentacion_comercial(texto: str | None) -> str | None:
+    """Devuelve un conteo comercial sólo cuando hay una lectura inequívoca."""
+
+    conteos = {
+        (unidad, cantidad)
+        for unidad, cantidad in extraer_conteos_presentacion(texto)
+        if unidad in _ETIQUETAS_PRESENTACION
+    }
+    if len(conteos) != 1:
+        return None
+    unidad, cantidad = conteos.pop()
+    singular, plural = _ETIQUETAS_PRESENTACION[unidad]
+    etiqueta = singular if cantidad == 1 else plural
+    return f"Caja con {cantidad} {etiqueta}"
 
 
 def _tokens(texto: str | None) -> frozenset[str]:

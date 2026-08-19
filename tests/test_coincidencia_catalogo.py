@@ -6,6 +6,7 @@ from triage.proveedores.coincidencia_catalogo import (
     evaluar_candidato,
     extraer_conteos_presentacion,
     extraer_medidas,
+    extraer_presentacion_comercial,
     normalizar_texto,
     seleccionar_candidato,
     termino_busqueda,
@@ -135,6 +136,36 @@ def test_catalogo_rechaza_concentracion_de_amantadina_distinta():
 
     assert resultado.coincide is False
     assert "concentración distinta" in resultado.motivos
+
+
+def test_catalogo_extrae_presentacion_comercial_solo_si_es_inequivoca():
+    assert extraer_presentacion_comercial("Trayenta 5Mg 30 Tab (Linagliptina)") == (
+        "Caja con 30 tabletas"
+    )
+    assert (
+        extraer_presentacion_comercial(
+            "Trayenta 5 mg 30 tabletas o 60 tabletas (Linagliptina)"
+        )
+        is None
+    )
+
+
+def test_catalogo_no_acepta_caja_de_20_cuando_se_solicitan_30():
+    solicitud_caja_30 = SolicitudProveedor(
+        partida_documento_id="producto-caja-30",
+        producto="PRODUCTO COMPATIBLE",
+        marca=None,
+        concentracion="100 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 30",
+    )
+
+    resultado = evaluar_candidato(
+        solicitud_caja_30,
+        candidato("PRODUCTO COMPATIBLE 100 mg TABLETAS 20 TABLETAS"),
+    )
+
+    assert resultado.coincide is False
 
 
 def test_catalogo_prefiere_marca_explicita_para_busqueda():
