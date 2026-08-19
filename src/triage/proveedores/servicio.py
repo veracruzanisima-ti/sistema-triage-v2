@@ -648,7 +648,6 @@ def _motivos_descarte_web(
                 evidencia_identidad = evidencia.como_json()
     if (
         not candidato.coincidencia_exacta
-        and evidencia_identidad is None
         and not any(
             motivo
             in {

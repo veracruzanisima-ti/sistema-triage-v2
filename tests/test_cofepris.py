@@ -180,8 +180,14 @@ def _preparar_producto(
 class _DescubridorTrayenta:
     modelo = "web-cofepris-prueba"
 
-    def __init__(self, producto_observado: str = "TRAYENTA 5 mg 30 tabletas") -> None:
+    def __init__(
+        self,
+        producto_observado: str = "TRAYENTA 5 mg 30 tabletas",
+        *,
+        coincidencia_exacta: bool = True,
+    ) -> None:
         self.producto_observado = producto_observado
+        self.coincidencia_exacta = coincidencia_exacta
 
     def buscar(self, _solicitud: SolicitudProveedor, *, terminos_adicionales=()):
         return (
@@ -190,7 +196,7 @@ class _DescubridorTrayenta:
                 producto_exacto=self.producto_observado,
                 url="https://ejemplo.invalid/trayenta",
                 precio_total=850,
-                coincidencia_exacta=False,
+                coincidencia_exacta=self.coincidencia_exacta,
             ),
         )
 
@@ -353,6 +359,28 @@ def test_trayenta_vigente_crea_observacion_con_evidencia_y_la_muestra(cliente):
     pagina = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
     assert pagina.status_code == 200
     assert "Identidad verificada con COFEPRIS · Registro 159M2011 SSA" in pagina.text
+
+
+def test_trayenta_no_exacta_sigue_descartada_aunque_cofepris_resuelva(cliente):
+    _importar(cliente, [_registro()])
+    cotizacion_id, partida_id, usuario_id = _preparar_producto(cliente)
+
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        resumen = ejecutar_descubrimiento_web(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_documento_id=partida_id,
+            usuario_id=usuario_id,
+            descubridor=_DescubridorTrayenta(coincidencia_exacta=False),
+        )
+        assert resumen.guardados == 0
+        assert sesion.scalar(select(ObservacionPrecio)) is None
+        descartados = list(sesion.scalars(select(CandidatoWebDescartado)))
+        assert descartados
+        assert all(
+            "faltan datos suficientes para comprobar coincidencia" in descartado.motivos
+            for descartado in descartados
+        )
 
 
 @pytest.mark.parametrize(
