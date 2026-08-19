@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import replace
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -105,7 +104,6 @@ def _seleccionar_articulo(sesion, solicitud: SolicitudProveedor) -> ArticuloNadr
     if not articulos:
         return None
 
-    solicitud_match = _solicitud_para_match(solicitud)
     candidatos = [
         CandidatoCatalogo(
             descripcion=_descripcion_para_match(articulo.descripcion),
@@ -114,9 +112,8 @@ def _seleccionar_articulo(sesion, solicitud: SolicitudProveedor) -> ArticuloNadr
             fuente=articulo.codigo_nadro,
         )
         for articulo in articulos
-        if _cumple_conteo_presentacion(solicitud_match, articulo.descripcion)
     ]
-    seleccion = seleccionar_candidato(solicitud_match, candidatos)
+    seleccion = seleccionar_candidato(solicitud, candidatos)
     if seleccion is None:
         return None
     return next(
@@ -130,79 +127,15 @@ def _termino_amplio(solicitud: SolicitudProveedor) -> str:
     return tokens[0] if tokens else ""
 
 
-def _solicitud_para_match(solicitud: SolicitudProveedor) -> SolicitudProveedor:
-    forma = normalizar_texto(solicitud.forma_dispositivo)
-    equivalencias = (
-        (("PLUMA",), "PLUMA"),
-        (("CARTUCHO",), "CARTUCHO"),
-        (("VIAL", "AMPULA", "AMPOLLA"), "VIAL"),
-        (("JERINGA",), "JERINGA"),
-        (("TABLETA", "TABLETAS", "TAB"), "TAB"),
-        (("CAPSULA", "CAPSULAS", "CAP"), "CAP"),
-    )
-    distintivos = [
-        canonico
-        for aliases, canonico in equivalencias
-        if any(re.search(rf"\b{re.escape(alias)}\b", forma) for alias in aliases)
-    ]
-    return replace(solicitud, forma_dispositivo=" ".join(distintivos) or None)
-
-
 def _descripcion_para_match(descripcion: str) -> str:
     texto = descripcion.upper()
-    texto = re.sub(r"\bF\.?\s*A\.?\b", " VIAL ", texto)
-    texto = re.sub(r"\bFAM\b", " VIAL ", texto)
-    texto = re.sub(r"\bJGA\s+PRE\b", " JERINGA ", texto)
-    texto = re.sub(r"\bJGA\b", " JERINGA ", texto)
-    texto = re.sub(r"\bCART\s+DES\b", " CARTUCHO ", texto)
-    texto = re.sub(r"\bCART\b", " CARTUCHO ", texto)
-    texto = re.sub(r"\bAMP\b", " VIAL ", texto)
-    texto = re.sub(r"\bTABLETAS?\b", " TAB ", texto)
-    texto = re.sub(r"\bCAPSULAS?\b", " CAP ", texto)
+    texto = re.sub(r"\bFAM\b", " FRASCO AMPULA ", texto)
     texto = re.sub(
         r"\b(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*(MG|G|ML|UI)\b",
         r"\1\3 \2\3",
         texto,
     )
     return normalizar_texto(texto)
-
-
-def _cumple_conteo_presentacion(solicitud: SolicitudProveedor, descripcion: str) -> bool:
-    """Evita mezclar cajas con distinta cantidad cuando el envase la declara."""
-
-    forma = normalizar_texto(solicitud.forma_dispositivo)
-    presentacion = normalizar_texto(solicitud.presentacion)
-    grupos = (
-        ("TAB", ("TABLETA", "TABLETAS", "TAB"), ("TAB",)),
-        ("CAP", ("CAPSULA", "CAPSULAS", "CAP"), ("CAP",)),
-        ("JERINGA", ("JERINGA", "JERINGAS"), ("JGA", "JERINGA")),
-        ("PLUMA", ("PLUMA", "PLUMAS"), ("PLUMA",)),
-        ("CARTUCHO", ("CARTUCHO", "CARTUCHOS"), ("CART", "CARTUCHO")),
-    )
-    for forma_canonica, aliases_solicitud, aliases_catalogo in grupos:
-        if not re.search(rf"\b{forma_canonica}\b", forma):
-            continue
-        esperado = _conteo_junto_a_forma(presentacion, aliases_solicitud)
-        if esperado is None:
-            return True
-        catalogo = normalizar_texto(descripcion)
-        patrones = [
-            rf"\b{re.escape(alias)}\s+(?:PRE\s+)?{esperado}\b"
-            for alias in aliases_catalogo
-        ] + [rf"\b{esperado}\s+{re.escape(alias)}\b" for alias in aliases_catalogo]
-        return any(re.search(patron, catalogo) for patron in patrones)
-    return True
-
-
-def _conteo_junto_a_forma(texto: str, aliases: tuple[str, ...]) -> str | None:
-    for alias in aliases:
-        antes = re.search(rf"\b(\d{{1,3}})\s+{re.escape(alias)}\b", texto)
-        if antes:
-            return antes.group(1)
-        despues = re.search(rf"\b{re.escape(alias)}\s+(\d{{1,3}})\b", texto)
-        if despues:
-            return despues.group(1)
-    return None
 
 
 def _oferta_simple(oferta: OfertaNadro) -> bool:

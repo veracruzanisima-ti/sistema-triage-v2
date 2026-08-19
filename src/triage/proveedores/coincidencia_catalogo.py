@@ -1,4 +1,4 @@
-"""Coincidencia conservadora de tarjetas de catálogo."""
+"""Coincidencia conservadora de tarjetas de catálogo y resultados web."""
 
 import re
 import unicodedata
@@ -16,7 +16,45 @@ _FACTORES = {
     "U": ("U", Decimal("1")),
     "UI": ("U", Decimal("1")),
 }
-_RUIDO = {"CON", "DE", "DEL", "EL", "EN", "LA", "LAS", "LOS", "PARA", "POR"}
+_RUIDO = {
+    "CAJA",
+    "CON",
+    "DE",
+    "DEL",
+    "EL",
+    "EN",
+    "LA",
+    "LAS",
+    "LOS",
+    "PARA",
+    "POR",
+}
+_FORMAS_CONOCIDAS = {
+    "AMPOLLA",
+    "CAPSULA",
+    "CARTUCHO",
+    "JERINGA",
+    "PLUMA",
+    "PRELLENADA",
+    "TABLETA",
+    "VIAL",
+}
+_UNIDADES_PRESENTACION = (
+    "CAJA",
+    "TABLETA",
+    "CAPSULA",
+    "AMPOLLA",
+    "VIAL",
+    "JERINGA",
+    "PLUMA",
+    "CARTUCHO",
+)
+_ALIASES_BUSQUEDA = {
+    "TABLETA": ("tableta", "tabletas", "tab"),
+    "VIAL": ("frasco ámpula", "frasco ampula", "F.A.", "vial"),
+    "AMPOLLA": ("ampolla", "amp"),
+    "JERINGA PRELLENADA": ("jeringa prellenada", "jga pre"),
+}
 
 
 @dataclass(frozen=True)
@@ -36,19 +74,34 @@ class EvaluacionCatalogo:
 
 
 def normalizar_texto(texto: str | None) -> str:
+    """Normaliza formato y sólo equivalencias lingüísticas seguras y explícitas."""
+
     valor = str(texto or "").upper().replace("µ", "U")
     valor = unicodedata.normalize("NFKD", valor)
     valor = "".join(c for c in valor if not unicodedata.combining(c))
-    # En catálogos mexicanos el mismo frasco inyectable puede publicarse como
-    # "vial", "frasco ámpula" o simplemente "ámpula". Canonizamos sólo esa
-    # terminología; plumas, cartuchos y otros dispositivos siguen siendo distintos.
-    valor = re.sub(r"\bFRASCO\s+(?:AMPULA|AMPOLLA)\b", "VIAL", valor)
-    valor = re.sub(r"\b(?:AMPULA|AMPOLLA)\b", "VIAL", valor)
+    sustituciones = (
+        (r"\bF\s*\.?\s*A\.?(?=[^A-Z0-9]|$)", "VIAL"),
+        (r"\bFRASCO\s+(?:AMPULA|AMPOLLA)\b", "VIAL"),
+        (r"\bJERINGAS?\s+PRELLENADAS?\b", "JERINGA PRELLENADA"),
+        (r"\bJGA\s+PRE\b", "JERINGA PRELLENADA"),
+        (r"\bJGA\b", "JERINGA"),
+        (r"\bTABLETAS?\b|\bTAB\b", "TABLETA"),
+        (r"\bCAPSULAS?\b|\bCAP\b", "CAPSULA"),
+        (r"\bAMPOLLAS?\b|\bAMP\b", "AMPOLLA"),
+        # Conserva la equivalencia histórica de catálogos mexicanos para "ámpula".
+        (r"\bAMPULAS?\b", "VIAL"),
+        (r"\bCART(?:\s+DES)?\b", "CARTUCHO"),
+    )
+    for patron, reemplazo in sustituciones:
+        valor = re.sub(patron, reemplazo, valor)
+    valor = re.sub(r"(?<![0-9])\.|\.(?![0-9])", " ", valor)
     valor = re.sub(r"[^A-Z0-9./+%-]+", " ", valor)
     return re.sub(r"\s+", " ", valor).strip()
 
 
 def extraer_medidas(texto: str | None) -> frozenset[tuple[str, Decimal]]:
+    """Convierte sólo masa, volumen y unidades matemáticamente exactas."""
+
     normalizado = normalizar_texto(texto).replace(",", ".")
     patron = r"(?<![A-Z0-9])([0-9]+(?:\.[0-9]+)?)\s*(MG|KG|ML|UI|G|L|U)\b"
     medidas: set[tuple[str, Decimal]] = set()
@@ -56,6 +109,22 @@ def extraer_medidas(texto: str | None) -> frozenset[tuple[str, Decimal]]:
         unidad_base, factor = _FACTORES[unidad]
         medidas.add((unidad_base, (Decimal(valor) * factor).normalize()))
     return frozenset(medidas)
+
+
+def extraer_conteos_presentacion(texto: str | None) -> frozenset[tuple[str, int]]:
+    """Extrae cantidades sólo cuando están unidas a una forma de envase conocida."""
+
+    normalizado = normalizar_texto(texto)
+    conteos: set[tuple[str, int]] = set()
+    for unidad in _UNIDADES_PRESENTACION:
+        patrones = (
+            rf"\b([0-9]{{1,4}})\s*{unidad}\b",
+            rf"\b{unidad}\s*(?:(?:CON|C/?|X)\s*)?([0-9]{{1,4}})\b",
+        )
+        for patron in patrones:
+            for cantidad in re.findall(patron, normalizado):
+                conteos.add((unidad, int(cantidad)))
+    return frozenset(conteos)
 
 
 def _tokens(texto: str | None) -> frozenset[str]:
@@ -70,6 +139,70 @@ def termino_busqueda(solicitud: SolicitudProveedor) -> str:
     return normalizar_texto(solicitud.marca) or normalizar_texto(solicitud.producto)
 
 
+def _decimal_legible(valor: Decimal) -> str:
+    return format(valor.normalize(), "f")
+
+
+def _variantes_medida(unidad_base: str, valor_base: Decimal) -> tuple[str, ...]:
+    if unidad_base == "MG":
+        return (
+            f"{_decimal_legible(valor_base)} mg",
+            f"{_decimal_legible(valor_base / Decimal('1000'))} g",
+        )
+    if unidad_base == "ML":
+        return (
+            f"{_decimal_legible(valor_base)} mL",
+            f"{_decimal_legible(valor_base / Decimal('1000'))} L",
+        )
+    if unidad_base == "U":
+        legible = _decimal_legible(valor_base)
+        return (f"{legible} U", f"{legible} UI")
+    return ()
+
+
+def terminos_busqueda_ampliada(solicitud: SolicitudProveedor) -> tuple[str, ...]:
+    """Lista abreviaturas y unidades exactas para un único segundo descubrimiento."""
+
+    identidad = " ".join(
+        parte or ""
+        for parte in (
+            solicitud.forma_dispositivo,
+            solicitud.concentracion,
+            solicitud.presentacion,
+        )
+    )
+    normalizada = normalizar_texto(identidad)
+    terminos: list[str] = []
+    for canonico, aliases in _ALIASES_BUSQUEDA.items():
+        if set(canonico.split()).issubset(set(normalizada.split())):
+            terminos.append(" | ".join(aliases))
+    for unidad_base, valor in sorted(extraer_medidas(identidad)):
+        variantes = _variantes_medida(unidad_base, valor)
+        if variantes:
+            terminos.append(" | ".join(variantes))
+    return tuple(dict.fromkeys(terminos))
+
+
+def _agregar_motivo(motivos: list[str], motivo: str) -> None:
+    if motivo not in motivos:
+        motivos.append(motivo)
+
+
+def _motivo_medidas(
+    esperadas: frozenset[tuple[str, Decimal]],
+    observadas: frozenset[tuple[str, Decimal]],
+    *,
+    distinto: str,
+) -> str | None:
+    faltantes = esperadas - observadas
+    if not faltantes:
+        return None
+    unidades_observadas = {unidad for unidad, _ in observadas}
+    if any(unidad in unidades_observadas for unidad, _ in faltantes):
+        return distinto
+    return "faltan datos suficientes para comprobar coincidencia"
+
+
 def evaluar_candidato(
     solicitud: SolicitudProveedor,
     candidato: CandidatoCatalogo,
@@ -81,23 +214,53 @@ def evaluar_candidato(
     tokens_forma = _tokens(solicitud.forma_dispositivo)
 
     if candidato.precio_observado <= 0:
-        motivos.append("precio no utilizable")
+        _agregar_motivo(motivos, "precio no utilizable")
     if candidato.stock is not None and candidato.stock <= 0:
-        motivos.append("sin disponibilidad")
+        _agregar_motivo(motivos, "sin disponibilidad")
     if tokens_marca and not tokens_marca.issubset(tokens_candidato):
-        motivos.append("marca distinta")
-    elif not tokens_marca and tokens_producto and not (tokens_producto & tokens_candidato):
-        motivos.append("producto distinto")
-    if tokens_forma and not tokens_forma.issubset(tokens_candidato):
-        motivos.append("forma o dispositivo distinto")
+        _agregar_motivo(motivos, "marca distinta")
+    elif not tokens_marca and tokens_producto and not tokens_producto.issubset(tokens_candidato):
+        _agregar_motivo(motivos, "producto distinto")
 
-    identidad = " ".join(
-        parte or "" for parte in (solicitud.concentracion, solicitud.presentacion)
-    )
-    medidas = extraer_medidas(identidad)
+    if tokens_forma and not tokens_forma.issubset(tokens_candidato):
+        formas_observadas = tokens_candidato & _FORMAS_CONOCIDAS
+        motivo_forma = (
+            "forma o dispositivo distinto"
+            if formas_observadas
+            else "faltan datos suficientes para comprobar coincidencia"
+        )
+        _agregar_motivo(motivos, motivo_forma)
+
     medidas_candidato = extraer_medidas(candidato.descripcion)
-    if medidas and not medidas.issubset(medidas_candidato):
-        motivos.append("medida o concentración distinta")
+    medidas_concentracion = extraer_medidas(solicitud.concentracion)
+    motivo_concentracion = _motivo_medidas(
+        medidas_concentracion,
+        medidas_candidato,
+        distinto="concentración distinta",
+    )
+    if motivo_concentracion:
+        _agregar_motivo(motivos, motivo_concentracion)
+
+    medidas_presentacion = extraer_medidas(solicitud.presentacion) - medidas_concentracion
+    motivo_presentacion = _motivo_medidas(
+        medidas_presentacion,
+        medidas_candidato,
+        distinto="presentación distinta",
+    )
+    if motivo_presentacion:
+        _agregar_motivo(motivos, motivo_presentacion)
+
+    conteos_esperados = extraer_conteos_presentacion(solicitud.presentacion)
+    conteos_observados = extraer_conteos_presentacion(candidato.descripcion)
+    conteos_faltantes = conteos_esperados - conteos_observados
+    if conteos_faltantes:
+        unidades_observadas = {unidad for unidad, _ in conteos_observados}
+        motivo_conteo = (
+            "presentación distinta"
+            if any(unidad in unidades_observadas for unidad, _ in conteos_faltantes)
+            else "faltan datos suficientes para comprobar coincidencia"
+        )
+        _agregar_motivo(motivos, motivo_conteo)
 
     puntaje = 0
     if not motivos:
@@ -105,7 +268,8 @@ def evaluar_candidato(
             4 * len(tokens_marca & tokens_candidato)
             + 2 * len(tokens_producto & tokens_candidato)
             + 3 * len(tokens_forma & tokens_candidato)
-            + 5 * len(medidas)
+            + 5 * len(medidas_concentracion | medidas_presentacion)
+            + 5 * len(conteos_esperados)
         )
     return EvaluacionCatalogo(candidato, not motivos, puntaje, tuple(motivos))
 

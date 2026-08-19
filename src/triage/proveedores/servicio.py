@@ -10,13 +10,32 @@ from sqlalchemy.orm import Session
 from triage.cotizaciones.modelos import Cotizacion, ahora_utc
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
 from triage.historico.decisiones_servicio import referencias_estables_cotizadas_hoy
-from triage.historico.modelos import OrigenObservacionPrecio
+from triage.historico.modelos import (
+    LIMITE_FUENTE_OBSERVACION,
+    LIMITE_PRODUCTO_OBSERVADO,
+    LIMITE_PROVEEDOR_OBSERVACION,
+    OrigenObservacionPrecio,
+)
 from triage.historico.servicio import clave_producto, crear_observacion_precio
 from triage.normalizacion.modelos import NormalizacionPartida
 from triage.proveedores.base import ProveedorProducto, ResultadoProveedor, SolicitudProveedor
-from triage.proveedores.coincidencia_catalogo import CandidatoCatalogo, evaluar_candidato
-from triage.proveedores.descubrimiento_web import DescubridorWeb
-from triage.proveedores.modelos import ConsultaProveedor, EstadoConsultaProveedor
+from triage.proveedores.coincidencia_catalogo import (
+    CandidatoCatalogo,
+    evaluar_candidato,
+    terminos_busqueda_ampliada,
+)
+from triage.proveedores.descubrimiento_web import (
+    CandidatoWeb,
+    DescubridorWeb,
+    ErrorDescubrimientoWeb,
+)
+from triage.proveedores.modelos import (
+    CandidatoWebDescartado,
+    ConsultaProveedor,
+    ConsultaWeb,
+    EstadoConsultaProveedor,
+    EstadoConsultaWeb,
+)
 
 
 class ErrorConsultaProveedor(Exception):
@@ -52,6 +71,24 @@ class ResumenDescubrimientoWeb:
     candidatos: int
     guardados: int
     descartados: int
+    intentos: int
+
+
+@dataclass(frozen=True)
+class TrazabilidadWebPartida:
+    """Última consulta web y sus descartes, sin mezclarlos con precios históricos."""
+
+    consulta: ConsultaWeb
+    descartados: tuple[CandidatoWebDescartado, ...]
+
+
+@dataclass(frozen=True)
+class _EvaluacionWeb:
+    candidato: CandidatoWeb
+    intento_busqueda: int
+    proveedor: str | None
+    producto_observado: str | None
+    motivos: tuple[str, ...]
 
 
 def _limpiar(valor: str | None) -> str | None:
@@ -132,6 +169,49 @@ def listar_productos_consultables(
         )
         for normalizacion, partida, documento in filas
     ]
+
+
+def listar_trazabilidad_web(
+    sesion: Session,
+    cotizacion_id: str,
+) -> dict[str, TrazabilidadWebPartida]:
+    """Devuelve sólo la ejecución web más reciente de cada partida para una UI compacta."""
+
+    consultas = list(
+        sesion.scalars(
+            select(ConsultaWeb)
+            .where(ConsultaWeb.cotizacion_id == cotizacion_id)
+            .order_by(ConsultaWeb.iniciada_en.desc())
+        )
+    )
+    ultimas: dict[str, ConsultaWeb] = {}
+    for consulta in consultas:
+        if consulta.partida_documento_id:
+            ultimas.setdefault(consulta.partida_documento_id, consulta)
+    if not ultimas:
+        return {}
+
+    descartados_por_consulta: dict[str, list[CandidatoWebDescartado]] = {
+        consulta.id: [] for consulta in ultimas.values()
+    }
+    descartados = sesion.scalars(
+        select(CandidatoWebDescartado)
+        .where(CandidatoWebDescartado.consulta_web_id.in_(descartados_por_consulta))
+        .order_by(
+            CandidatoWebDescartado.intento_busqueda.asc(),
+            CandidatoWebDescartado.descartado_en.asc(),
+        )
+    )
+    for candidato in descartados:
+        descartados_por_consulta[candidato.consulta_web_id].append(candidato)
+
+    return {
+        partida_id: TrazabilidadWebPartida(
+            consulta=consulta,
+            descartados=tuple(descartados_por_consulta[consulta.id]),
+        )
+        for partida_id, consulta in ultimas.items()
+    }
 
 
 def _validar_resultado(resultado: ResultadoProveedor) -> None:
@@ -388,6 +468,108 @@ def ejecutar_consultas_configuradas(
     )
 
 
+def _motivos_descarte_web(
+    solicitud: SolicitudProveedor,
+    candidato: CandidatoWeb,
+) -> tuple[str | None, str | None, tuple[str, ...]]:
+    proveedor = _limpiar(candidato.proveedor)
+    producto_observado = _limpiar(candidato.producto_exacto)
+    url = str(candidato.url)
+    motivos: list[str] = []
+    if proveedor is None:
+        motivos.append("proveedor o fuente no identificada")
+    elif len(proveedor) > LIMITE_PROVEEDOR_OBSERVACION:
+        motivos.append("proveedor excede el límite del histórico cotizable")
+    if producto_observado is None:
+        motivos.append("faltan datos suficientes para comprobar coincidencia")
+    elif len(producto_observado) > LIMITE_PRODUCTO_OBSERVADO:
+        motivos.append("producto observado excede el límite del histórico cotizable")
+    if len(url) > LIMITE_FUENTE_OBSERVACION:
+        motivos.append("URL excede el límite del histórico cotizable")
+    if candidato.precio_total is None:
+        motivos.append("precio no visible")
+
+    if producto_observado is not None:
+        evaluacion = evaluar_candidato(
+            solicitud,
+            CandidatoCatalogo(
+                descripcion=producto_observado,
+                precio_observado=candidato.precio_total or Decimal("1"),
+                stock=None,
+                fuente=str(candidato.url),
+            ),
+        )
+        motivos.extend(evaluacion.motivos)
+    if not candidato.coincidencia_exacta and not any(
+        motivo
+        in {
+            "marca distinta",
+            "producto distinto",
+            "forma o dispositivo distinto",
+            "concentración distinta",
+            "presentación distinta",
+            "faltan datos suficientes para comprobar coincidencia",
+        }
+        for motivo in motivos
+    ):
+        motivos.append("faltan datos suficientes para comprobar coincidencia")
+    return proveedor, producto_observado, tuple(dict.fromkeys(motivos))
+
+
+def _evaluar_candidatos_web(
+    solicitud: SolicitudProveedor,
+    candidatos: Sequence[CandidatoWeb],
+    *,
+    intento_busqueda: int,
+) -> tuple[_EvaluacionWeb, ...]:
+    return tuple(
+        _EvaluacionWeb(
+            candidato=candidato,
+            intento_busqueda=intento_busqueda,
+            proveedor=resultado[0],
+            producto_observado=resultado[1],
+            motivos=resultado[2],
+        )
+        for candidato in candidatos
+        for resultado in (_motivos_descarte_web(solicitud, candidato),)
+    )
+
+
+def _finalizar_consulta_web(
+    sesion: Session,
+    consulta: ConsultaWeb,
+    evaluaciones: Sequence[_EvaluacionWeb],
+    *,
+    guardados: int,
+    intentos: int,
+    error: str | None = None,
+) -> None:
+    descartados = [evaluacion for evaluacion in evaluaciones if evaluacion.motivos]
+    for evaluacion in descartados:
+        sesion.add(
+            CandidatoWebDescartado(
+                consulta_web_id=consulta.id,
+                proveedor=evaluacion.proveedor,
+                producto_observado=evaluacion.producto_observado,
+                url=str(evaluacion.candidato.url),
+                precio_observado=evaluacion.candidato.precio_total,
+                motivos=list(evaluacion.motivos),
+                intento_busqueda=evaluacion.intento_busqueda,
+            )
+        )
+    consulta.estado = (
+        EstadoConsultaWeb.ERROR.value if error else EstadoConsultaWeb.COMPLETADA.value
+    )
+    consulta.intentos = intentos
+    consulta.candidatos = len(evaluaciones)
+    consulta.guardados = guardados
+    consulta.descartados = len(descartados)
+    consulta.mensaje_error = error
+    consulta.finalizada_en = ahora_utc()
+    sesion.add(consulta)
+    sesion.commit()
+
+
 def ejecutar_descubrimiento_web(
     sesion: Session,
     *,
@@ -396,7 +578,7 @@ def ejecutar_descubrimiento_web(
     usuario_id: str,
     descubridor: DescubridorWeb,
 ) -> ResumenDescubrimientoWeb:
-    """Busca opciones públicas y guarda sólo coincidencias exactas con precio visible."""
+    """Hace como máximo dos búsquedas y sólo guarda coincidencias estrictas."""
 
     fila = _normalizacion_elegible(
         sesion,
@@ -419,41 +601,88 @@ def ejecutar_descubrimiento_web(
         normalizacion=normalizacion,
         codigo_postal=codigo_postal,
     )
-    candidatos = descubridor.buscar(solicitud)
-    guardados = 0
-    descartados = 0
-    for candidato in candidatos:
-        proveedor = _limpiar(candidato.proveedor)
-        producto_observado = _limpiar(candidato.producto_exacto)
-        if (
-            not candidato.coincidencia_exacta
-            or candidato.precio_total is None
-            or not proveedor
-            or not producto_observado
-        ):
-            descartados += 1
-            continue
+    criterios = {
+        "producto": solicitud.producto,
+        "marca": solicitud.marca,
+        "concentracion": solicitud.concentracion,
+        "forma_dispositivo": solicitud.forma_dispositivo,
+        "presentacion": solicitud.presentacion,
+        "codigo_postal": solicitud.codigo_postal,
+    }
+    terminos_ampliados = terminos_busqueda_ampliada(solicitud)
+    consulta = ConsultaWeb(
+        cotizacion_id=cotizacion_id,
+        partida_documento_id=partida_documento_id,
+        clave_producto=clave_producto(normalizacion),
+        modelo=_limpiar(getattr(descubridor, "modelo", None))
+        or type(descubridor).__name__,
+        criterios_busqueda=criterios,
+        terminos_ampliados=list(terminos_ampliados),
+        ejecutada_por_usuario_id=usuario_id,
+    )
+    sesion.add(consulta)
+    sesion.commit()
+    sesion.refresh(consulta)
 
-        evaluacion = evaluar_candidato(
-            solicitud,
-            CandidatoCatalogo(
-                descripcion=producto_observado,
-                precio_observado=candidato.precio_total,
-                stock=None,
-                fuente=str(candidato.url),
-            ),
+    evaluaciones: list[_EvaluacionWeb] = []
+    intentos = 1
+    try:
+        primeros = descubridor.buscar(solicitud)
+    except ErrorDescubrimientoWeb as error:
+        _finalizar_consulta_web(
+            sesion,
+            consulta,
+            evaluaciones,
+            guardados=0,
+            intentos=intentos,
+            error=str(error),
         )
-        if not evaluacion.coincide:
-            descartados += 1
-            continue
+        raise
+    evaluaciones.extend(
+        _evaluar_candidatos_web(solicitud, primeros, intento_busqueda=1)
+    )
 
+    validos = [evaluacion for evaluacion in evaluaciones if not evaluacion.motivos]
+    if not validos and terminos_ampliados:
+        intentos = 2
+        try:
+            segundos = descubridor.buscar(
+                solicitud,
+                terminos_adicionales=terminos_ampliados,
+            )
+        except ErrorDescubrimientoWeb as error:
+            _finalizar_consulta_web(
+                sesion,
+                consulta,
+                evaluaciones,
+                guardados=0,
+                intentos=intentos,
+                error=str(error),
+            )
+            raise
+        segundas_evaluaciones = _evaluar_candidatos_web(
+            solicitud,
+            segundos,
+            intento_busqueda=2,
+        )
+        evaluaciones.extend(segundas_evaluaciones)
+        validos = [evaluacion for evaluacion in segundas_evaluaciones if not evaluacion.motivos]
+
+    guardados = 0
+    fuentes_guardadas: set[str] = set()
+    for evaluacion in validos:
+        candidato = evaluacion.candidato
+        fuente = str(candidato.url)
+        if fuente in fuentes_guardadas:
+            continue
+        fuentes_guardadas.add(fuente)
         crear_observacion_precio(
             sesion,
             cotizacion_id=cotizacion_id,
             partida_documento_id=partida_documento_id,
             usuario_id=usuario_id,
-            proveedor=proveedor,
-            fuente=str(candidato.url),
+            proveedor=evaluacion.proveedor or "Fuente web",
+            fuente=fuente,
             precio_antes_iva=None,
             iva_porcentaje=None,
             precio_total=candidato.precio_total,
@@ -462,13 +691,23 @@ def ejecutar_descubrimiento_web(
             disponibilidad=candidato.disponibilidad,
             entrega_viable=candidato.entrega_viable,
             codigo_postal=codigo_postal,
-            producto_observado=producto_observado,
+            producto_observado=evaluacion.producto_observado,
             origen=OrigenObservacionPrecio.WEB,
+            guardar=False,
         )
         guardados += 1
 
+    _finalizar_consulta_web(
+        sesion,
+        consulta,
+        evaluaciones,
+        guardados=guardados,
+        intentos=intentos,
+    )
+    descartados = sum(bool(evaluacion.motivos) for evaluacion in evaluaciones)
     return ResumenDescubrimientoWeb(
-        candidatos=len(candidatos),
+        candidatos=len(evaluaciones),
         guardados=guardados,
         descartados=descartados,
+        intentos=intentos,
     )

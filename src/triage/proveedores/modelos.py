@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from triage.base_datos import Base
@@ -18,6 +18,14 @@ class EstadoConsultaProveedor(StrEnum):
     INICIADA = "INICIADA"
     EXITOSA = "EXITOSA"
     NO_ENCONTRADO = "NO_ENCONTRADO"
+    ERROR = "ERROR"
+
+
+class EstadoConsultaWeb(StrEnum):
+    """Estado de una ejecución acotada de descubrimiento web."""
+
+    INICIADA = "INICIADA"
+    COMPLETADA = "COMPLETADA"
     ERROR = "ERROR"
 
 
@@ -76,3 +84,80 @@ class ConsultaProveedor(Base):
         index=True,
     )
     finalizada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ConsultaWeb(Base):
+    """Ejecución web trazable, separada de las observaciones de precio utilizables."""
+
+    __tablename__ = "consultas_web"
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    cotizacion_id: Mapped[str] = mapped_column(
+        ForeignKey("cotizaciones.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    partida_documento_id: Mapped[str | None] = mapped_column(
+        ForeignKey("partidas_documento.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    clave_producto: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    modelo: Mapped[str] = mapped_column(String(120), nullable=False)
+    estado: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default=EstadoConsultaWeb.INICIADA.value,
+        index=True,
+    )
+    criterios_busqueda: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    terminos_ampliados: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    intentos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    candidatos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    guardados: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    descartados: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mensaje_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    ejecutada_por_usuario_id: Mapped[str] = mapped_column(
+        ForeignKey("usuarios.id"),
+        nullable=False,
+    )
+    iniciada_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=ahora_utc,
+        index=True,
+    )
+    finalizada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CandidatoWebDescartado(Base):
+    """Resultado web no cotizable conservado sólo para explicar el descarte."""
+
+    __tablename__ = "candidatos_web_descartados"
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    consulta_web_id: Mapped[str] = mapped_column(
+        ForeignKey("consultas_web.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    proveedor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    producto_observado: Mapped[str | None] = mapped_column(Text, nullable=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    precio_observado: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    motivos: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    intento_busqueda: Mapped[int] = mapped_column(Integer, nullable=False)
+    descartado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=ahora_utc,
+        index=True,
+    )

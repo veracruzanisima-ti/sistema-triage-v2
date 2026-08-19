@@ -1,6 +1,7 @@
 """Descubrimiento opcional de nuevas fuentes públicas para un producto preparado."""
 
 import logging
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Protocol
 
@@ -57,7 +58,12 @@ class DescubridorWeb(Protocol):
 
     modelo: str
 
-    def buscar(self, solicitud: SolicitudProveedor) -> tuple[CandidatoWeb, ...]:
+    def buscar(
+        self,
+        solicitud: SolicitudProveedor,
+        *,
+        terminos_adicionales: Sequence[str] = (),
+    ) -> tuple[CandidatoWeb, ...]:
         """Busca candidatos públicos sin tomar una decisión comercial."""
 
 
@@ -70,7 +76,8 @@ Busca en la web pública de México opciones reales para comprar el producto des
 
 Reglas obligatorias:
 - Devuelve máximo 5 candidatos.
-- Sólo incluye páginas que muestren un precio numérico visible del producto.
+- Incluye páginas de producto identificables. Reporta `precio_total` sólo cuando exista un
+  precio numérico visible; en caso contrario usa null para que Triage explique el descarte.
 - `url` debe ser la URL directa de la página fuente encontrada mediante la búsqueda web.
 - No inventes precios, disponibilidad, promociones, envío ni impuestos.
 - No calcules ni infieras IVA. El precio público encontrado se reporta únicamente como
@@ -81,8 +88,8 @@ Reglas obligatorias:
   explícita para el contexto indicado. En cualquier otro caso devuelve null.
 - `coincidencia_exacta` exige respetar la identidad preparada: producto, marca cuando exista,
   concentración, forma/dispositivo y presentación. No conviertas cajas, dosis ni tamaños.
-- Puedes devolver una coincidencia no exacta con `coincidencia_exacta=false` para explicar por
-  qué fue descartada, pero Triage no la guardará como precio utilizable.
+- Puedes devolver una coincidencia no exacta con `coincidencia_exacta=false`; Triage conservará
+  su URL y la volverá a validar localmente, pero nunca la guardará como precio utilizable.
 - El código postal sirve como contexto de disponibilidad/precio. No afirmes cobertura sólo por
   conocer el código postal.
 - Prioriza farmacias, distribuidores y comercios con página de producto identificable.
@@ -90,17 +97,29 @@ Reglas obligatorias:
 """.strip()
 
 
-def _descripcion_solicitud(solicitud: SolicitudProveedor) -> str:
-    return "\n".join(
-        (
-            f"Producto: {solicitud.producto or 'sin nombre'}",
-            f"Marca: {solicitud.marca or 'no especificada'}",
-            f"Concentración: {solicitud.concentracion or 'no especificada'}",
-            f"Forma/dispositivo: {solicitud.forma_dispositivo or 'no especificado'}",
-            f"Presentación: {solicitud.presentacion or 'no especificada'}",
-            f"Código postal de consulta: {solicitud.codigo_postal or 'no configurado'}",
+def _descripcion_solicitud(
+    solicitud: SolicitudProveedor,
+    *,
+    terminos_adicionales: Sequence[str] = (),
+) -> str:
+    lineas = [
+        f"Producto: {solicitud.producto or 'sin nombre'}",
+        f"Marca: {solicitud.marca or 'no especificada'}",
+        f"Concentración: {solicitud.concentracion or 'no especificada'}",
+        f"Forma/dispositivo: {solicitud.forma_dispositivo or 'no especificado'}",
+        f"Presentación: {solicitud.presentacion or 'no especificada'}",
+        f"Código postal de consulta: {solicitud.codigo_postal or 'no configurado'}",
+    ]
+    if terminos_adicionales:
+        lineas.extend(
+            (
+                "Esta es la segunda y última búsqueda.",
+                "Prueba además estas equivalencias seguras sólo para descubrir páginas:",
+                *(f"- {termino}" for termino in terminos_adicionales),
+                "No las uses para relajar la identidad ni para convertir presentaciones.",
+            )
         )
-    )
+    return "\n".join(lineas)
 
 
 def _convertir_candidato(candidato: CandidatoWebRespuesta) -> CandidatoWeb | None:
@@ -178,10 +197,18 @@ class DescubridorWebOpenAI:
         self.modelo = modelo.strip()
         self._cliente = OpenAI(api_key=api_key)
 
-    def buscar(self, solicitud: SolicitudProveedor) -> tuple[CandidatoWeb, ...]:
+    def buscar(
+        self,
+        solicitud: SolicitudProveedor,
+        *,
+        terminos_adicionales: Sequence[str] = (),
+    ) -> tuple[CandidatoWeb, ...]:
         """Busca sólo con datos operativos del producto, sin datos personales."""
 
-        descripcion = _descripcion_solicitud(solicitud)
+        descripcion = _descripcion_solicitud(
+            solicitud,
+            terminos_adicionales=terminos_adicionales,
+        )
         try:
             respuesta = self._cliente.responses.parse(
                 model=self.modelo,
@@ -238,10 +265,18 @@ class DescubridorWebGemini:
             http_options={"timeout": 80_000},
         )
 
-    def buscar(self, solicitud: SolicitudProveedor) -> tuple[CandidatoWeb, ...]:
+    def buscar(
+        self,
+        solicitud: SolicitudProveedor,
+        *,
+        terminos_adicionales: Sequence[str] = (),
+    ) -> tuple[CandidatoWeb, ...]:
         """Busca con Google Search usando sólo la identidad operativa y el CP."""
 
-        descripcion = _descripcion_solicitud(solicitud)
+        descripcion = _descripcion_solicitud(
+            solicitud,
+            terminos_adicionales=terminos_adicionales,
+        )
         try:
             respuesta = self._cliente.models.generate_content(
                 model=self.modelo,
