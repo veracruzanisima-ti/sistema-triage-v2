@@ -18,10 +18,11 @@ from triage.revision_final.servicio import ProductoPreCierre, listar_precierre
 _MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _FORMATO_MONEDA = '$#,##0.00'
 _GUION = "—"
+_PREFIJOS_FORMULA = ("=", "+", "-", "@")
 
 
 class ErrorExportacionDif(ValueError):
-    """La cotización todavía no cumple las condiciones para emitir el Excel DIF."""
+    """El modelo interno todavía no permite generar un borrador DIF consistente."""
 
 
 @dataclass(frozen=True)
@@ -35,10 +36,19 @@ def _texto(valor: object | None) -> str:
     return " ".join(str(valor or "").split())
 
 
+def _texto_excel(valor: object | None) -> str:
+    """Evita que texto controlado por usuarios se interprete como fórmula al abrir el XLSX."""
+
+    limpio = _texto(valor)
+    if limpio.startswith(_PREFIJOS_FORMULA):
+        return "'" + limpio
+    return limpio
+
+
 def _nombre_archivo(cotizacion: Cotizacion) -> str:
     base = _texto(cotizacion.referencia) or cotizacion.id[:8]
     seguro = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._-") or cotizacion.id[:8]
-    return f"Cotizacion_DIF_{seguro[:80]}.xlsx"
+    return f"Borrador_Cotizacion_DIF_{seguro[:80]}.xlsx"
 
 
 def _validar_exportable(
@@ -73,7 +83,7 @@ def _validar_exportable(
     if pendientes:
         tipos = ", ".join(dict.fromkeys(pendientes))
         raise ErrorExportacionDif(
-            "La cotización no es emitible todavía. Pendiente: " + tipos + "."
+            "No puede generarse el borrador DIF todavía. Pendiente: " + tipos + "."
         )
 
 
@@ -87,16 +97,17 @@ def _fila_dif(numero: int, item: ProductoPreCierre) -> list[object]:
     if item.decision_comercial.estado == EstadoComercial.NO_SE_COTIZA:
         return [
             numero,
-            documento.memorandum or "",
-            folios,
-            documento.municipio or "",
-            normalizacion.producto or partida.producto_solicitado or "",
-            normalizacion.presentacion or partida.presentacion_solicitada or "",
+            _texto_excel(documento.memorandum),
+            _texto_excel(folios),
+            _texto_excel(documento.municipio),
+            _texto_excel(normalizacion.producto or partida.producto_solicitado),
+            _texto_excel(normalizacion.presentacion or partida.presentacion_solicitada),
             float(partida.cantidad) if partida.cantidad is not None else "",
-            partida.unidad_medida or "",
-            normalizacion.marca or partida.marca_solicitada or "",
+            _texto_excel(partida.unidad_medida),
+            _texto_excel(normalizacion.marca or partida.marca_solicitada),
             "NO SE COTIZA",
-            item.decision_comercial.motivo or "",
+            _texto_excel(item.decision_comercial.motivo),
+            _GUION,
             _GUION,
             _GUION,
             _GUION,
@@ -110,27 +121,30 @@ def _fila_dif(numero: int, item: ProductoPreCierre) -> list[object]:
     validacion = item.validacion_fiscal
     referencia = item.referencia
     if calculo is None or validacion is None or referencia is None:
-        raise ErrorExportacionDif("Una partida cotizable perdió su consolidación antes de exportar.")
+        raise ErrorExportacionDif(
+            "Una partida cotizable perdió su consolidación antes de exportar."
+        )
 
     return [
         numero,
-        documento.memorandum or "",
-        folios,
-        documento.municipio or "",
-        normalizacion.producto or partida.producto_solicitado or "",
-        normalizacion.presentacion or partida.presentacion_solicitada or "",
+        _texto_excel(documento.memorandum),
+        _texto_excel(folios),
+        _texto_excel(documento.municipio),
+        _texto_excel(normalizacion.producto or partida.producto_solicitado),
+        _texto_excel(normalizacion.presentacion or partida.presentacion_solicitada),
         float(partida.cantidad) if partida.cantidad is not None else "",
-        partida.unidad_medida or "",
-        normalizacion.marca or partida.marca_solicitada or "",
+        _texto_excel(partida.unidad_medida),
+        _texto_excel(normalizacion.marca or partida.marca_solicitada),
         "COTIZABLE",
         "",
         float(calculo.precio_unitario_sin_iva),
         float(calculo.subtotal),
         float(calculo.iva),
         float(calculo.total),
-        validacion.etiqueta,
-        referencia.proveedor,
-        referencia.fuente,
+        _texto_excel(validacion.etiqueta),
+        _texto_excel(referencia.proveedor),
+        _texto_excel(referencia.fuente),
+        _texto_excel(calculo.origen_precio),
     ]
 
 
@@ -138,8 +152,16 @@ def _crear_libro(cotizacion: Cotizacion, productos: list[ProductoPreCierre]) -> 
     libro = Workbook()
     hoja = libro.active
     hoja.title = "Cotización DIF"
-    hoja.append(["COTIZACIÓN DIF · VERACRUZANÍSIMA"])
-    hoja.append(["Referencia", cotizacion.referencia or "Sin referencia"])
+    hoja.append(["BORRADOR DIF · NO EMITIBLE"])
+    hoja.append(["Referencia", _texto_excel(cotizacion.referencia or "Sin referencia")])
+    hoja.append(
+        [
+            "Aviso",
+            "Los importes usan el precio provisional disponible en el modelo interno. "
+            "Triage V2 aún no tiene una regla validada de precio final de venta/utilidad. "
+            "Este archivo sirve para revisión del formato y no debe emitirse al cliente.",
+        ]
+    )
     hoja.append([])
 
     encabezados = [
@@ -161,22 +183,24 @@ def _crear_libro(cotizacion: Cotizacion, productos: list[ProductoPreCierre]) -> 
         "Tratamiento fiscal",
         "Proveedor de referencia",
         "Fuente",
+        "Origen del precio",
     ]
     hoja.append(encabezados)
 
     for numero, item in enumerate(productos, start=1):
         hoja.append(_fila_dif(numero, item))
 
-    hoja.freeze_panes = "A5"
-    hoja.auto_filter.ref = f"A4:R{hoja.max_row}"
+    hoja.freeze_panes = "A6"
+    hoja.auto_filter.ref = f"A5:S{hoja.max_row}"
     hoja["A1"].font = Font(bold=True, size=14)
-    for celda in hoja[4]:
+    hoja["A3"].font = Font(bold=True)
+    for celda in hoja[5]:
         celda.font = Font(bold=True)
         celda.alignment = Alignment(wrap_text=True, vertical="top")
-    for fila in hoja.iter_rows(min_row=5):
+    for fila in hoja.iter_rows(min_row=6):
         for celda in fila:
             celda.alignment = Alignment(vertical="top", wrap_text=True)
-    for fila in range(5, hoja.max_row + 1):
+    for fila in range(6, hoja.max_row + 1):
         for columna in range(12, 16):
             celda = hoja.cell(row=fila, column=columna)
             if isinstance(celda.value, (int, float)):
@@ -201,6 +225,7 @@ def _crear_libro(cotizacion: Cotizacion, productos: list[ProductoPreCierre]) -> 
         16: 20,
         17: 24,
         18: 42,
+        19: 44,
     }
     for indice, ancho in anchos.items():
         hoja.column_dimensions[get_column_letter(indice)].width = ancho
@@ -212,7 +237,7 @@ def _crear_libro(cotizacion: Cotizacion, productos: list[ProductoPreCierre]) -> 
 
 
 def generar_exportacion_dif(sesion: Session, cotizacion_id: str) -> ExportacionDif:
-    """Genera el Excel sólo si el modelo interno ya es emitible para DIF."""
+    """Genera un borrador DIF con tratamiento fiscal validado, no una cotización final."""
 
     cotizacion = obtener_cotizacion(sesion, cotizacion_id)
     if cotizacion is None:
