@@ -10,7 +10,7 @@
 
 ## Estado operativo actual
 
-El piloto end-to-end de #55 continúa activo. Durante la prueba con productos reales aparecieron problemas reproducibles de identidad, forma/dispositivo, disponibilidad y navegación. Se corrigieron como cambios separados, con pruebas y reversión, sin reutilizar reglas del V1.
+El piloto end-to-end de #55 continúa activo. Durante la prueba con productos reales aparecieron problemas reproducibles de identidad, forma/dispositivo, disponibilidad, navegación y verificabilidad documental por terceros. Se corrigieron como cambios separados, con pruebas y reversión, sin reutilizar reglas del V1.
 
 ### PR #69 · convergencia segura marca → genérico con COFEPRIS
 
@@ -78,6 +78,40 @@ Resultado UX:
 - Revisión consolidada resume con cinco señales: `Preparación`, `Referencias`, `Fiscal`, `Precio final` y `Alertas`; los conteos completos siguen disponibles bajo `Ver conteos detallados`.
 - Preparación e Histórico ya tenían navegación dirigida por #63 y #71; la auditoría evitó rediseñar pantallas que ya comunicaban correctamente el siguiente paso.
 
+### PR #77 · conservación privada del documento original
+
+Fusionado en `main` con commit `dd93e7d55492a195d019b171ebc79d7e1f6f4e0f`. CI #179 verde. Migración `20260821_0018`.
+
+- Las nuevas cargas conservan el archivo original en PostgreSQL **antes** de invocar al lector.
+- La ruta de lectura del original requiere sesión y responde con `Cache-Control: private, no-store`.
+- PDF e imágenes admitidas pueden revisarse desde la pantalla del documento; también existe `Abrir original`.
+- Si el lector falla, el documento no queda bloqueado: una persona puede contrastar el original y capturar manualmente los datos/partidas antes de `Guardar revisión`.
+- Los documentos creados antes de esta migración no recuperan el archivo automáticamente; muestran `Original no disponible` y requieren nueva carga si se necesita comprobación visual.
+- Para el prototipo se conserva en la base compartida y aplica el límite existente de 15 MB por archivo. Si el volumen crece, debe migrarse a almacenamiento de objetos conservando hash, acceso privado y trazabilidad.
+- El archivo sólo se sirve dentro de la cotización a la que pertenece; no se expone como URL pública reutilizable.
+
+### PR #78 · paleta semántica suave y CTA de disponibilidad
+
+Fusionado en `main` con commit `a1756e1e4ed940d8255a6f3b8f5015d9dca61326`. CI #184 verde.
+
+Se normalizó el significado visual sin depender únicamente del color:
+
+- verde suave: confirmado, disponible, seleccionado o listo;
+- ámbar suave: pendiente o por confirmar;
+- azul suave: identidad/evidencia informativa;
+- violeta suave: oferta o promoción;
+- rosa/rojo suave: sin disponibilidad, bloqueado, `NO SE COTIZA` o atención fuerte;
+- gris: neutral o contexto sin decisión.
+
+La misma semántica se reutiliza en Proveedores, Histórico y Revisión final; el texto siempre permanece visible y no se colorean botones o fondos por decoración.
+
+Ajuste de CTA confirmado durante el piloto:
+
+- `entrega_viable=False`: se muestra `Confirmar con proveedor`, porque la fuente indicó falta de existencia/no viabilidad y una confirmación humana posterior puede cambiar el estado mediante una nueva observación trazable.
+- `entrega_viable=None`: se muestra `Por confirmar`, pero **sin** el botón repetitivo de contactar proveedor.
+- `entrega_viable=True`: se muestra `Disponible` y tampoco necesita ese CTA.
+- Esta simplificación sólo cambia la interfaz; no relaja que una referencia estable siga requiriendo disponibilidad/entrega confirmada.
+
 ## Hitos base del flujo DIF
 
 ### PR #54 · precio final manual y DIF emitible
@@ -107,16 +141,18 @@ Issue #55, **“Piloto end-to-end: validar una cotización DIF real en Triage V2
 
 Continuar con la misma solicitud real después de desplegar el `main` actual:
 
-`cargar/reabrir -> revisar lectura -> normalizar -> consultar precios -> validar identidad/evidencia -> confirmar disponibilidad -> elegir referencia estable -> decidir COTIZABLE/NO SE COTIZA -> validar tratamiento fiscal -> capturar precio final autorizado -> revisar rubros -> exportar DIF`
+`cargar/reabrir -> revisar original/lectura -> normalizar -> consultar precios -> validar identidad/evidencia -> confirmar disponibilidad cuando corresponda -> elegir referencia estable -> decidir COTIZABLE/NO SE COTIZA -> validar tratamiento fiscal -> capturar precio final autorizado -> revisar rubros -> exportar DIF`
 
 Objetivos restantes del piloto:
 
 1. Repetir los casos que antes fallaron por marca/genérico y comprobarlos contra el snapshot COFEPRIS realmente cargado en producción.
-2. Confirmar visualmente los estados `Disponible`, `Por confirmar` y `Sin disponibilidad` con proveedores reales.
-3. Verificar el recorrido completo sin volver manualmente al inicio de listas largas.
-4. Comparar el Excel generado con el formato operativo esperado por DIF.
-5. Registrar cualquier nueva diferencia reproducible como issue separado antes de modificar código.
-6. Medir de forma aproximada el tiempo desde carga hasta exportación.
+2. Confirmar visualmente los estados `Disponible`, `Por confirmar` y `Sin disponibilidad`, incluyendo que `Confirmar con proveedor` aparezca sólo en el último caso.
+3. Comprobar que disponibilidad, identidad y promoción se distinguen por color suave y texto sin saturar la pantalla.
+4. Cargar un documento nuevo y verificar que un segundo usuario pueda abrir el original, contrastar la lectura y completar manualmente un caso de lector incompleto/error.
+5. Verificar el recorrido completo sin volver manualmente al inicio de listas largas.
+6. Comparar el Excel generado con el formato operativo esperado por DIF.
+7. Registrar cualquier nueva diferencia reproducible como issue separado antes de modificar código.
+8. Medir de forma aproximada el tiempo desde carga hasta exportación.
 
 Issue #43 permanece abierto hasta completar esta validación operativa del flujo DIF.
 
@@ -125,6 +161,7 @@ Issue #43 permanece abierto hasta completar esta validación operativa del flujo
 - Una partida que Veracruzanísima no pueda comercializar permanece en la cotización y en el Excel con el resultado `NO SE COTIZA`.
 - La falta de existencia web o entrega por confirmar es un estado operativo temporal y **no** equivale a `NO_SE_COTIZA`.
 - Una referencia estable requiere disponibilidad/entrega confirmada además de las validaciones de identidad y precio aplicables.
+- El CTA `Confirmar con proveedor` se reserva para una observación marcada sin disponibilidad/no viable; no se muestra de forma general para toda observación pendiente o disponible.
 - En la salida DIF, una partida no cotizable muestra `—` en precio unitario sin IVA, subtotal, IVA y total.
 - COFEPRIS aporta evidencia de identidad sanitaria; no decide sustituciones clínicas, comerciales ni fiscales.
 - La IA no inventa tasas, tratamientos fiscales, márgenes, restricciones sanitarias ni reglas comerciales.
@@ -132,6 +169,7 @@ Issue #43 permanece abierto hasta completar esta validación operativa del flujo
 - El precio final manual es una decisión comercial explícita y trazable, no una regla automática.
 - Una cotización con tratamiento fiscal pendiente o precio final pendiente no es emitible.
 - Los exportadores consumen el modelo interno; futuros formatos deben permanecer separados del núcleo.
+- Para documentos nuevos, el original debe permanecer disponible a usuarios autenticados para permitir revisión posterior por una persona distinta de quien cargó el archivo.
 
 ## Validaciones externas pendientes
 
@@ -142,7 +180,7 @@ Issue #43 permanece abierto hasta completar esta validación operativa del flujo
 
 Hasta contar con esas validaciones, el sistema puede proponer, capturar y conservar decisiones humanas, pero no debe convertir supuestos en reglas productivas.
 
-## Diseño fiscal y comercial reservado
+## Diseño fiscal, comercial y documental reservado
 
 - El estado comercial de una partida se mantiene separado de sus importes, disponibilidad y tratamiento fiscal.
 - Las validaciones fiscales son append-only y ligadas a identidad exacta; los cambios de identidad invalidan su uso actual sin borrar historia.
@@ -150,6 +188,8 @@ Hasta contar con esas validaciones, el sistema puede proponer, capturar y conser
 - El precio final de venta se conserva separado de la referencia estable de adquisición.
 - Una futura regla de margen deberá ser versionada y no recalcular silenciosamente cotizaciones anteriores.
 - El exportador DIF consume resultados internos ya calculados; no contiene tasas, márgenes ni decisiones propias.
+- El original documental se conserva como evidencia para revisión humana; no sustituye la revisión ni convierte una lectura automática en dato aprobado.
+- El almacenamiento en PostgreSQL es una decisión proporcional al piloto actual, no una arquitectura definitiva para alto volumen.
 
 ## Protocolo para reanudar
 
