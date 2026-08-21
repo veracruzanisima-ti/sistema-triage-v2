@@ -50,6 +50,7 @@
     </div>
     <div class="grupo-botones">
       <a class="boton boton-secundario" href="/proveedores/nadro/actualizar?cotizacion_id={{ cotizacion.id }}">Actualizar NADRO</a>
+      <a class="boton boton-secundario" href="/proveedores/cofepris/actualizar?cotizacion_id={{ cotizacion.id }}">Actualizar COFEPRIS</a>
       {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
         <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/consultar" data-form-busqueda data-estado-busqueda="estado-busqueda-general" data-mensaje-busqueda="Buscando precios en proveedores configurados…">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

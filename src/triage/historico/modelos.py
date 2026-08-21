@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from triage.base_datos import Base
@@ -64,6 +64,10 @@ class ObservacionPrecio(Base):
     entrega_viable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     codigo_postal: Mapped[str | None] = mapped_column(String(5), nullable=True)
     fuente: Mapped[str] = mapped_column(String(LIMITE_FUENTE_OBSERVACION), nullable=False)
+    evidencia_identidad: Mapped[dict[str, object] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
     observado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

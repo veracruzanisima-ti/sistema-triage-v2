@@ -136,6 +136,7 @@ def crear_observacion_precio(
     codigo_postal: str | None = None,
     producto_observado: str | None = None,
     origen: OrigenObservacionPrecio = OrigenObservacionPrecio.MANUAL,
+    evidencia_identidad: dict[str, object] | None = None,
     guardar: bool = True,
 ) -> ObservacionPrecio:
     """Agrega una observación nueva; nunca modifica una observación anterior."""
@@ -186,6 +187,7 @@ def crear_observacion_precio(
         entrega_viable=entrega_viable,
         codigo_postal=limpiar_codigo_postal(codigo_postal),
         fuente=fuente_limpia,
+        evidencia_identidad=dict(evidencia_identidad) if evidencia_identidad else None,
         capturada_por_usuario_id=usuario_id,
     )
     sesion.add(observacion)
