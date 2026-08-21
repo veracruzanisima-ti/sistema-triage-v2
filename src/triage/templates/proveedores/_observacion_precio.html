@@ -1,22 +1,42 @@
 {% set identidad_cofepris = observacion.evidencia_identidad and observacion.evidencia_identidad.get("fuente") == "COFEPRIS" %}
 {% set numeros_cofepris = observacion.evidencia_identidad.get("numeros_registro", []) if identidad_cofepris else [] %}
+{% set seleccionada = seleccion and seleccion.referencia_estable_id == observacion.id %}
+{% set distintiva = observacion.evidencia_identidad.get("denominacion_distintiva", "") if identidad_cofepris else "" %}
+{% set generica = observacion.evidencia_identidad.get("denominacion_generica", "") if identidad_cofepris else "" %}
+{% set distintiva_norm = distintiva|lower %}
+{% set generica_norm = generica|lower %}
+{% set observado_norm = (observacion.producto_observado or "")|lower %}
+{% set producto_norm = (producto.normalizacion.producto or "")|lower %}
+{% set marca_propia_declarada = "marca propia" in observado_norm %}
+{% set generico_visible = producto_norm and producto_norm in observado_norm %}
 <div class="partida">
   <div class="barra">
     <div>
       <strong>{{ observacion.proveedor }}</strong>
-      {% if cotizada_hoy and cotizada_hoy.id == observacion.id %}<span class="estado estado-revisado">Cotizado hoy</span>{% endif %}
-      {% if observacion.origen == "WEB" %}<span class="estado estado-analizado">Web</span>{% endif %}
-      {% if identidad_cofepris %}<span class="estado estado-revisado">COFEPRIS verificado</span>{% endif %}
-      {% if observacion.entrega_viable is sameas true %}
-        <span class="estado estado-revisado">Disponible confirmado</span>
+      {% if seleccionada %}
+        <span class="estado estado-revisado">Usado para cotizar</span>
+      {% elif cotizada_hoy and cotizada_hoy.id == observacion.id %}
+        <span class="estado estado-revisado">Cotizado hoy</span>
+      {% elif observacion.entrega_viable is sameas true %}
+        <span class="estado estado-revisado">Disponible</span>
       {% elif observacion.entrega_viable is sameas false %}
         <span class="estado estado-pendiente-revision">Sin disponibilidad</span>
       {% else %}
-        <span class="estado estado-pendiente-revision">Disponibilidad por confirmar</span>
+        <span class="estado estado-pendiente-revision">Por confirmar</span>
       {% endif %}
+
+      {% if identidad_cofepris and distintiva_norm and generica_norm and distintiva_norm != generica_norm %}
+        <span class="estado estado-analizado">Marca comercial</span>
+      {% elif identidad_cofepris and distintiva_norm and distintiva_norm == generica_norm %}
+        <span class="estado estado-analizado">Nombre genérico registrado</span>
+      {% elif marca_propia_declarada %}
+        <span class="estado estado-analizado">Marca propia declarada</span>
+      {% elif generico_visible %}
+        <span class="estado estado-analizado">Nombre genérico visible</span>
+      {% endif %}
+
       {% if observacion.es_promocion %}<span class="estado estado-analizado">Oferta / promoción</span>{% endif %}
-      {% if seleccion and seleccion.referencia_estable_id == observacion.id %}<span class="estado estado-revisado">Usado para cotizar</span>{% endif %}
-      <p class="ayuda">Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
+      <p class="ayuda">{% if observacion.origen == "WEB" %}Fuente web · {% endif %}Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
     </div>
     <div>
       {% if observacion.precio_total is not none %}
@@ -30,21 +50,18 @@
 
   {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
   {% if identidad_cofepris %}
-    <div class="exito" role="note">
+    <p class="ayuda">
+      <strong>COFEPRIS:</strong>
+      {{ distintiva or "Denominación distintiva sin registrar" }}
+      → {{ generica or "Denominación genérica sin registrar" }}
+      · {{ observacion.evidencia_identidad.get("estado") or "estado sin registrar" }}
       {% if numeros_cofepris|length > 1 %}
-        <strong>Identidad verificada con COFEPRIS · {{ numeros_cofepris|length }} registros vigentes convergentes</strong>
-        <p class="ayuda">Registros: {{ numeros_cofepris|join("; ") }}.</p>
-      {% else %}
-        <strong>Identidad verificada con COFEPRIS · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}</strong>
-      {% endif %}
-      <p class="ayuda">
-        {{ observacion.evidencia_identidad.get("denominacion_distintiva") or "Denominación distintiva sin registrar" }}
-        →
-        {{ observacion.evidencia_identidad.get("denominacion_generica") or "Denominación genérica sin registrar" }}
-        · Estado {{ observacion.evidencia_identidad.get("estado") or "sin registrar" }}.
-      </p>
-      <p class="ayuda">Esta evidencia sólo confirma identidad sanitaria; no decide sustituciones clínicas, comerciales ni fiscales.</p>
-    </div>
+        · {{ numeros_cofepris|length }} registros vigentes convergentes
+      {% elif observacion.evidencia_identidad.get("numero_registro") %}
+        · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}
+      {% endif %}.
+      Evidencia de identidad sanitaria; no decide sustitución clínica, comercial ni fiscal.
+    </p>
   {% endif %}
   {% if observacion.disponibilidad %}<p><strong>Disponibilidad reportada:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
   {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
@@ -75,7 +92,7 @@
     </p>
   {% endif %}
 
-  {% if seleccion and seleccion.referencia_estable_id == observacion.id %}
+  {% if seleccionada %}
     <p class="ayuda">Este es el precio que actualmente alimentará la revisión de la cotización.</p>
   {% elif observacion.es_promocion %}
     <p class="ayuda">La fuente la marca como oferta. Se conserva como evidencia, pero no se usa automáticamente como referencia estable.</p>
