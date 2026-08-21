@@ -112,6 +112,7 @@
     {% set vista = vistas_precios.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     {% set trazabilidad_web = trazabilidad_web_por_partida.get(producto.partida.id) %}
+    {% set correccion_producto = sugerir_correccion_producto_web(producto.normalizacion.producto, trazabilidad_web.consulta.criterios_busqueda.get("producto"), trazabilidad_web.descartados) if trazabilidad_web else none %}
     {% set cotizada_hoy = referencias_cotizadas_hoy.get(producto.clave_producto) %}
     {% set estado_busqueda_id = "estado-busqueda-" ~ producto.partida.id %}
     <section class="tarjeta">
@@ -203,6 +204,27 @@
         <div class="vacio">
           <strong>Aún no hay precios observados.</strong>
           <p class="ayuda">Usa la búsqueda general, amplía este producto en web o registra manualmente un precio para continuar.</p>
+        </div>
+      {% endif %}
+
+      {% if correccion_producto and correccion_producto.valor %}
+        <div class="aviso" role="status">
+          <strong>¿Quisiste decir {{ correccion_producto.valor }}?</strong>
+          <p>Producto preparado actualmente: <strong>{{ producto.normalizacion.producto }}</strong>.</p>
+          {% if correccion_producto.fuentes %}
+            <p class="ayuda">
+              Se detectó un nombre muy parecido en {{ correccion_producto.fuentes|length }} fuente(s):
+              {{ correccion_producto.fuentes|join("; ") }}.
+            </p>
+          {% endif %}
+          <p class="ayuda">Triage mantuvo esos resultados descartados como “producto distinto”. No cambió la identidad ni aceptó ningún precio. Revisa la preparación y corrígela sólo si corresponde.</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Revisar y corregir preparación</a>
+        </div>
+      {% elif correccion_producto and correccion_producto.ambigua %}
+        <div class="aviso" role="status">
+          <strong>La web encontró varias posibles correcciones del nombre.</strong>
+          <p class="ayuda">Triage no eligió ninguna automáticamente. Revisa la preparación antes de volver a buscar.</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Revisar preparación</a>
         </div>
       {% endif %}
 
