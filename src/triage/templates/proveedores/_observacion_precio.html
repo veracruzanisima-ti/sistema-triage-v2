@@ -79,8 +79,7 @@
   {% elif observacion.entrega_viable is none %}
     <div class="aviso" role="status">
       <strong>Disponibilidad por confirmar.</strong>
-      <p class="ayuda">El precio es evidencia, pero todavía no puede ser referencia estable. Confirma existencia/entrega con la fuente antes de cotizar.</p>
-      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores&partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Confirmar con proveedor</a>
+      <p class="ayuda">El precio se conserva como evidencia. Triage no lo toma como referencia estable mientras la disponibilidad/entrega siga sin confirmación suficiente.</p>
     </div>
   {% endif %}
 
