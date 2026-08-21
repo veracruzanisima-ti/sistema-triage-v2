@@ -7,6 +7,10 @@ from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from triage.comercial.modelos import EstadoComercial
+from triage.comercial.precios_venta_servicio import (
+    registrar_precio_venta,
+    retirar_precio_venta,
+)
 from triage.comercial.servicio import registrar_decision_comercial
 from triage.cotizaciones.servicio import obtener_cotizacion
 from triage.fiscal.modelos import TratamientoIVA
@@ -39,6 +43,25 @@ def _render(
     productos = listar_precierre(sesion, cotizacion_id)
     resumen = resumen_normalizacion_cotizacion(sesion, cotizacion_id)
     sin_preparar = max(resumen.total - resumen.preparados, 0)
+    fiscalmente_lista = bool(productos) and not sin_preparar and all(
+        item.decision_comercial.estado == EstadoComercial.NO_SE_COTIZA
+        or (
+            item.referencia is not None
+            and item.validacion_fiscal is not None
+            and item.calculo_fiscal is not None
+        )
+        for item in productos
+    )
+    lista_para_emitir = bool(productos) and not sin_preparar and all(
+        item.decision_comercial.estado == EstadoComercial.NO_SE_COTIZA
+        or (
+            item.referencia is not None
+            and item.validacion_fiscal is not None
+            and item.precio_venta is not None
+            and item.calculo_final is not None
+        )
+        for item in productos
+    )
     return request.app.state.plantillas.TemplateResponse(
         request=request,
         name="revision_final/lista.html",
@@ -67,17 +90,18 @@ def _render(
                 and item.validacion_fiscal is None
                 for item in productos
             ),
-            "fiscalmente_lista": bool(productos)
-            and not sin_preparar
-            and all(
-                item.decision_comercial.estado == EstadoComercial.NO_SE_COTIZA
-                or (
-                    item.referencia is not None
-                    and item.validacion_fiscal is not None
-                    and item.calculo_fiscal is not None
-                )
+            "precios_finales_validados": sum(
+                item.decision_comercial.estado == EstadoComercial.COTIZABLE
+                and item.precio_venta is not None
                 for item in productos
             ),
+            "precios_finales_pendientes": sum(
+                item.decision_comercial.estado == EstadoComercial.COTIZABLE
+                and item.precio_venta is None
+                for item in productos
+            ),
+            "fiscalmente_lista": fiscalmente_lista,
+            "lista_para_emitir": lista_para_emitir,
             "error": error,
         },
         status_code=status_code,
@@ -206,13 +230,97 @@ def retirar_validacion_fiscal_actual(
     usuario: UsuarioActual,
     csrf_token: Annotated[str, Form()],
 ):
-    """Devuelve la partida a pendiente sin borrar la decisión previa."""
+    """Devuelve la partida a pendiente sin borrar la decisión fiscal previa."""
 
     validar_token_csrf(request, csrf_token)
     if obtener_cotizacion(sesion, cotizacion_id) is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
     try:
         retirar_validacion_fiscal(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_id=partida_id,
+            usuario_id=usuario.id,
+        )
+    except ValueError as error:
+        return _render(
+            cotizacion_id,
+            request,
+            sesion,
+            usuario,
+            error=str(error),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    return RedirectResponse(
+        url=f"/cotizaciones/{cotizacion_id}/revision-final",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/{cotizacion_id}/revision-final/{partida_id}/precio-final")
+def guardar_precio_final(
+    cotizacion_id: str,
+    partida_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+    precio_unitario_sin_iva: Annotated[str, Form()],
+    fuente_comercial: Annotated[str, Form()],
+    observacion: Annotated[str, Form()] = "",
+):
+    """Captura el precio final explícito; no aplica margen ni porcentaje automático."""
+
+    validar_token_csrf(request, csrf_token)
+    if obtener_cotizacion(sesion, cotizacion_id) is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    try:
+        precio = Decimal(precio_unitario_sin_iva)
+        registrar_precio_venta(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_id=partida_id,
+            usuario_id=usuario.id,
+            precio_unitario_sin_iva=precio,
+            fuente_comercial=fuente_comercial,
+            observacion=observacion,
+        )
+    except (InvalidOperation, ValueError) as error:
+        mensaje = (
+            "el precio final unitario sin IVA no es válido"
+            if isinstance(error, InvalidOperation)
+            else str(error)
+        )
+        return _render(
+            cotizacion_id,
+            request,
+            sesion,
+            usuario,
+            error=mensaje,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    return RedirectResponse(
+        url=f"/cotizaciones/{cotizacion_id}/revision-final",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/{cotizacion_id}/revision-final/{partida_id}/precio-final/retirar")
+def retirar_precio_final_actual(
+    cotizacion_id: str,
+    partida_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+):
+    """Retira el precio final con un nuevo evento y conserva su historial."""
+
+    validar_token_csrf(request, csrf_token)
+    if obtener_cotizacion(sesion, cotizacion_id) is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    try:
+        retirar_precio_venta(
             sesion,
             cotizacion_id=cotizacion_id,
             partida_id=partida_id,
