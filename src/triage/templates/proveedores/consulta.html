@@ -267,7 +267,7 @@
             <p class="error">{{ trazabilidad_web.consulta.mensaje_error }}</p>
           {% endif %}
           {% if trazabilidad_web.descartados %}
-            <p class="ayuda">Estos resultados son sólo trazabilidad: no son precios utilizables ni referencias para cotizar.</p>
+            <p class="ayuda">Estos resultados son sólo trazabilidad: no son precios utilizables ni referencias para cotizar. Los motivos pertenecen al momento de esa búsqueda y pueden diferir de las reglas actuales.</p>
             {% for descartado in trazabilidad_web.descartados %}
               <div class="partida">
                 <div class="barra">
@@ -281,7 +281,9 @@
                   {% endif %}
                 </div>
                 <p><a href="{{ descartado.url }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
-                <p><strong>No pasó porque:</strong> {{ descartado.motivos|join("; ") }}.</p>
+                <p><strong>Motivo registrado en esa búsqueda:</strong> {{ descartado.motivos|join("; ") }}.</p>
+                <p class="ayuda">Se conserva sin reescribirlo para auditoría.</p>
+                <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/descartados/{{ descartado.id }}/evaluacion-actual">Evaluar con reglas actuales</a>
               </div>
             {% endfor %}
           {% else %}
