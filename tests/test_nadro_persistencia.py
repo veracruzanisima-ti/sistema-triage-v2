@@ -192,10 +192,18 @@ def test_adaptadores_separan_precio_estable_de_oferta(cliente):
     assert estable.producto_exacto == "LANTUS 100UI 10ML F.A."
     assert estable.precio_antes_iva == Decimal("2133.16")
     assert estable.es_promocion is False
+    assert estable.entrega_viable is True
+    assert estable.disponibilidad is not None
+    assert "Surtible por NADRO" in estable.disponibilidad
+    assert "no informa existencia inmediata" in estable.disponibilidad
+
     assert promocion.encontrado is True
     assert promocion.producto_exacto == "LANTUS 100UI 10ML F.A."
     assert promocion.precio_antes_iva == Decimal("1866.52")
     assert promocion.es_promocion is True
+    assert promocion.entrega_viable is True
+    assert promocion.disponibilidad is not None
+    assert "Surtible por NADRO" in promocion.disponibilidad
 
 
 def test_carga_nadro_se_vuelve_consultable_sin_reiniciar_app(cliente):

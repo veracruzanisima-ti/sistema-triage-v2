@@ -11,6 +11,7 @@
 {% set generico_visible = producto_norm and producto_norm in observado_norm %}
 {% set disponibilidad_operativa = observacion.disponibilidad_operativa %}
 {% set confirmacion_manual_web = observacion.evidencia_identidad and observacion.evidencia_identidad.get("confirmacion_manual_fuente_web") %}
+{% set surtible_nadro = observacion.origen == "ADAPTADOR" and observacion.fuente.startswith("EdiNadro") and disponibilidad_operativa is sameas true %}
 <div class="partida">
   <div class="barra">
     <div>
@@ -19,6 +20,8 @@
         <span class="estado estado-disponible">Usado para cotizar</span>
       {% elif cotizada_hoy and cotizada_hoy.id == observacion.id %}
         <span class="estado estado-disponible">Cotizado hoy</span>
+      {% elif surtible_nadro %}
+        <span class="estado estado-disponible">Surtible por NADRO</span>
       {% elif disponibilidad_operativa is sameas true %}
         <span class="estado estado-disponible">Disponible</span>
       {% elif disponibilidad_operativa is sameas false %}
@@ -69,6 +72,9 @@
     </p>
   {% endif %}
   {% if observacion.disponibilidad %}<p><strong>Disponibilidad reportada:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
+  {% if surtible_nadro %}
+    <p class="ayuda"><strong>Regla comercial NADRO:</strong> la referencia es cotizable por capacidad de surtimiento bajo pedido; este indicador no afirma existencia física inmediata.</p>
+  {% endif %}
   {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
     <p><a href="{{ observacion.fuente }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
   {% else %}

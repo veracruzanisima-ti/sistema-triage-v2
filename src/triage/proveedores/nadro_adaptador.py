@@ -16,6 +16,11 @@ from triage.proveedores.coincidencia_catalogo import (
 from triage.proveedores.nadro_modelos import ArticuloNadro, ImportacionNadro, OfertaNadro
 from triage.proveedores.nadro_servicio import hay_catalogo_nadro, hay_ofertas_nadro
 
+_DISPONIBILIDAD_SURTIBLE = (
+    "Surtible por NADRO según regla comercial de Veracruzanísima; "
+    "EdiNadro no informa existencia inmediata en tiempo real."
+)
+
 
 class AdaptadorNadro:
     """Consulta el precio farmacia estable de la última carga EdiNadro."""
@@ -36,7 +41,8 @@ class AdaptadorNadro:
                 fuente=_fuente(articulo, importacion),
                 producto_exacto=articulo.descripcion,
                 precio_antes_iva=articulo.precio_farmacia_sin_iva,
-                disponibilidad="EdiNadro no incluye existencia en tiempo real.",
+                disponibilidad=_DISPONIBILIDAD_SURTIBLE,
+                entrega_viable=True,
             )
 
 
@@ -80,7 +86,8 @@ class AdaptadorNadroOferta:
                     f"Descuento en factura de {oferta.descuento_factura_pct.normalize()}% "
                     "reportado por EdiNadro."
                 ),
-                disponibilidad="EdiNadro no incluye existencia en tiempo real.",
+                disponibilidad=_DISPONIBILIDAD_SURTIBLE,
+                entrega_viable=True,
             )
 
 
