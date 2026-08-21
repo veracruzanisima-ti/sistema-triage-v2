@@ -218,13 +218,13 @@
             </p>
           {% endif %}
           <p class="ayuda">Triage mantuvo esos resultados descartados como “producto distinto”. No cambió la identidad ni aceptó ningún precio. Revisa la preparación y corrígela sólo si corresponde.</p>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Revisar y corregir preparación</a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar y corregir preparación</a>
         </div>
       {% elif correccion_producto and correccion_producto.ambigua %}
         <div class="aviso" role="status">
           <strong>La web encontró varias posibles correcciones del nombre.</strong>
           <p class="ayuda">Triage no eligió ninguna automáticamente. Revisa la preparación antes de volver a buscar.</p>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Revisar preparación</a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar preparación</a>
         </div>
       {% endif %}
 

@@ -9,6 +9,8 @@ from triage.normalizacion.servicio import (
     guardar_normalizaciones,
     listar_partidas_normalizables,
 )
+from triage.proveedores.correcciones_web import sugerir_correccion_producto_web
+from triage.proveedores.servicio import listar_trazabilidad_web
 from triage.usuarios.seguridad import (
     Sesion,
     UsuarioActual,
@@ -28,6 +30,34 @@ def _limpiar_formulario(valor) -> str | None:
     return texto or None
 
 
+def _correccion_vigente_para_partida(
+    sesion: Sesion,
+    *,
+    cotizacion_id: str,
+    partida_objetivo: str,
+    entradas,
+):
+    """Reconstruye la sugerencia desde evidencia persistida; nunca confía en texto de la URL."""
+
+    if not partida_objetivo:
+        return None
+    entrada = next(
+        (entrada for entrada in entradas if entrada.partida.id == partida_objetivo),
+        None,
+    )
+    if entrada is None or entrada.normalizacion is None:
+        return None
+
+    trazabilidad = listar_trazabilidad_web(sesion, cotizacion_id).get(partida_objetivo)
+    if trazabilidad is None:
+        return None
+    return sugerir_correccion_producto_web(
+        entrada.normalizacion.producto,
+        trazabilidad.consulta.criterios_busqueda.get("producto"),
+        trazabilidad.descartados,
+    )
+
+
 @router.get(
     "/{cotizacion_id}/normalizacion",
     response_class=HTMLResponse,
@@ -39,12 +69,23 @@ def ver_normalizacion(
     sesion: Sesion,
     usuario: UsuarioActual,
     guardado: int = 0,
+    partida_objetivo: str = "",
 ):
     """Muestra sólo partidas revisadas e incluidas que podrán buscarse después."""
 
     cotizacion = obtener_cotizacion(sesion, cotizacion_id)
     if cotizacion is None:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
+
+    entradas = listar_partidas_normalizables(sesion, cotizacion.id)
+    ids_partidas = {entrada.partida.id for entrada in entradas}
+    objetivo = partida_objetivo if partida_objetivo in ids_partidas else ""
+    correccion_producto = _correccion_vigente_para_partida(
+        sesion,
+        cotizacion_id=cotizacion.id,
+        partida_objetivo=objetivo,
+        entradas=entradas,
+    )
 
     return _plantillas(request).TemplateResponse(
         request=request,
@@ -53,8 +94,10 @@ def ver_normalizacion(
             "usuario": usuario,
             "csrf_token": obtener_token_csrf(request),
             "cotizacion": cotizacion,
-            "entradas": listar_partidas_normalizables(sesion, cotizacion.id),
+            "entradas": entradas,
             "guardado": bool(guardado),
+            "partida_objetivo": objetivo or None,
+            "correccion_producto": correccion_producto,
         },
     )
 

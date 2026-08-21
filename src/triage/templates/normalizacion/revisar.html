@@ -29,7 +29,7 @@
     {% for entrada in entradas %}
       {% set i = loop.index0 %}
       {% set valores = entrada.normalizacion or entrada.propuesta %}
-      <section class="tarjeta">
+      <section class="tarjeta" id="partida-{{ entrada.partida.id }}">
         <input type="hidden" name="partida_{{ i }}_id" value="{{ entrada.partida.id }}">
         <div class="barra">
           <div>
@@ -42,6 +42,34 @@
             <span class="estado estado-pendiente-revision">Pendiente</span>
           {% endif %}
         </div>
+
+        {% if partida_objetivo == entrada.partida.id %}
+          {% if correccion_producto and correccion_producto.valor %}
+            <div class="aviso" role="status">
+              <strong>Sugerencia de corrección: {{ correccion_producto.valor }}</strong>
+              <p>Producto preparado actualmente: <strong>{{ valores.producto or "Sin nombre" }}</strong>.</p>
+              {% if correccion_producto.fuentes %}
+                <p class="ayuda">
+                  La sugerencia se reconstruyó desde {{ correccion_producto.fuentes|length }} fuente(s) de la última búsqueda web:
+                  {{ correccion_producto.fuentes|join("; ") }}.
+                </p>
+              {% endif %}
+              <p class="ayuda">Usar la sugerencia sólo rellena el campo de esta pantalla. Nada cambia hasta que pulses Guardar preparación.</p>
+              <button
+                class="boton boton-secundario"
+                type="button"
+                data-aplicar-sugerencia-producto
+                data-input-id="partida_{{ i }}_producto"
+                data-sugerencia="{{ correccion_producto.valor }}"
+              >Usar {{ correccion_producto.valor }}</button>
+            </div>
+          {% else %}
+            <div class="aviso" role="status">
+              <strong>Revisa esta partida.</strong>
+              <p class="ayuda">La sugerencia web que te trajo aquí ya no está vigente o dejó de ser inequívoca. Triage no aplicó ningún cambio automáticamente.</p>
+            </div>
+          {% endif %}
+        {% endif %}
 
         <details>
           <summary>Ver solicitud revisada</summary>
@@ -95,4 +123,22 @@
     <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a documentos</a>
   </section>
 {% endif %}
+
+<script>
+  (() => {
+    document.querySelectorAll("[data-aplicar-sugerencia-producto]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const input = document.getElementById(boton.dataset.inputId || "");
+        const sugerencia = boton.dataset.sugerencia || "";
+        if (!input || !sugerencia) return;
+
+        input.value = sugerencia;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus();
+        boton.disabled = true;
+        boton.textContent = "Sugerencia aplicada";
+      });
+    });
+  })();
+</script>
 {% endblock %}
