@@ -51,7 +51,7 @@
     <div class="grupo-botones">
       <a class="boton boton-secundario" href="/proveedores/nadro/actualizar?cotizacion_id={{ cotizacion.id }}">Actualizar NADRO</a>
       <a class="boton boton-secundario" href="/proveedores/cofepris/actualizar?cotizacion_id={{ cotizacion.id }}">Actualizar COFEPRIS</a>
-      {% if proveedores and productos and cotizacion.codigo_postal_consulta %}
+      {% if proveedores and cotizables and cotizacion.codigo_postal_consulta %}
         <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/consultar" data-form-busqueda data-estado-busqueda="estado-busqueda-general" data-mensaje-busqueda="Buscando precios en proveedores configurados…">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="boton" type="submit">Buscar precios</button>
@@ -73,7 +73,8 @@
   <div class="barra">
     <div>
       <h2>Progreso</h2>
-      <p>{{ con_referencia }} de {{ productos|length }} productos tienen precio confirmado para cotizar.</p>
+      <p>{{ con_referencia }} de {{ cotizables }} productos cotizables tienen precio confirmado.</p>
+      {% if no_se_cotiza %}<p>{{ no_se_cotiza }} partida(s) permanecen visibles como NO SE COTIZA.</p>{% endif %}
       <p class="ayuda">Una oferta se conserva como evidencia. Sólo se marca como oportunidad de compra cuando realmente mejora la referencia estable en la misma base de precio.</p>
     </div>
     {% if todas_con_referencia %}
@@ -85,6 +86,7 @@
 {% if productos %}
   {% for producto in productos %}
     {% set seleccion = selecciones.get(producto.partida.id) %}
+    {% set decision_comercial = decisiones_comerciales.get(producto.partida.id) %}
     {% set vista = vistas_precios.get(producto.partida.id) %}
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     {% set trazabilidad_web = trazabilidad_web_por_partida.get(producto.partida.id) %}
@@ -101,7 +103,7 @@
             {{ producto.normalizacion.presentacion or "Sin presentación" }}
           </p>
         </div>
-        {% if descubrimiento_web_disponible and cotizacion.codigo_postal_consulta %}
+        {% if (not decision_comercial or decision_comercial.estado != estados_comerciales.NO_SE_COTIZA) and descubrimiento_web_disponible and cotizacion.codigo_postal_consulta %}
           <form method="post" action="/cotizaciones/{{ cotizacion.id }}/proveedores/{{ producto.partida.id }}/buscar-web" data-form-busqueda data-estado-busqueda="{{ estado_busqueda_id }}" data-mensaje-busqueda="Buscando más opciones en web para este producto…">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="boton boton-secundario" type="submit">Buscar más opciones en web</button>
@@ -113,6 +115,15 @@
         <span class="spinner" aria-hidden="true"></span>
         <span data-texto-busqueda>Buscando opciones…</span>
       </div>
+
+      {% if decision_comercial and decision_comercial.estado == estados_comerciales.NO_SE_COTIZA %}
+        <div class="aviso">
+          <strong>Resultado comercial: NO SE COTIZA</strong>
+          <p>{{ decision_comercial.motivo }}</p>
+          <p class="ayuda">La partida sigue en la cotización, pero las búsquedas y capturas de precio están deshabilitadas.</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisar decisión comercial</a>
+        </div>
+      {% else %}
 
       {% if cotizada_hoy and (not vista or not vista.referencia) %}
         <div class="aviso">
@@ -274,6 +285,7 @@
             </div>
           {% endfor %}
         </details>
+      {% endif %}
       {% endif %}
     </section>
   {% endfor %}

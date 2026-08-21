@@ -8,6 +8,11 @@ from urllib.parse import urlsplit
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from triage.comercial.modelos import EstadoComercial
+from triage.comercial.servicio import (
+    asegurar_partida_cotizable,
+    listar_decisiones_comerciales_actuales,
+)
 from triage.cotizaciones.modelos import Cotizacion, ahora_utc
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
 from triage.historico.decisiones_servicio import referencias_estables_cotizadas_hoy
@@ -185,7 +190,14 @@ def _normalizacion_elegible(
             PartidaDocumento.incluida_cotizacion.is_(True),
         )
     )
-    return sesion.execute(consulta).one_or_none()
+    fila = sesion.execute(consulta).one_or_none()
+    if fila is not None:
+        asegurar_partida_cotizable(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_id=partida_documento_id,
+        )
+    return fila
 
 
 def listar_productos_consultables(
@@ -209,6 +221,13 @@ def listar_productos_consultables(
         .order_by(Documento.recibido_en.asc(), PartidaDocumento.orden.asc())
     )
     filas = list(sesion.execute(consulta_productos))
+    decisiones = listar_decisiones_comerciales_actuales(sesion, cotizacion_id)
+    filas = [
+        fila
+        for fila in filas
+        if decisiones.get(fila[1].id, None) is None
+        or decisiones[fila[1].id].estado == EstadoComercial.COTIZABLE
+    ]
     if not filas:
         return []
 

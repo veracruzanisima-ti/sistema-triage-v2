@@ -5,6 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from triage.comercial.modelos import EstadoComercial
+from triage.comercial.servicio import listar_decisiones_comerciales_actuales
 from triage.cotizaciones.servicio import obtener_cotizacion
 from triage.historico.decisiones_servicio import (
     listar_selecciones_actuales,
@@ -69,6 +71,13 @@ def _render(
     }
     trazabilidad_web_por_partida = listar_trazabilidad_web(sesion, cotizacion.id)
     selecciones = listar_selecciones_actuales(sesion, cotizacion.id)
+    decisiones_comerciales = listar_decisiones_comerciales_actuales(sesion, cotizacion.id)
+    ids_cotizables = {
+        producto.partida.id
+        for producto in productos
+        if decisiones_comerciales.get(producto.partida.id, None) is None
+        or decisiones_comerciales[producto.partida.id].estado == EstadoComercial.COTIZABLE
+    }
     vistas_precios = {}
     for producto in productos:
         seleccion = selecciones.get(producto.partida.id)
@@ -81,11 +90,17 @@ def _render(
 
     referencias_hoy = referencias_estables_cotizadas_hoy(
         sesion,
-        claves={producto.clave_producto for producto in productos},
+        claves={
+            producto.clave_producto
+            for producto in productos
+            if producto.partida.id in ids_cotizables
+        },
         codigo_postal=cotizacion.codigo_postal_consulta,
     )
     con_referencia = sum(
-        bool(seleccion.referencia_estable_id) for seleccion in selecciones.values()
+        bool(seleccion.referencia_estable_id)
+        for partida_id, seleccion in selecciones.items()
+        if partida_id in ids_cotizables
     )
     return _plantillas(request).TemplateResponse(
         request=request,
@@ -95,14 +110,18 @@ def _render(
             "csrf_token": obtener_token_csrf(request),
             "cotizacion": cotizacion,
             "productos": productos,
+            "decisiones_comerciales": decisiones_comerciales,
+            "estados_comerciales": EstadoComercial,
+            "cotizables": len(ids_cotizables),
+            "no_se_cotiza": len(productos) - len(ids_cotizables),
             "consultas_por_partida": consultas_por_partida,
             "trazabilidad_web_por_partida": trazabilidad_web_por_partida,
             "selecciones": selecciones,
             "vistas_precios": vistas_precios,
             "referencias_cotizadas_hoy": referencias_hoy,
             "con_referencia": con_referencia,
-            "todas_con_referencia": bool(productos)
-            and con_referencia == len(productos),
+            "todas_con_referencia": bool(ids_cotizables)
+            and con_referencia == len(ids_cotizables),
             "proveedores": tuple(proveedor.nombre for proveedor in proveedores.values()),
             "descubrimiento_web_disponible": obtener_descubridor_web(request) is not None,
             "error": error,

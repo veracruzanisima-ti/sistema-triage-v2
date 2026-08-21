@@ -49,6 +49,15 @@ Orden de implementación acordado:
 
 Hasta contar con esas validaciones, el sistema puede modelar estados pendientes y captura manual trazable, pero no debe convertir supuestos en reglas productivas.
 
+## Diseño fiscal reservado
+
+- El estado comercial de una partida se mantiene separado de sus importes y de su tratamiento fiscal.
+- La futura matriz fiscal tendrá versión, vigencia, fuente y validación explícita de Contabilidad.
+- El cálculo conservará la versión de regla aplicada; no recalculará silenciosamente cotizaciones anteriores cuando cambie una tasa.
+- Una partida fiscalmente pendiente podrá revisarse, pero la cotización no se considerará emitible.
+- El exportador DIF consumirá el resultado interno ya calculado: no contendrá tasas ni decisiones fiscales propias.
+- Mientras no exista una matriz validada, este proyecto no fija tasas, exenciones ni tratamientos productivos.
+
 ## Protocolo para reanudar
 
 1. Leer `AGENTS.md`, este documento y `README.md`.
