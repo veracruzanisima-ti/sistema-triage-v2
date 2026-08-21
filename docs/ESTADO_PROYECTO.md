@@ -33,19 +33,25 @@ Fusionado en `main` con commit `a5e902792bf9d6021e3b5f614026c901c3389dec`. CI #1
 - Dispositivos explícitos incompatibles, como pluma frente a vial, siguen siendo rechazo.
 - No se infiere solución, suspensión o polvo a partir del envase.
 
-### PR #71 · disponibilidad confirmada antes de usar una referencia
+### PR #71 y #85 · disponibilidad antes de usar una referencia
 
-Fusionado en `main` con commit `c3eeb0bf108435bcbf6336e19c9f0c279b97c872`. CI #165 verde.
+- PR #71 fusionado con commit `c3eeb0bf108435bcbf6336e19c9f0c279b97c872`. CI #165 verde.
+- PR #85 fusionado con commit `0fda5bac808672bdb2ec0894cb5b1618b328c8f1`. CI #192 verde, 234 pruebas. Issue #80 cerrado.
 
-Regla operativa confirmada durante el piloto:
+Regla operativa vigente después del hallazgo real `100 disponibles` + `entrega_viable=null`:
 
 - `entrega_viable=True`: una observación puede ser elegible como referencia estable si cumple las demás reglas.
-- `entrega_viable=None`: `Disponibilidad por confirmar`; se conserva como evidencia y no se puede usar para cotizar.
 - `entrega_viable=False`: `Sin disponibilidad`; se conserva como evidencia y no se puede usar para cotizar.
+- `entrega_viable=None` en observaciones MANUAL/ADAPTADOR permanece `Por confirmar`; Triage no infiere decisiones desde texto libre humano.
+- `entrega_viable=None` en observaciones WEB se combina con el texto de disponibilidad ya persistido para obtener una **disponibilidad operativa derivada**, sin reescribir la evidencia original.
+- Señales WEB positivas inequívocas como `100 disponibles`, `en existencia` o `Disponible (Agregar al carrito)` permiten tratar la opción como disponible.
+- Señales negativas como `agotado`, `sin existencias` o `no disponible` mantienen el bloqueo aunque otra señal sea contradictoria.
+- Frases ambiguas o condicionadas como `consulta disponibilidad`, `sujeto a disponibilidad`, `ingresa un código postal...`, `falta confirmar` o `pendiente de confirmar` permanecen pendientes.
+- Los resultados WEB ya persistidos se recalculan al mostrarse/seleccionarse; no requieren migración ni repetir la búsqueda.
 - La falta temporal de existencia **no** convierte automáticamente la partida en `NO_SE_COTIZA`.
-- Si una persona contacta al proveedor y confirma existencia/entrega, registra una nueva observación append-only con fuente/evidencia; la observación web anterior no se modifica.
-- Reutilización del mismo día y oportunidades de compra también exigen disponibilidad/entrega confirmada.
-- Selecciones antiguas apoyadas en observaciones no confirmadas dejan de ser vigentes sin borrar historia.
+- Si una fuente indica falta de existencia y después una persona contacta al proveedor, la confirmación se registra como una nueva observación append-only con fuente/evidencia; la observación web anterior no se modifica.
+- Reutilización del mismo día y oportunidades de compra usan la misma disponibilidad operativa.
+- Promociones siguen sin poder usarse como referencia estable aunque tengan disponibilidad.
 
 ### PR #72 · clasificación visual basada en evidencia
 
@@ -107,10 +113,10 @@ La misma semántica se reutiliza en Proveedores, Histórico y Revisión final; e
 
 Ajuste de CTA confirmado durante el piloto:
 
-- `entrega_viable=False`: se muestra `Confirmar con proveedor`, porque la fuente indicó falta de existencia/no viabilidad y una confirmación humana posterior puede cambiar el estado mediante una nueva observación trazable.
-- `entrega_viable=None`: se muestra `Por confirmar`, pero **sin** el botón repetitivo de contactar proveedor.
-- `entrega_viable=True`: se muestra `Disponible` y tampoco necesita ese CTA.
-- Esta simplificación sólo cambia la interfaz; no relaja que una referencia estable siga requiriendo disponibilidad/entrega confirmada.
+- disponibilidad operativa `False`: se muestra `Confirmar con proveedor`, porque la fuente indicó falta de existencia/no viabilidad y una confirmación humana posterior puede cambiar el estado mediante una nueva observación trazable;
+- disponibilidad operativa `None`: se muestra `Por confirmar`, pero **sin** el botón repetitivo de contactar proveedor;
+- disponibilidad operativa `True`: se muestra `Disponible` y tampoco necesita ese CTA;
+- la disponibilidad operativa puede provenir del booleano explícito o, sólo para origen WEB, de evidencia textual inequívoca conforme a #85.
 
 ## Hitos base del flujo DIF
 
@@ -141,27 +147,31 @@ Issue #55, **“Piloto end-to-end: validar una cotización DIF real en Triage V2
 
 Continuar con la misma solicitud real después de desplegar el `main` actual:
 
-`cargar/reabrir -> revisar original/lectura -> normalizar -> consultar precios -> validar identidad/evidencia -> confirmar disponibilidad cuando corresponda -> elegir referencia estable -> decidir COTIZABLE/NO SE COTIZA -> validar tratamiento fiscal -> capturar precio final autorizado -> revisar rubros -> exportar DIF`
+`cargar/reabrir -> revisar original/lectura -> normalizar -> consultar precios -> validar identidad/evidencia -> validar disponibilidad operativa -> elegir referencia estable -> decidir COTIZABLE/NO SE COTIZA -> validar tratamiento fiscal -> capturar precio final autorizado -> revisar rubros -> exportar DIF`
 
 Objetivos restantes del piloto:
 
 1. Repetir los casos que antes fallaron por marca/genérico y comprobarlos contra el snapshot COFEPRIS realmente cargado en producción.
-2. Confirmar visualmente los estados `Disponible`, `Por confirmar` y `Sin disponibilidad`, incluyendo que `Confirmar con proveedor` aparezca sólo en el último caso.
-3. Comprobar que disponibilidad, identidad y promoción se distinguen por color suave y texto sin saturar la pantalla.
-4. Cargar un documento nuevo y verificar que un segundo usuario pueda abrir el original, contrastar la lectura y completar manualmente un caso de lector incompleto/error.
-5. Verificar el recorrido completo sin volver manualmente al inicio de listas largas.
-6. Comparar el Excel generado con el formato operativo esperado por DIF.
-7. Registrar cualquier nueva diferencia reproducible como issue separado antes de modificar código.
-8. Medir de forma aproximada el tiempo desde carga hasta exportación.
+2. Reabrir el caso real de Linagliptina/Farmatodo y confirmar que `100 disponibles (texto en página)` cambia a `Disponible` y ofrece `Usar para cotizar` sin repetir la búsqueda.
+3. Confirmar que frases ambiguas siguen como `Por confirmar`, las faltas de existencia siguen como `Sin disponibilidad` y `Confirmar con proveedor` aparece sólo en este último caso.
+4. Comprobar que disponibilidad, identidad y promoción se distinguen por color suave y texto sin saturar la pantalla.
+5. Cargar un documento nuevo y verificar que un segundo usuario pueda abrir el original, contrastar la lectura y completar manualmente un caso de lector incompleto/error.
+6. Verificar el recorrido completo sin volver manualmente al inicio de listas largas.
+7. Comparar el Excel generado con el formato operativo esperado por DIF.
+8. Registrar cualquier nueva diferencia reproducible como issue separado antes de modificar código.
+9. Medir de forma aproximada el tiempo desde carga hasta exportación.
 
 Issue #43 permanece abierto hasta completar esta validación operativa del flujo DIF.
 
 ## Decisiones confirmadas
 
 - Una partida que Veracruzanísima no pueda comercializar permanece en la cotización y en el Excel con el resultado `NO SE COTIZA`.
-- La falta de existencia web o entrega por confirmar es un estado operativo temporal y **no** equivale a `NO_SE_COTIZA`.
-- Una referencia estable requiere disponibilidad/entrega confirmada además de las validaciones de identidad y precio aplicables.
+- La falta de existencia web o una disponibilidad realmente ambigua es un estado operativo temporal y **no** equivale a `NO_SE_COTIZA`.
+- Una referencia estable requiere disponibilidad operativa positiva además de las validaciones de identidad y precio aplicables.
+- En origen WEB, una señal textual inequívoca de existencia puede satisfacer la disponibilidad operativa aunque el booleano externo haya llegado nulo; la evidencia cruda no se modifica.
+- En origen MANUAL/ADAPTADOR no se infiere disponibilidad desde texto libre cuando el booleano está nulo.
 - El CTA `Confirmar con proveedor` se reserva para una observación marcada sin disponibilidad/no viable; no se muestra de forma general para toda observación pendiente o disponible.
+- Una promoción no puede usarse como referencia estable aunque tenga disponibilidad; se conserva como evidencia/oportunidad.
 - En la salida DIF, una partida no cotizable muestra `—` en precio unitario sin IVA, subtotal, IVA y total.
 - COFEPRIS aporta evidencia de identidad sanitaria; no decide sustituciones clínicas, comerciales ni fiscales.
 - La IA no inventa tasas, tratamientos fiscales, márgenes, restricciones sanitarias ni reglas comerciales.
