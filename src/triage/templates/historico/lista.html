@@ -30,7 +30,7 @@
 {% if productos %}
   {% for producto in productos %}
     {% set decision_comercial = decisiones_comerciales.get(producto.partida.id) %}
-    <section class="tarjeta">
+    <section class="tarjeta" id="partida-{{ producto.partida.id }}">
       <div class="barra">
         <div>
           <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
@@ -52,6 +52,13 @@
         {% endif %}
       </div>
 
+      {% if partida_objetivo == producto.partida.id %}
+        <div class="aviso" role="status">
+          <strong>Confirma esta partida con la evidencia real del proveedor.</strong>
+          <p class="ayuda">Si la web no confirmó existencia, conserva ese resultado como evidencia y registra una nueva observación sólo después de obtener confirmación. Indica la fuente —por ejemplo cotización, mensaje o portal— y marca “Sí, viable” únicamente cuando existencia/entrega estén realmente confirmadas.</p>
+        </div>
+      {% endif %}
+
       {% if producto.observaciones %}
         <h3>Observaciones recientes</h3>
         {% for observacion in producto.observaciones[:5] %}
@@ -61,9 +68,12 @@
                 <strong>{{ observacion.proveedor }}</strong>
                 <div class="ayuda">{{ observacion.observado_en.strftime("%d/%m/%Y %H:%M") }}</div>
               </div>
-              {% if observacion.es_promocion %}
-                <span class="estado estado-pendiente-revision">Promoción</span>
-              {% endif %}
+              <div>
+                {% if observacion.entrega_viable is sameas true %}<span class="estado estado-revisado">Disponible confirmado</span>{% endif %}
+                {% if observacion.entrega_viable is sameas false %}<span class="estado estado-pendiente-revision">No viable</span>{% endif %}
+                {% if observacion.entrega_viable is none %}<span class="estado estado-pendiente-revision">Por confirmar</span>{% endif %}
+                {% if observacion.es_promocion %}<span class="estado estado-pendiente-revision">Promoción</span>{% endif %}
+              </div>
             </div>
             <p>
               {% if observacion.precio_antes_iva is not none %}
@@ -83,6 +93,8 @@
               <p class="ayuda">Entrega al destino: confirmada como viable.</p>
             {% elif observacion.entrega_viable is sameas false %}
               <p class="ayuda">Entrega al destino: no viable.</p>
+            {% else %}
+              <p class="ayuda">Entrega al destino: sin confirmar.</p>
             {% endif %}
             {% if observacion.condiciones_promocion %}
               <p class="ayuda">Condiciones de promoción: {{ observacion.condiciones_promocion }}</p>
@@ -104,7 +116,7 @@
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisar decisión comercial</a>
         </div>
       {% else %}
-      <details>
+      <details {% if partida_objetivo == producto.partida.id %}open{% endif %}>
         <summary>Agregar observación de precio</summary>
         <form method="post" action="/cotizaciones/{{ cotizacion.id }}/historico/{{ producto.partida.id }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -116,7 +128,7 @@
             </div>
             <div class="campo">
               <label for="fuente_{{ loop.index }}">Fuente / evidencia</label>
-              <input id="fuente_{{ loop.index }}" name="fuente" placeholder="Ej. portal proveedor, cotización recibida o URL" required>
+              <input id="fuente_{{ loop.index }}" name="fuente" placeholder="Ej. URL, cotización, WhatsApp o correo del proveedor" required>
             </div>
             <div class="campo">
               <label for="base_{{ loop.index }}">Precio antes de IVA</label>
@@ -133,14 +145,14 @@
             </div>
             <div class="campo">
               <label for="disponibilidad_{{ loop.index }}">Disponibilidad</label>
-              <input id="disponibilidad_{{ loop.index }}" name="disponibilidad" placeholder="Ej. 12 piezas, disponible, agotado">
+              <input id="disponibilidad_{{ loop.index }}" name="disponibilidad" placeholder="Ej. 12 piezas disponibles; confirmado por Ana">
             </div>
             <div class="campo">
-              <label for="entrega_{{ loop.index }}">Entrega al destino</label>
+              <label for="entrega_{{ loop.index }}">Disponibilidad / entrega</label>
               <select id="entrega_{{ loop.index }}" name="entrega_viable">
                 <option value="">Sin confirmar</option>
-                <option value="si">Sí, viable</option>
-                <option value="no">No viable</option>
+                <option value="si">Sí, viable y confirmada</option>
+                <option value="no">No viable / sin existencia</option>
               </select>
             </div>
             <div class="campo campo-ancho">
