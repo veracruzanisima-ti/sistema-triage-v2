@@ -1,9 +1,11 @@
+{% set identidad_cofepris = observacion.evidencia_identidad and observacion.evidencia_identidad.get("fuente") == "COFEPRIS" %}
 <div class="partida">
   <div class="barra">
     <div>
       <strong>{{ observacion.proveedor }}</strong>
       {% if cotizada_hoy and cotizada_hoy.id == observacion.id %}<span class="estado estado-revisado">Cotizado hoy</span>{% endif %}
       {% if observacion.origen == "WEB" %}<span class="estado estado-analizado">Web</span>{% endif %}
+      {% if identidad_cofepris %}<span class="estado estado-revisado">COFEPRIS verificado</span>{% endif %}
       {% if observacion.es_promocion %}<span class="estado estado-analizado">Oferta / promoción</span>{% endif %}
       {% if seleccion and seleccion.referencia_estable_id == observacion.id %}<span class="estado estado-revisado">Usado para cotizar</span>{% endif %}
       <p class="ayuda">Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
@@ -19,8 +21,17 @@
   </div>
 
   {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
-  {% if observacion.evidencia_identidad and observacion.evidencia_identidad.get("fuente") == "COFEPRIS" %}
-    <p class="ayuda">Identidad verificada con COFEPRIS · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}</p>
+  {% if identidad_cofepris %}
+    <div class="exito" role="note">
+      <strong>Identidad verificada con COFEPRIS · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}</strong>
+      <p class="ayuda">
+        {{ observacion.evidencia_identidad.get("denominacion_distintiva") or "Denominación distintiva sin registrar" }}
+        →
+        {{ observacion.evidencia_identidad.get("denominacion_generica") or "Denominación genérica sin registrar" }}
+        · Estado {{ observacion.evidencia_identidad.get("estado") or "sin registrar" }}.
+      </p>
+      <p class="ayuda">Esta evidencia sólo confirma identidad sanitaria; no decide sustituciones clínicas, comerciales ni fiscales.</p>
+    </div>
   {% endif %}
   {% if observacion.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
   {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
