@@ -314,7 +314,8 @@ def resolver_identidad_cofepris(
     numeros = [registro.numero_registro for registro in coincidencias]
     if len({numero.casefold() for numero in numeros}) != len(numeros):
         return None
-    if len(coincidencias) > 1 and len({_perfil_registro(registro) for registro in coincidencias}) == 1:
+    perfiles = {_perfil_registro(registro) for registro in coincidencias}
+    if len(coincidencias) > 1 and len(perfiles) == 1:
         return None
 
     registro = sorted(coincidencias, key=lambda item: item.numero_registro.casefold())[0]
