@@ -50,7 +50,7 @@ _UNIDADES_PRESENTACION = (
     "CARTUCHO",
 )
 _ALIASES_BUSQUEDA = {
-    "TABLETA": ("tableta", "tabletas", "tab", "tabs"),
+    "TABLETA": ("tableta", "tabletas", "tab"),
     "VIAL": ("frasco ámpula", "frasco ampula", "F.A.", "vial"),
     "AMPOLLA": ("ampolla", "amp"),
     "JERINGA PRELLENADA": ("jeringa prellenada", "jga pre"),
