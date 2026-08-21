@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from triage.comercial.modelos import EstadoComercial
 from triage.comercial.servicio import listar_decisiones_comerciales_actuales
 from triage.cotizaciones.servicio import obtener_cotizacion
+from triage.historico.confirmaciones_web import confirmar_fuente_web_y_usar_como_referencia
 from triage.historico.decisiones_modelos import RolDecisionPrecio
 from triage.historico.decisiones_servicio import (
     listar_selecciones_actuales,
@@ -86,6 +87,23 @@ def _siguiente_partida_pendiente(
     return None
 
 
+def _destino_proveedores(
+    sesion: Sesion,
+    *,
+    cotizacion_id: str,
+    partida_actual_id: str,
+) -> str:
+    destino = f"/cotizaciones/{cotizacion_id}/proveedores"
+    siguiente_id = _siguiente_partida_pendiente(
+        sesion,
+        cotizacion_id=cotizacion_id,
+        partida_actual_id=partida_actual_id,
+    )
+    if siguiente_id:
+        destino += f"#estado-busqueda-{siguiente_id}"
+    return destino
+
+
 @router.get("/{cotizacion_id}/decisiones-precio", response_class=HTMLResponse)
 def ver_decisiones(
     cotizacion_id: str,
@@ -132,14 +150,52 @@ def guardar_decision(
     if volver == "proveedores":
         destino = f"/cotizaciones/{cotizacion_id}/proveedores"
         if rol_validado == RolDecisionPrecio.REFERENCIA_ESTABLE:
-            siguiente_id = _siguiente_partida_pendiente(
+            destino = _destino_proveedores(
                 sesion,
                 cotizacion_id=cotizacion_id,
                 partida_actual_id=partida_id,
             )
-            if siguiente_id:
-                destino += f"#estado-busqueda-{siguiente_id}"
     return RedirectResponse(
         url=destino,
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post(
+    "/{cotizacion_id}/decisiones-precio/{partida_id}"
+    "/confirmar-web/{observacion_web_id}"
+)
+def confirmar_fuente_web(
+    cotizacion_id: str,
+    partida_id: str,
+    observacion_web_id: str,
+    request: Request,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+    csrf_token: Annotated[str, Form()],
+):
+    """Convierte una verificación humana de la fuente en una nueva evidencia manual."""
+
+    validar_token_csrf(request, csrf_token)
+    cotizacion = obtener_cotizacion(sesion, cotizacion_id)
+    if cotizacion is None:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    try:
+        confirmar_fuente_web_y_usar_como_referencia(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_id=partida_id,
+            usuario_id=usuario.id,
+            observacion_web_id=observacion_web_id,
+        )
+    except ValueError as error:
+        return _render(request, sesion, usuario, cotizacion, error=str(error))
+
+    return RedirectResponse(
+        url=_destino_proveedores(
+            sesion,
+            cotizacion_id=cotizacion_id,
+            partida_actual_id=partida_id,
+        ),
         status_code=status.HTTP_303_SEE_OTHER,
     )
