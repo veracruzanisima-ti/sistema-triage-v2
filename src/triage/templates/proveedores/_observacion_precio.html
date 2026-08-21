@@ -10,6 +10,7 @@
 {% set marca_propia_declarada = "marca propia" in observado_norm %}
 {% set generico_visible = producto_norm and producto_norm in observado_norm %}
 {% set disponibilidad_operativa = observacion.disponibilidad_operativa %}
+{% set confirmacion_manual_web = observacion.evidencia_identidad and observacion.evidencia_identidad.get("confirmacion_manual_fuente_web") %}
 <div class="partida">
   <div class="barra">
     <div>
@@ -37,7 +38,10 @@
       {% endif %}
 
       {% if observacion.es_promocion %}<span class="estado estado-promocion">Oferta / promoción</span>{% endif %}
-      <p class="ayuda">{% if observacion.origen == "WEB" %}Fuente web · {% endif %}Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
+      <p class="ayuda">
+        {% if confirmacion_manual_web %}Verificación humana de fuente web · {% elif observacion.origen == "WEB" %}Fuente web · {% endif %}
+        Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}
+      </p>
     </div>
     <div>
       {% if observacion.precio_total is not none %}
@@ -81,6 +85,13 @@
     <div class="aviso" role="status">
       <strong>Disponibilidad por confirmar.</strong>
       <p class="ayuda">El precio se conserva como evidencia. Triage no lo toma como referencia estable mientras la disponibilidad/entrega siga sin confirmación suficiente.</p>
+      {% if observacion.origen == "WEB" and not observacion.es_promocion %}
+        <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}/confirmar-web/{{ observacion.id }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="boton" type="submit">Verifiqué fuente · usar para cotizar</button>
+        </form>
+        <p class="ayuda">Al continuar confirmas que abriste la fuente y comprobaste que este precio sigue visible y que existe disponibilidad/entrega para comprar.</p>
+      {% endif %}
     </div>
   {% endif %}
 
