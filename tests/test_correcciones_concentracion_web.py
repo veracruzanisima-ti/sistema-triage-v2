@@ -1,7 +1,4 @@
-import types
-from decimal import Decimal
-
-from triage.proveedores import correcciones_concentracion_web
+from triage.proveedores import correcciones_concentracion_web as correcciones
 
 
 CRITERIOS = {
@@ -13,15 +10,18 @@ CRITERIOS = {
 }
 
 
+class DescartadoFalso:
+    def __init__(self, proveedor: str, producto: str, intento: int) -> None:
+        self.proveedor = proveedor
+        self.producto_observado = producto
+        self.url = f"https://{proveedor.casefold().replace(' ', '-')}.example/producto"
+        self.precio_observado = 100
+        self.motivos = ["producto distinto"]
+        self.intento_busqueda = intento
+
+
 def _descartado(proveedor: str, producto: str, *, intento: int = 1):
-    return types.SimpleNamespace(
-        proveedor=proveedor,
-        producto_observado=producto,
-        url=f"https://{proveedor.casefold().replace(' ', '-')}.example/producto",
-        precio_observado=Decimal("100.00"),
-        motivos=["producto distinto"],
-        intento_busqueda=intento,
-    )
+    return DescartadoFalso(proveedor, producto, intento)
 
 
 def _sugerir(descartados, **cambios):
@@ -35,9 +35,7 @@ def _sugerir(descartados, **cambios):
         "descartados": descartados,
     }
     argumentos.update(cambios)
-    return correcciones_concentracion_web.sugerir_correccion_concentracion_web(
-        **argumentos
-    )
+    return correcciones.sugerir_correccion_concentracion_web(**argumentos)
 
 
 def test_dos_fuentes_independientes_sugieren_40_mg_por_ml():
