@@ -1,5 +1,5 @@
+import types
 from decimal import Decimal
-from types import SimpleNamespace
 
 from triage.proveedores.correcciones_concentracion_web import (
     sugerir_correccion_concentracion_web,
@@ -16,7 +16,7 @@ CRITERIOS = {
 
 
 def _descartado(proveedor: str, producto: str, *, intento: int = 1):
-    return SimpleNamespace(
+    return types.SimpleNamespace(
         proveedor=proveedor,
         producto_observado=producto,
         url=f"https://{proveedor.casefold().replace(' ', '-')}.example/producto",
@@ -98,16 +98,33 @@ def test_concentraciones_alternativas_en_conflicto_no_eligen_una():
     assert sugerencia.ambigua is True
 
 
-def test_conflicto_de_forma_o_presentacion_no_apoya_sugerencia():
+def test_conflicto_de_forma_no_apoya_sugerencia():
     sugerencia = _sugerir(
         [
             _descartado(
-                "Farmacia Tabletas",
+                "Farmacia Tabletas Uno",
                 "Metilprednisolona 40 mg/mL TABLETAS caja con 30",
             ),
             _descartado(
-                "Farmacia Vial 5",
+                "Farmacia Tabletas Dos",
+                "Acetato de Metilprednisolona 40 mg/mL TABLETAS caja con 30",
+            ),
+        ]
+    )
+
+    assert sugerencia is None
+
+
+def test_volumen_de_presentacion_distinto_no_apoya_sugerencia():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmacia Vial 5 Uno",
                 "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 5 mL",
+            ),
+            _descartado(
+                "Farmacia Vial 5 Dos",
+                "Acetato de Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 5 mL",
             ),
         ]
     )
