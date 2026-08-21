@@ -3,9 +3,10 @@
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.datastructures import FormData
 
 from triage.cotizaciones.servicio import obtener_cotizacion
@@ -311,6 +312,37 @@ async def subir_y_procesar_cola(
             "error": documento.error_lector if not lectura_correcta else None,
             "revision_url": revision_url,
         }
+    )
+
+
+@router.get(
+    "/cotizaciones/{cotizacion_id}/documentos/{documento_id}/original",
+    response_class=Response,
+    name="ver_original_documento",
+)
+def ver_original(
+    cotizacion_id: str,
+    documento_id: str,
+    sesion: Sesion,
+    usuario: UsuarioActual,
+):
+    """Sirve el original en línea sólo dentro de la cotización autenticada."""
+
+    documento = _documento_o_404(sesion, cotizacion_id, documento_id)
+    contenido = documento.contenido_original
+    if contenido is None:
+        raise HTTPException(status_code=404, detail="Original no disponible para este documento")
+
+    nombre = quote(documento.nombre_original, safe="")
+    return Response(
+        content=contenido,
+        media_type=documento.mime_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{nombre}",
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin",
+        },
     )
 
 

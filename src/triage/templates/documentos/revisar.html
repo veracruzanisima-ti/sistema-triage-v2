@@ -8,345 +8,400 @@
     <h1>Revisar documento</h1>
     <p class="ayuda">{{ documento.nombre_original }}</p>
   </div>
-  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a la cotización</a>
+  <div class="grupo-botones">
+    {% if documento.contenido_original is not none %}
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/original" target="_blank" rel="noopener">Abrir original</a>
+    {% endif %}
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver a la cotización</a>
+  </div>
 </div>
 
-{% if documento.estado == estado_error %}
-  <section class="tarjeta">
-    <h2>No se pudo leer el archivo</h2>
-    <p class="error">{{ documento.error_lector or "El lector no pudo interpretar este documento." }}</p>
-    <p>No se modificó ninguna partida de la cotización. Puedes volver y cargar el archivo nuevamente.</p>
-    <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/documentos/nuevo">Cargar otro archivo</a>
-  </section>
+{% if documento.contenido_original is not none %}
+  <details class="tarjeta documento-original" {% if documento.estado == estado_error %}open{% endif %}>
+    <summary>Ver documento original para comparar</summary>
+    <p class="ayuda">Este es el archivo exacto que se cargó a Triage. Úsalo para comprobar la lectura antes de guardar correcciones.</p>
+    {% if documento.mime_type == "application/pdf" %}
+      <iframe
+        class="visor-original-pdf"
+        src="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/original"
+        title="Documento original {{ documento.nombre_original }}"
+      ></iframe>
+    {% else %}
+      <a href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/original" target="_blank" rel="noopener">
+        <img
+          class="visor-original-imagen"
+          src="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/original"
+          alt="Documento original {{ documento.nombre_original }}"
+        >
+      </a>
+    {% endif %}
+  </details>
 {% else %}
-  {% if documento.estado == "REVISADO" %}
-    <p class="exito">Revisión guardada. Estos son los datos actualmente aprobados por una persona.</p>
-  {% endif %}
+  <p class="aviso">
+    <strong>Original no disponible.</strong>
+    Este documento fue registrado antes de que Triage conservara los archivos originales. Si necesitas comprobarlo visualmente, vuelve a cargar el archivo.
+  </p>
+{% endif %}
 
-  {% if error %}
-    <p class="error">{{ error }}</p>
-  {% endif %}
+{% if documento.estado == estado_error %}
+  <div class="aviso" role="status">
+    <strong>No se pudo leer el archivo.</strong>
+    <p>El lector no pudo completar la lectura automáticamente.</p>
+    <p>{{ documento.error_lector or "El lector no pudo interpretar este documento." }}</p>
+    <p>Puedes capturar manualmente los datos y partidas comparándolos con el original. Nada se aprobará hasta que pulses Guardar revisión.</p>
+  </div>
+{% elif documento.estado == "REVISADO" %}
+  <p class="exito">Revisión guardada. Estos son los datos actualmente aprobados por una persona.</p>
+{% endif %}
 
-  <form id="formulario-revision" method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/revision">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input id="partidas-total" type="hidden" name="partidas_total" value="{{ partidas|length + 1 }}">
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% endif %}
 
-    <section class="tarjeta">
-      <h2>Lo que entendí</h2>
-      <p class="ayuda">Corrige cualquier dato que no coincida con el documento. Los campos vacíos pueden quedarse vacíos.</p>
+<form id="formulario-revision" method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/revision">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input id="partidas-total" type="hidden" name="partidas_total" value="{{ partidas|length + 1 }}">
 
-      <div class="rejilla">
-        <div class="campo">
-          <label for="tipo_documento">Tipo de documento</label>
-          <input id="tipo_documento" name="tipo_documento" value="{{ documento.tipo_documento or '' }}">
-        </div>
-        <div class="campo">
-          <label for="memorandum">Memorándum / referencia</label>
-          <input id="memorandum" name="memorandum" value="{{ documento.memorandum or '' }}">
-        </div>
-        <div class="campo">
-          <label for="folios">Folio(s)</label>
-          <input id="folios" name="folios" value="{{ documento.folios | join(', ') }}">
-          <p class="ayuda">Si hay varios, sepáralos con coma.</p>
-        </div>
-        <div class="campo">
-          <label for="fecha_documento">Fecha</label>
-          <input id="fecha_documento" name="fecha_documento" value="{{ documento.fecha_documento or '' }}">
-        </div>
-        <div class="campo">
-          <label for="municipio">Municipio</label>
-          <input id="municipio" name="municipio" value="{{ documento.municipio or '' }}">
-        </div>
+  <section class="tarjeta">
+    <h2>{% if documento.estado == estado_error %}Captura manual{% else %}Lo que entendí{% endif %}</h2>
+    <p class="ayuda">Corrige cualquier dato que no coincida con el documento. Los campos vacíos pueden quedarse vacíos.</p>
+
+    <div class="rejilla">
+      <div class="campo">
+        <label for="tipo_documento">Tipo de documento</label>
+        <input id="tipo_documento" name="tipo_documento" value="{{ documento.tipo_documento or '' }}">
       </div>
-    </section>
+      <div class="campo">
+        <label for="memorandum">Memorándum / referencia</label>
+        <input id="memorandum" name="memorandum" value="{{ documento.memorandum or '' }}">
+      </div>
+      <div class="campo">
+        <label for="folios">Folio(s)</label>
+        <input id="folios" name="folios" value="{{ documento.folios | join(', ') }}">
+        <p class="ayuda">Si hay varios, sepáralos con coma.</p>
+      </div>
+      <div class="campo">
+        <label for="fecha_documento">Fecha</label>
+        <input id="fecha_documento" name="fecha_documento" value="{{ documento.fecha_documento or '' }}">
+      </div>
+      <div class="campo">
+        <label for="municipio">Municipio</label>
+        <input id="municipio" name="municipio" value="{{ documento.municipio or '' }}">
+      </div>
+    </div>
+  </section>
 
-    <section class="tarjeta">
-      <h2>Partidas</h2>
-      <p class="ayuda">Puedes corregir las partidas detectadas. La cantidad se captura en unidades completas. Si faltó alguna partida, usa el renglón de agregar y crea más sólo cuando los necesites.</p>
+  <section class="tarjeta">
+    <h2>Partidas</h2>
+    <p class="ayuda">Puedes corregir las partidas detectadas. La cantidad se captura en unidades completas. Si faltó alguna partida, usa el renglón de agregar y crea más sólo cuando los necesites.</p>
 
-      {% if partidas_con_alerta %}
-        <p class="alerta-restriccion-resumen">
-          <strong>{{ partidas_con_alerta }} partida{% if partidas_con_alerta != 1 %}s{% endif %} requiere{% if partidas_con_alerta != 1 %}n{% endif %} revisión por posible restricción.</strong>
-          Triage no rechazó ninguna automáticamente.
-        </p>
-      {% endif %}
+    {% if partidas_con_alerta %}
+      <p class="alerta-restriccion-resumen">
+        <strong>{{ partidas_con_alerta }} partida{% if partidas_con_alerta != 1 %}s{% endif %} requiere{% if partidas_con_alerta != 1 %}n{% endif %} revisión por posible restricción.</strong>
+        Triage no rechazó ninguna automáticamente.
+      </p>
+    {% endif %}
 
-      {% if partidas_excluidas %}
-        <p class="resumen-exclusion">
-          <strong>{{ partidas_excluidas }} partida{% if partidas_excluidas != 1 %}s{% endif %} excluida{% if partidas_excluidas != 1 %}s{% endif %} de la cotización.</strong>
-          Se conserva{% if partidas_excluidas != 1 %}n{% endif %} como parte de la solicitud original.
-        </p>
-      {% endif %}
+    {% if partidas_excluidas %}
+      <p class="resumen-exclusion">
+        <strong>{{ partidas_excluidas }} partida{% if partidas_excluidas != 1 %}s{% endif %} excluida{% if partidas_excluidas != 1 %}s{% endif %} de la cotización.</strong>
+        Se conserva{% if partidas_excluidas != 1 %}n{% endif %} como parte de la solicitud original.
+      </p>
+    {% endif %}
 
-      {% for partida in partidas %}
-        {% set i = loop.index0 %}
-        {% set alertas_partida = alertas_por_partida[i] %}
-        <article class="partida{% if alertas_partida and partida.incluida_cotizacion %} partida-restringida{% endif %}{% if not partida.incluida_cotizacion %} partida-excluida{% endif %}" data-partida-indice="{{ i }}">
-          <input class="partida-incluir" type="hidden" name="partida_{{ i }}_incluir" value="{% if partida.incluida_cotizacion %}1{% else %}0{% endif %}">
-          <input class="partida-motivo-exclusion" type="hidden" name="partida_{{ i }}_motivo_exclusion" value="{{ partida.motivo_exclusion or '' }}">
+    {% for partida in partidas %}
+      {% set i = loop.index0 %}
+      {% set alertas_partida = alertas_por_partida[i] %}
+      <article class="partida{% if alertas_partida and partida.incluida_cotizacion %} partida-restringida{% endif %}{% if not partida.incluida_cotizacion %} partida-excluida{% endif %}" data-partida-indice="{{ i }}">
+        <input class="partida-incluir" type="hidden" name="partida_{{ i }}_incluir" value="{% if partida.incluida_cotizacion %}1{% else %}0{% endif %}">
+        <input class="partida-motivo-exclusion" type="hidden" name="partida_{{ i }}_motivo_exclusion" value="{{ partida.motivo_exclusion or '' }}">
 
-          <div class="estado-partida-excluida" {% if partida.incluida_cotizacion %}hidden{% endif %}>
-            <div>
-              <strong>Excluida de la cotización</strong>
-              <p class="ayuda">
-                {{ partida.producto_solicitado or "Partida sin nombre" }}
-                {% if partida.concentracion %} · {{ partida.concentracion }}{% endif %}
-                {% if partida.cantidad %} · {{ cantidad_visible(partida.cantidad) }} {{ partida.unidad_medida or "unidades" }}{% endif %}
-              </p>
-              <p class="ayuda motivo-exclusion-visible">Motivo: {{ partida.motivo_exclusion or "Decisión de revisión humana." }}</p>
+        <div class="estado-partida-excluida" {% if partida.incluida_cotizacion %}hidden{% endif %}>
+          <div>
+            <strong>Excluida de la cotización</strong>
+            <p class="ayuda">
+              {{ partida.producto_solicitado or "Partida sin nombre" }}
+              {% if partida.concentracion %} · {{ partida.concentracion }}{% endif %}
+              {% if partida.cantidad %} · {{ cantidad_visible(partida.cantidad) }} {{ partida.unidad_medida or "unidades" }}{% endif %}
+            </p>
+            <p class="ayuda motivo-exclusion-visible">Motivo: {{ partida.motivo_exclusion or "Decisión de revisión humana." }}</p>
+          </div>
+          <button class="boton boton-secundario reintegrar-partida" type="button">Reintegrar</button>
+        </div>
+
+        <div class="contenido-partida" {% if not partida.incluida_cotizacion %}hidden{% endif %}>
+          <h3>Partida {{ loop.index }}</h3>
+
+          {% if alertas_partida %}
+            <div class="alerta-restriccion">
+              <strong>Posible rechazo - requiere revisión</strong>
+              <p>Este producto podría no ser cotizable según una política interna provisional.</p>
+              {% for alerta in alertas_partida %}
+                <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
+                {% if alerta.nota %}
+                  <p class="alerta-restriccion-meta">{{ alerta.nota }}</p>
+                {% endif %}
+                <details class="detalle-regla">
+                  <summary>Ver detalle de la regla</summary>
+                  <p class="alerta-restriccion-meta">
+                    {{ alerta.politica_id }} · {{ alerta.regla_id }} · {{ alerta.politica_version }} · Pendiente de validación del Responsable Sanitario.
+                  </p>
+                </details>
+              {% endfor %}
+              <p class="alerta-restriccion-meta">La partida permanece disponible hasta que una persona decida cómo proceder.</p>
+              {% set primera_alerta = alertas_partida[0] %}
+              <button
+                class="boton boton-excluir excluir-partida"
+                type="button"
+                data-motivo="{{ primera_alerta.motivo }}"
+                data-producto="{{ partida.producto_solicitado or 'esta partida' }}"
+              >Excluir de cotización</button>
             </div>
-            <button class="boton boton-secundario reintegrar-partida" type="button">Reintegrar</button>
-          </div>
+          {% endif %}
 
-          <div class="contenido-partida" {% if not partida.incluida_cotizacion %}hidden{% endif %}>
-            <h3>Partida {{ loop.index }}</h3>
-
-            {% if alertas_partida %}
-              <div class="alerta-restriccion">
-                <strong>Posible rechazo - requiere revisión</strong>
-                <p>Este producto podría no ser cotizable según una política interna provisional.</p>
-                {% for alerta in alertas_partida %}
-                  <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
-                  {% if alerta.nota %}
-                    <p class="alerta-restriccion-meta">{{ alerta.nota }}</p>
-                  {% endif %}
-                  <details class="detalle-regla">
-                    <summary>Ver detalle de la regla</summary>
-                    <p class="alerta-restriccion-meta">
-                      {{ alerta.politica_id }} · {{ alerta.regla_id }} · {{ alerta.politica_version }} · Pendiente de validación del Responsable Sanitario.
-                    </p>
-                  </details>
-                {% endfor %}
-                <p class="alerta-restriccion-meta">La partida permanece disponible hasta que una persona decida cómo proceder.</p>
-                {% set primera_alerta = alertas_partida[0] %}
-                <button
-                  class="boton boton-excluir excluir-partida"
-                  type="button"
-                  data-motivo="{{ primera_alerta.motivo }}"
-                  data-producto="{{ partida.producto_solicitado or 'esta partida' }}"
-                >Excluir de cotización</button>
-              </div>
-            {% endif %}
-
-            <div class="rejilla">
-              <div class="campo campo-ancho">
-                <label for="partida_{{ i }}_producto">Producto solicitado</label>
-                <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto" value="{{ partida.producto_solicitado or '' }}">
-              </div>
-              <div class="campo">
-                <label for="partida_{{ i }}_marca">Marca solicitada</label>
-                <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca" value="{{ partida.marca_solicitada or '' }}">
-              </div>
-              <div class="campo">
-                <label for="partida_{{ i }}_concentracion">Concentración</label>
-                <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion" value="{{ partida.concentracion or '' }}">
-              </div>
-              <div class="campo">
-                <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
-                <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma" value="{{ partida.forma_farmaceutica_dispositivo or '' }}">
-              </div>
-              <div class="campo campo-ancho">
-                <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
-                <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion" value="{{ partida.presentacion_solicitada or '' }}">
-              </div>
-              <div class="campo">
-                <label for="partida_{{ i }}_cantidad">Cantidad</label>
-                <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric" value="{{ cantidad_visible(partida.cantidad) }}">
-              </div>
-              <div class="campo">
-                <label for="partida_{{ i }}_unidad">Unidad de medida</label>
-                <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad" value="{{ partida.unidad_medida or '' }}">
-              </div>
+          <div class="rejilla">
+            <div class="campo campo-ancho">
+              <label for="partida_{{ i }}_producto">Producto solicitado</label>
+              <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto" value="{{ partida.producto_solicitado or '' }}">
             </div>
-          </div>
-        </article>
-      {% endfor %}
-
-      {% set i = partidas|length %}
-      <article class="partida partida-vacia">
-        <h3>Agregar partida</h3>
-        <div class="rejilla">
-          <div class="campo campo-ancho">
-            <label for="partida_{{ i }}_producto">Producto solicitado</label>
-            <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto">
-          </div>
-          <div class="campo">
-            <label for="partida_{{ i }}_marca">Marca solicitada</label>
-            <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca">
-          </div>
-          <div class="campo">
-            <label for="partida_{{ i }}_concentracion">Concentración</label>
-            <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion">
-          </div>
-          <div class="campo">
-            <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
-            <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma">
-          </div>
-          <div class="campo campo-ancho">
-            <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
-            <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion">
-          </div>
-          <div class="campo">
-            <label for="partida_{{ i }}_cantidad">Cantidad</label>
-            <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric">
-          </div>
-          <div class="campo">
-            <label for="partida_{{ i }}_unidad">Unidad de medida</label>
-            <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad">
+            <div class="campo">
+              <label for="partida_{{ i }}_marca">Marca solicitada</label>
+              <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca" value="{{ partida.marca_solicitada or '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_concentracion">Concentración</label>
+              <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion" value="{{ partida.concentracion or '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
+              <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma" value="{{ partida.forma_farmaceutica_dispositivo or '' }}">
+            </div>
+            <div class="campo campo-ancho">
+              <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
+              <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion" value="{{ partida.presentacion_solicitada or '' }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_cantidad">Cantidad</label>
+              <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric" value="{{ cantidad_visible(partida.cantidad) }}">
+            </div>
+            <div class="campo">
+              <label for="partida_{{ i }}_unidad">Unidad de medida</label>
+              <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad" value="{{ partida.unidad_medida or '' }}">
+            </div>
           </div>
         </div>
       </article>
+    {% endfor %}
 
-      <div id="partidas-extras"></div>
-      <button id="agregar-partida" class="boton boton-secundario" type="button">+ Agregar otra partida</button>
+    {% set i = partidas|length %}
+    <article class="partida partida-vacia">
+      <h3>Agregar partida</h3>
+      <div class="rejilla">
+        <div class="campo campo-ancho">
+          <label for="partida_{{ i }}_producto">Producto solicitado</label>
+          <input id="partida_{{ i }}_producto" name="partida_{{ i }}_producto">
+        </div>
+        <div class="campo">
+          <label for="partida_{{ i }}_marca">Marca solicitada</label>
+          <input id="partida_{{ i }}_marca" name="partida_{{ i }}_marca">
+        </div>
+        <div class="campo">
+          <label for="partida_{{ i }}_concentracion">Concentración</label>
+          <input id="partida_{{ i }}_concentracion" name="partida_{{ i }}_concentracion">
+        </div>
+        <div class="campo">
+          <label for="partida_{{ i }}_forma">Forma / dispositivo</label>
+          <input id="partida_{{ i }}_forma" name="partida_{{ i }}_forma">
+        </div>
+        <div class="campo campo-ancho">
+          <label for="partida_{{ i }}_presentacion">Presentación solicitada</label>
+          <input id="partida_{{ i }}_presentacion" name="partida_{{ i }}_presentacion">
+        </div>
+        <div class="campo">
+          <label for="partida_{{ i }}_cantidad">Cantidad</label>
+          <input id="partida_{{ i }}_cantidad" name="partida_{{ i }}_cantidad" type="number" min="0" step="1" inputmode="numeric">
+        </div>
+        <div class="campo">
+          <label for="partida_{{ i }}_unidad">Unidad de medida</label>
+          <input id="partida_{{ i }}_unidad" name="partida_{{ i }}_unidad">
+        </div>
+      </div>
+    </article>
 
-      <template id="plantilla-partida">
-        <article class="partida partida-vacia">
-          <div class="encabezado-partida">
-            <h3>Agregar partida</h3>
-            <button class="boton boton-texto quitar-partida" type="button">× Quitar</button>
+    <div id="partidas-extras"></div>
+    <button id="agregar-partida" class="boton boton-secundario" type="button">+ Agregar otra partida</button>
+
+    <template id="plantilla-partida">
+      <article class="partida partida-vacia">
+        <div class="encabezado-partida">
+          <h3>Agregar partida</h3>
+          <button class="boton boton-texto quitar-partida" type="button">× Quitar</button>
+        </div>
+        <div class="rejilla">
+          <div class="campo campo-ancho">
+            <label for="partida___INDICE___producto">Producto solicitado</label>
+            <input id="partida___INDICE___producto" name="partida___INDICE___producto">
           </div>
-          <div class="rejilla">
-            <div class="campo campo-ancho">
-              <label for="partida___INDICE___producto">Producto solicitado</label>
-              <input id="partida___INDICE___producto" name="partida___INDICE___producto">
-            </div>
-            <div class="campo">
-              <label for="partida___INDICE___marca">Marca solicitada</label>
-              <input id="partida___INDICE___marca" name="partida___INDICE___marca">
-            </div>
-            <div class="campo">
-              <label for="partida___INDICE___concentracion">Concentración</label>
-              <input id="partida___INDICE___concentracion" name="partida___INDICE___concentracion">
-            </div>
-            <div class="campo">
-              <label for="partida___INDICE___forma">Forma / dispositivo</label>
-              <input id="partida___INDICE___forma" name="partida___INDICE___forma">
-            </div>
-            <div class="campo campo-ancho">
-              <label for="partida___INDICE___presentacion">Presentación solicitada</label>
-              <input id="partida___INDICE___presentacion" name="partida___INDICE___presentacion">
-            </div>
-            <div class="campo">
-              <label for="partida___INDICE___cantidad">Cantidad</label>
-              <input id="partida___INDICE___cantidad" name="partida___INDICE___cantidad" type="number" min="0" step="1" inputmode="numeric">
-            </div>
-            <div class="campo">
-              <label for="partida___INDICE___unidad">Unidad de medida</label>
-              <input id="partida___INDICE___unidad" name="partida___INDICE___unidad">
-            </div>
+          <div class="campo">
+            <label for="partida___INDICE___marca">Marca solicitada</label>
+            <input id="partida___INDICE___marca" name="partida___INDICE___marca">
           </div>
-        </article>
-      </template>
-    </section>
+          <div class="campo">
+            <label for="partida___INDICE___concentracion">Concentración</label>
+            <input id="partida___INDICE___concentracion" name="partida___INDICE___concentracion">
+          </div>
+          <div class="campo">
+            <label for="partida___INDICE___forma">Forma / dispositivo</label>
+            <input id="partida___INDICE___forma" name="partida___INDICE___forma">
+          </div>
+          <div class="campo campo-ancho">
+            <label for="partida___INDICE___presentacion">Presentación solicitada</label>
+            <input id="partida___INDICE___presentacion" name="partida___INDICE___presentacion">
+          </div>
+          <div class="campo">
+            <label for="partida___INDICE___cantidad">Cantidad</label>
+            <input id="partida___INDICE___cantidad" name="partida___INDICE___cantidad" type="number" min="0" step="1" inputmode="numeric">
+          </div>
+          <div class="campo">
+            <label for="partida___INDICE___unidad">Unidad de medida</label>
+            <input id="partida___INDICE___unidad" name="partida___INDICE___unidad">
+          </div>
+        </div>
+      </article>
+    </template>
+  </section>
 
-    <section class="tarjeta">
-      <h2>¿El archivo parece incompleto por sí solo?</h2>
-      <label class="opcion">
-        <input type="checkbox" name="parece_fragmento" value="1" {% if documento.parece_fragmento %}checked{% endif %}>
-        Sí, parece ser sólo una parte de un documento mayor.
-      </label>
-      {% if documento.senales_fragmento %}
-        <details>
-          <summary>Ver por qué el lector lo sugirió</summary>
-          <ul>
-            {% for senal in documento.senales_fragmento %}
-              <li>{{ senal }}</li>
-            {% endfor %}
-          </ul>
-        </details>
-      {% endif %}
-      <p class="ayuda">Esto no une el archivo con ningún otro. La relación entre documentos se decidirá manualmente en una etapa posterior.</p>
-    </section>
+  <section class="tarjeta">
+    <h2>¿El archivo parece incompleto por sí solo?</h2>
+    <label class="opcion">
+      <input type="checkbox" name="parece_fragmento" value="1" {% if documento.parece_fragmento %}checked{% endif %}>
+      Sí, parece ser sólo una parte de un documento mayor.
+    </label>
+    {% if documento.senales_fragmento %}
+      <details>
+        <summary>Ver por qué el lector lo sugirió</summary>
+        <ul>
+          {% for senal in documento.senales_fragmento %}
+            <li>{{ senal }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
+    <p class="ayuda">Esto no une el archivo con ningún otro. La relación entre documentos se decidirá manualmente en una etapa posterior.</p>
+  </section>
 
-    <div class="grupo-botones">
-      <button class="boton" type="submit">Guardar revisión</button>
-      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver sin guardar</a>
-    </div>
-  </form>
+  <div class="grupo-botones">
+    <button class="boton" type="submit">Guardar revisión</button>
+    <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver sin guardar</a>
+  </div>
+</form>
 
-  <script>
-    (() => {
-      const formulario = document.getElementById("formulario-revision");
-      const total = document.getElementById("partidas-total");
-      const botonAgregar = document.getElementById("agregar-partida");
-      const contenedor = document.getElementById("partidas-extras");
-      const plantilla = document.getElementById("plantilla-partida");
-      let siguienteIndice = Number(total.value);
-      let hayCambios = false;
-      let guardando = false;
+<style>
+  .documento-original > summary { font-size: 1.05rem; }
+  .visor-original-pdf {
+    display: block;
+    width: 100%;
+    min-height: 62vh;
+    margin-top: 12px;
+    border: 1px solid #dfe4ec;
+    border-radius: 10px;
+    background: #f7f8fa;
+  }
+  .visor-original-imagen {
+    display: block;
+    max-width: 100%;
+    max-height: 72vh;
+    margin: 12px auto 0;
+    border: 1px solid #dfe4ec;
+    border-radius: 10px;
+    object-fit: contain;
+    background: #f7f8fa;
+  }
+  @media (max-width: 680px) {
+    .visor-original-pdf { min-height: 52vh; }
+  }
+</style>
+<script>
+  (() => {
+    const formulario = document.getElementById("formulario-revision");
+    const total = document.getElementById("partidas-total");
+    const botonAgregar = document.getElementById("agregar-partida");
+    const contenedor = document.getElementById("partidas-extras");
+    const plantilla = document.getElementById("plantilla-partida");
+    let siguienteIndice = Number(total.value);
+    let hayCambios = false;
+    let guardando = false;
 
-      const marcarCambios = () => {
-        hayCambios = true;
-      };
+    const marcarCambios = () => {
+      hayCambios = true;
+    };
 
-      formulario.addEventListener("input", marcarCambios);
-      formulario.addEventListener("change", marcarCambios);
+    formulario.addEventListener("input", marcarCambios);
+    formulario.addEventListener("change", marcarCambios);
 
-      botonAgregar.addEventListener("click", () => {
-        const html = plantilla.innerHTML.replaceAll("__INDICE__", String(siguienteIndice));
-        const temporal = document.createElement("div");
-        temporal.innerHTML = html.trim();
-        const nuevaPartida = temporal.firstElementChild;
-        contenedor.append(nuevaPartida);
-        siguienteIndice += 1;
-        total.value = String(siguienteIndice);
+    botonAgregar.addEventListener("click", () => {
+      const html = plantilla.innerHTML.replaceAll("__INDICE__", String(siguienteIndice));
+      const temporal = document.createElement("div");
+      temporal.innerHTML = html.trim();
+      const nuevaPartida = temporal.firstElementChild;
+      contenedor.append(nuevaPartida);
+      siguienteIndice += 1;
+      total.value = String(siguienteIndice);
+      marcarCambios();
+      nuevaPartida.querySelector("input")?.focus();
+    });
+
+    contenedor.addEventListener("click", (evento) => {
+      const boton = evento.target.closest(".quitar-partida");
+      if (!boton) return;
+      boton.closest(".partida")?.remove();
+      marcarCambios();
+    });
+
+    formulario.addEventListener("click", (evento) => {
+      const excluir = evento.target.closest(".excluir-partida");
+      if (excluir) {
+        const partida = excluir.closest(".partida");
+        const producto = excluir.dataset.producto || "esta partida";
+        const confirmado = window.confirm(
+          `¿Excluir ${producto} de esta cotización? La partida seguirá registrada y podrás reintegrarla.`
+        );
+        if (!confirmado) return;
+
+        partida.querySelector(".partida-incluir").value = "0";
+        partida.querySelector(".partida-motivo-exclusion").value = excluir.dataset.motivo || "Decisión de revisión humana.";
+        partida.querySelector(".motivo-exclusion-visible").textContent = `Motivo: ${excluir.dataset.motivo || "Decisión de revisión humana."}`;
+        partida.querySelector(".contenido-partida").hidden = true;
+        partida.querySelector(".estado-partida-excluida").hidden = false;
+        partida.classList.remove("partida-restringida");
+        partida.classList.add("partida-excluida");
         marcarCambios();
-        nuevaPartida.querySelector("input")?.focus();
-      });
+        return;
+      }
 
-      contenedor.addEventListener("click", (evento) => {
-        const boton = evento.target.closest(".quitar-partida");
-        if (!boton) return;
-        boton.closest(".partida")?.remove();
-        marcarCambios();
-      });
+      const reintegrar = evento.target.closest(".reintegrar-partida");
+      if (!reintegrar) return;
+      const partida = reintegrar.closest(".partida");
+      partida.querySelector(".partida-incluir").value = "1";
+      partida.querySelector(".partida-motivo-exclusion").value = "";
+      partida.querySelector(".contenido-partida").hidden = false;
+      partida.querySelector(".estado-partida-excluida").hidden = true;
+      partida.classList.remove("partida-excluida");
+      if (partida.querySelector(".alerta-restriccion")) {
+        partida.classList.add("partida-restringida");
+      }
+      marcarCambios();
+    });
 
-      formulario.addEventListener("click", (evento) => {
-        const excluir = evento.target.closest(".excluir-partida");
-        if (excluir) {
-          const partida = excluir.closest(".partida");
-          const producto = excluir.dataset.producto || "esta partida";
-          const confirmado = window.confirm(
-            `¿Excluir ${producto} de esta cotización? La partida seguirá registrada y podrás reintegrarla.`
-          );
-          if (!confirmado) return;
+    formulario.addEventListener("submit", () => {
+      guardando = true;
+    });
 
-          partida.querySelector(".partida-incluir").value = "0";
-          partida.querySelector(".partida-motivo-exclusion").value = excluir.dataset.motivo || "Decisión de revisión humana.";
-          partida.querySelector(".motivo-exclusion-visible").textContent = `Motivo: ${excluir.dataset.motivo || "Decisión de revisión humana."}`;
-          partida.querySelector(".contenido-partida").hidden = true;
-          partida.querySelector(".estado-partida-excluida").hidden = false;
-          partida.classList.remove("partida-restringida");
-          partida.classList.add("partida-excluida");
-          marcarCambios();
-          return;
-        }
-
-        const reintegrar = evento.target.closest(".reintegrar-partida");
-        if (!reintegrar) return;
-        const partida = reintegrar.closest(".partida");
-        partida.querySelector(".partida-incluir").value = "1";
-        partida.querySelector(".partida-motivo-exclusion").value = "";
-        partida.querySelector(".contenido-partida").hidden = false;
-        partida.querySelector(".estado-partida-excluida").hidden = true;
-        partida.classList.remove("partida-excluida");
-        if (partida.querySelector(".alerta-restriccion")) {
-          partida.classList.add("partida-restringida");
-        }
-        marcarCambios();
-      });
-
-      formulario.addEventListener("submit", () => {
-        guardando = true;
-      });
-
-      window.addEventListener("beforeunload", (evento) => {
-        if (!hayCambios || guardando) return;
-        evento.preventDefault();
-        evento.returnValue = "";
-      });
-    })();
-  </script>
-{% endif %}
+    window.addEventListener("beforeunload", (evento) => {
+      if (!hayCambios || guardando) return;
+      evento.preventDefault();
+      evento.returnValue = "";
+    });
+  })();
+</script>
 {% endblock %}

@@ -205,7 +205,7 @@ def procesar_documento(
     lector: LectorDocumento,
     clave_idempotencia: str | None = None,
 ) -> Documento:
-    """Registra y lee un archivo; un reintento reutiliza el mismo registro documental."""
+    """Registra, conserva y lee un archivo; un reintento reutiliza el mismo registro."""
 
     huella = sha256(contenido).hexdigest()
     clave = limpiar_clave_idempotencia(clave_idempotencia)
@@ -222,6 +222,11 @@ def procesar_documento(
                 raise ArchivoDocumentoInvalido(
                     "El identificador de reintento ya corresponde a otro archivo."
                 )
+            if documento.contenido_original is None:
+                documento.contenido_original = contenido
+                sesion.add(documento)
+                sesion.commit()
+                sesion.refresh(documento)
             if documento.estado != EstadoDocumento.RECIBIDO.value:
                 return documento
 
@@ -232,6 +237,7 @@ def procesar_documento(
             mime_type=mime_type,
             tamano_bytes=len(contenido),
             sha256=huella,
+            contenido_original=contenido,
             clave_idempotencia=clave,
             modelo_lector=lector.modelo,
         )

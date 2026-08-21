@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -32,7 +33,7 @@ class EstadoDocumento(StrEnum):
 
 
 class Documento(Base):
-    """Metadatos y extracción de una fuente; el archivo original aún no se conserva."""
+    """Metadatos, archivo original y extracción revisable de una fuente."""
 
     __tablename__ = "documentos"
     __table_args__ = (
@@ -57,6 +58,11 @@ class Documento(Base):
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     tamano_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    contenido_original: Mapped[bytes | None] = mapped_column(
+        LargeBinary,
+        nullable=True,
+        deferred=True,
+    )
     clave_idempotencia: Mapped[str | None] = mapped_column(String(80), nullable=True)
     estado: Mapped[str] = mapped_column(
         String(24),
