@@ -32,6 +32,7 @@ from triage.proveedores.descubrimiento_web import (
 )
 from triage.proveedores.fesa import AdaptadorFesa
 from triage.proveedores.nadro_rutas import router as router_nadro
+from triage.proveedores.reevaluacion_rutas import router as router_reevaluacion_web
 from triage.proveedores.rutas import router as router_proveedores
 from triage.revision_final.rutas import router as router_revision_final
 from triage.usuarios.rutas import router as router_usuarios
@@ -202,6 +203,7 @@ def crear_app(
     aplicacion.include_router(router_nadro)
     aplicacion.include_router(router_cofepris)
     aplicacion.include_router(router_proveedores)
+    aplicacion.include_router(router_reevaluacion_web)
     aplicacion.include_router(router_revision_final)
     aplicacion.include_router(router_exportadores)
 
