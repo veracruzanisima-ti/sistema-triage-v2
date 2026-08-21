@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 from sqlalchemy import select
 
 from triage.comercial.modelos import EstadoComercial
+from triage.comercial.precios_venta_servicio import registrar_precio_venta
 from triage.comercial.servicio import registrar_decision_comercial
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
@@ -70,7 +71,7 @@ def _crear_producto(sesion, *, referencia: str = "DIF-001"):
     return cotizacion, partida, usuario
 
 
-def _hacer_emitible_para_borrador(sesion, *, cotizacion, partida, usuario):
+def _agregar_referencia_y_fiscal(sesion, *, cotizacion, partida, usuario):
     referencia = crear_observacion_precio(
         sesion,
         cotizacion_id=cotizacion.id,
@@ -105,7 +106,25 @@ def _hacer_emitible_para_borrador(sesion, *, cotizacion, partida, usuario):
     )
 
 
-def test_dif_bloquea_borrador_si_hay_validacion_fiscal_pendiente(cliente: TestClient):
+def _hacer_emitible(sesion, *, cotizacion, partida, usuario):
+    _agregar_referencia_y_fiscal(
+        sesion,
+        cotizacion=cotizacion,
+        partida=partida,
+        usuario=usuario,
+    )
+    registrar_precio_venta(
+        sesion,
+        cotizacion_id=cotizacion.id,
+        partida_id=partida.id,
+        usuario_id=usuario.id,
+        precio_unitario_sin_iva=Decimal("150"),
+        fuente_comercial="Autorización comercial de prueba",
+        observacion="Precio final deliberadamente distinto a la referencia de compra",
+    )
+
+
+def test_dif_bloquea_si_hay_validacion_fiscal_pendiente(cliente: TestClient):
     with cliente.app.state.fabrica_sesiones() as sesion:
         cotizacion, _, _ = _crear_producto(sesion, referencia="DIF-PENDIENTE")
 
@@ -113,10 +132,24 @@ def test_dif_bloquea_borrador_si_hay_validacion_fiscal_pendiente(cliente: TestCl
             generar_exportacion_dif(sesion, cotizacion.id)
 
 
-def test_dif_exporta_importes_validados_pero_declara_borrador(cliente: TestClient):
+def test_dif_bloquea_si_falta_precio_final_aunque_fiscal_este_listo(cliente: TestClient):
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-SIN-PRECIO")
+        _agregar_referencia_y_fiscal(
+            sesion,
+            cotizacion=cotizacion,
+            partida=partida,
+            usuario=usuario,
+        )
+
+        with pytest.raises(ErrorExportacionDif, match="precio final de venta"):
+            generar_exportacion_dif(sesion, cotizacion.id)
+
+
+def test_dif_exporta_precio_final_y_no_la_referencia_de_compra(cliente: TestClient):
     with cliente.app.state.fabrica_sesiones() as sesion:
         cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-VALIDADA")
-        _hacer_emitible_para_borrador(
+        _hacer_emitible(
             sesion,
             cotizacion=cotizacion,
             partida=partida,
@@ -128,18 +161,18 @@ def test_dif_exporta_importes_validados_pero_declara_borrador(cliente: TestClien
     libro = load_workbook(BytesIO(exportacion.contenido), data_only=True)
     hoja = libro["Cotización DIF"]
     try:
-        assert exportacion.nombre_archivo == "Borrador_Cotizacion_DIF_DIF-VALIDADA.xlsx"
-        assert hoja["A1"].value == "BORRADOR DIF · NO EMITIBLE"
-        assert "precio final de venta/utilidad" in hoja["B3"].value
+        assert exportacion.nombre_archivo == "Cotizacion_DIF_DIF-VALIDADA.xlsx"
+        assert hoja["A1"].value == "COTIZACIÓN DIF · VERACRUZANÍSIMA"
+        assert "precios finales validados" in hoja["B3"].value
         assert hoja["E6"].value == "PARACETAMOL"
         assert hoja["J6"].value == "COTIZABLE"
-        assert hoja["L6"].value == 100
-        assert hoja["M6"].value == 200
-        assert hoja["N6"].value == 32
-        assert hoja["O6"].value == 232
+        assert hoja["L6"].value == 150
+        assert hoja["M6"].value == 300
+        assert hoja["N6"].value == 48
+        assert hoja["O6"].value == 348
         assert hoja["P6"].value == "IVA 16.00%"
         assert hoja["Q6"].value == "Proveedor estable"
-        assert "Referencia estable provisional" in hoja["S6"].value
+        assert hoja["S6"].value == "Autorización comercial de prueba"
     finally:
         libro.close()
 

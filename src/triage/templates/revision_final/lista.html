@@ -13,14 +13,16 @@
 
 <section class="tarjeta">
   <h2>Estado antes de continuar</h2>
-  <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ fiscales_validadas }} fiscales validadas · {{ fiscales_pendientes }} fiscales pendientes · {{ con_alertas }} con alertas.</p>
-  {% if fiscalmente_lista %}
-    <p class="exito"><strong>Base fiscal validada para generar el borrador DIF.</strong></p>
-    <p><a class="boton" href="/cotizaciones/{{ cotizacion.id }}/exportaciones/dif.xlsx">Descargar borrador Excel DIF</a></p>
-    <p class="aviso"><strong>Borrador no emitible.</strong> Los importes todavía parten de la referencia estable provisional; V2 no tiene una regla validada de precio final de venta/utilidad.</p>
-    <p class="ayuda">El exportador sólo renderiza el modelo interno y no aplica tasas, márgenes ni decisiones comerciales propias.</p>
+  <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ fiscales_validadas }} fiscales validadas · {{ fiscales_pendientes }} fiscales pendientes · {{ precios_finales_validados }} precios finales validados · {{ precios_finales_pendientes }} precios finales pendientes · {{ con_alertas }} con alertas.</p>
+  {% if lista_para_emitir %}
+    <p class="exito"><strong>Lista para generar el DIF con precios finales y tratamiento fiscal validados.</strong></p>
+    <p><a class="boton" href="/cotizaciones/{{ cotizacion.id }}/exportaciones/dif.xlsx">Descargar Excel DIF</a></p>
+    <p class="ayuda">El exportador usa únicamente decisiones ya registradas en Triage; no calcula margen ni tasa por su cuenta.</p>
+  {% elif fiscalmente_lista %}
+    <p class="aviso"><strong>Base fiscal lista.</strong> Faltan precios finales de venta en las partidas cotizables.</p>
+    <p class="ayuda">El precio final se captura manualmente con fuente o criterio comercial; no existe un porcentaje automático de utilidad.</p>
   {% else %}
-    <p class="ayuda">El cálculo es un borrador operativo. No se considera emitible mientras existan partidas fiscales pendientes.</p>
+    <p class="ayuda">La cotización sigue incompleta. Revisa referencias, tratamiento fiscal y precio final antes de emitir.</p>
   {% endif %}
 </section>
 
@@ -60,7 +62,7 @@
           {% if item.decision_comercial.creada_en %} · {{ item.decision_comercial.creada_en }}{% endif %}.
           No se buscarán ni capturarán precios mientras este estado siga vigente.
         </p>
-        <p><strong>Borrador fiscal:</strong> precio unitario s/IVA — · subtotal — · IVA — · total —.</p>
+        <p><strong>Importes:</strong> precio unitario s/IVA — · subtotal — · IVA — · total —.</p>
         <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/estado-comercial">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="estado" value="COTIZABLE">
@@ -82,6 +84,43 @@
       {% if item.oportunidad %}
         <p><strong>Oportunidad:</strong> {{ item.oportunidad.proveedor }}{% if item.oportunidad.es_promocion %} · Promoción: revalidar condiciones{% endif %}</p>
       {% endif %}
+
+      <div>
+        <h3>Precio final de venta · decisión comercial</h3>
+        {% if item.precio_venta %}
+          <div class="exito">
+            <strong>Precio unitario final s/IVA: ${{ "%.2f"|format(item.precio_venta.precio_unitario_sin_iva) }}</strong>
+            <p class="ayuda">
+              Fuente o criterio: {{ item.precio_venta.fuente_comercial }}.
+              {% if item.precio_venta.validada_por_nombre %} Validado por {{ item.precio_venta.validada_por_nombre }} ·{% endif %}
+              {{ item.precio_venta.creada_en }}.
+              {% if item.precio_venta.observacion %} {{ item.precio_venta.observacion }}{% endif %}
+            </p>
+            <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/precio-final/retirar">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="boton boton-secundario" type="submit">Retirar precio final</button>
+            </form>
+          </div>
+        {% else %}
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/precio-final">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="campo">
+              <label for="precio-final-{{ item.producto.partida.id }}">Precio unitario final sin IVA</label>
+              <input id="precio-final-{{ item.producto.partida.id }}" name="precio_unitario_sin_iva" type="number" min="0.01" step="0.01" required>
+            </div>
+            <div class="campo">
+              <label for="fuente-precio-{{ item.producto.partida.id }}">Fuente o criterio comercial</label>
+              <input id="fuente-precio-{{ item.producto.partida.id }}" name="fuente_comercial" maxlength="300" placeholder="Ej. autorización de Dirección / precio acordado" required>
+            </div>
+            <div class="campo">
+              <label for="observacion-precio-{{ item.producto.partida.id }}">Observación</label>
+              <input id="observacion-precio-{{ item.producto.partida.id }}" name="observacion" maxlength="500" placeholder="Opcional">
+            </div>
+            <button class="boton" type="submit">Validar precio final</button>
+          </form>
+          <p class="ayuda">Triage no aplica una utilidad automática: este valor debe provenir de una decisión comercial autorizada.</p>
+        {% endif %}
+      </div>
 
       <div>
         <h3>Propuesta fiscal por capas</h3>
@@ -147,19 +186,27 @@
         {% endif %}
       </div>
 
-      {% if item.calculo_fiscal %}
+      {% if item.calculo_final %}
+        <div class="exito">
+          <h3>Rubros finales validados</h3>
+          <p>
+            <strong>Precio unitario s/IVA:</strong> ${{ "%.2f"|format(item.calculo_final.precio_unitario_sin_iva) }} ·
+            <strong>Subtotal:</strong> ${{ "%.2f"|format(item.calculo_final.subtotal) }} ·
+            <strong>IVA:</strong> ${{ "%.2f"|format(item.calculo_final.iva) }} ·
+            <strong>Total:</strong> ${{ "%.2f"|format(item.calculo_final.total) }}
+          </p>
+          <p class="ayuda">{{ item.calculo_final.origen_precio }} · tratamiento fiscal validado.</p>
+        </div>
+      {% elif item.calculo_fiscal %}
         <div>
-          <h3>Rubros de cotización · borrador</h3>
+          <h3>Referencia provisional · no emitible</h3>
           <p>
             <strong>Precio unitario s/IVA:</strong> ${{ "%.2f"|format(item.calculo_fiscal.precio_unitario_sin_iva) }} ·
             <strong>Subtotal:</strong> ${{ "%.2f"|format(item.calculo_fiscal.subtotal) }} ·
             <strong>IVA:</strong> ${{ "%.2f"|format(item.calculo_fiscal.iva) }} ·
             <strong>Total:</strong> ${{ "%.2f"|format(item.calculo_fiscal.total) }}
           </p>
-          <p class="ayuda">
-            {{ item.calculo_fiscal.origen_precio }}.
-            {% if item.calculo_fiscal.validado %}Cálculo fiscal validado.{% else %}Cálculo pendiente basado en la propuesta; no emitible.{% endif %}
-          </p>
+          <p class="ayuda">{{ item.calculo_fiscal.origen_precio }}. Cálculo pendiente basado en la propuesta; no emitible. Sirve sólo como apoyo hasta validar el precio final comercial.</p>
         </div>
       {% endif %}
 

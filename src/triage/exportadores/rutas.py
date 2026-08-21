@@ -14,7 +14,7 @@ def descargar_dif(
     sesion: Sesion,
     _usuario: UsuarioActual,
 ) -> Response:
-    """Descarga un borrador DIF sólo cuando su base fiscal ya fue validada."""
+    """Descarga DIF sólo cuando precio final y tratamiento fiscal están validados."""
 
     try:
         exportacion = generar_exportacion_dif(sesion, cotizacion_id)
