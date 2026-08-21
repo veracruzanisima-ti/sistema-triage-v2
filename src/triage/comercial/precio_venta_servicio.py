@@ -52,13 +52,14 @@ def listar_precios_venta_actuales(
     cotizacion_id: str,
     productos: list[ProductoHistorico],
 ) -> dict[str, PrecioVentaActual]:
-    """Invalida silenciosamente la vigencia si cambió la identidad preparada."""
+    """Sólo mantiene vigencia si identidad y referencia estable siguen siendo las mismas."""
 
     por_partida = {
         partida_id: evento
         for (evento_cotizacion, partida_id), evento in _ultimo_evento_por_partida(sesion).items()
         if evento_cotizacion == cotizacion_id
     }
+    selecciones = listar_selecciones_actuales(sesion, cotizacion_id)
     vigentes = {
         producto.partida.id: por_partida[producto.partida.id]
         for producto in productos
@@ -66,6 +67,9 @@ def listar_precios_venta_actuales(
         and por_partida[producto.partida.id].clave_producto == producto.clave_producto
         and por_partida[producto.partida.id].estado == EstadoPrecioVenta.VALIDADO.value
         and por_partida[producto.partida.id].precio_unitario_sin_iva is not None
+        and producto.partida.id in selecciones
+        and por_partida[producto.partida.id].referencia_estable_id
+        == selecciones[producto.partida.id].referencia_estable_id
     }
     usuarios_ids = {evento.validado_por_usuario_id for evento in vigentes.values()}
     nombres = (
