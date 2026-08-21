@@ -14,6 +14,10 @@ from triage.historico.decisiones_servicio import (
 )
 from triage.historico.servicio import listar_productos_historico
 from triage.modelos_ia import obtener_descubridor_web
+from triage.proveedores.cofepris_servicio import (
+    total_registros_cofepris,
+    ultima_importacion_cofepris,
+)
 from triage.proveedores.descubrimiento_web import ErrorDescubrimientoWeb
 from triage.proveedores.nadro_adaptador import adaptadores_nadro_disponibles
 from triage.proveedores.servicio import (
@@ -64,6 +68,8 @@ def _render(
     status_code: int = status.HTTP_200_OK,
 ):
     proveedores = _proveedores(request, sesion)
+    importacion_cofepris = ultima_importacion_cofepris(sesion)
+    total_cofepris = total_registros_cofepris(sesion)
     productos = listar_productos_historico(sesion, cotizacion.id)
     consultables = listar_productos_consultables(sesion, cotizacion.id)
     consultas_por_partida = {
@@ -123,6 +129,9 @@ def _render(
             "todas_con_referencia": bool(ids_cotizables)
             and con_referencia == len(ids_cotizables),
             "proveedores": tuple(proveedor.nombre for proveedor in proveedores.values()),
+            "cofepris_importacion": importacion_cofepris,
+            "cofepris_total_registros": total_cofepris,
+            "cofepris_activo": importacion_cofepris is not None and total_cofepris > 0,
             "descubrimiento_web_disponible": obtener_descubridor_web(request) is not None,
             "error": error,
             "mensaje": mensaje,
