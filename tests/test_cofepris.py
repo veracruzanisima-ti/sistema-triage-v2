@@ -407,7 +407,32 @@ def test_trayenta_vigente_crea_observacion_con_evidencia_y_la_muestra(cliente):
 
     pagina = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
     assert pagina.status_code == 200
+    assert "COFEPRIS verificado" in pagina.text
     assert "Identidad verificada con COFEPRIS · Registro 159M2011 SSA" in pagina.text
+    assert "TRAYENTA" in pagina.text
+    assert "LINAGLIPTINA" in pagina.text
+    assert "sólo confirma identidad sanitaria" in pagina.text
+
+
+def test_pantalla_de_precios_muestra_si_cofepris_esta_activo(cliente):
+    cotizacion_id, _, _ = _preparar_producto(cliente)
+
+    sin_catalogo = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    assert sin_catalogo.status_code == 200
+    assert "COFEPRIS no cargado" in sin_catalogo.text
+    assert "Las marcas comerciales no pueden validarse contra su genérico" in (
+        sin_catalogo.text
+    )
+    assert "Cargar COFEPRIS" in sin_catalogo.text
+
+    _importar(cliente, [_registro()])
+    con_catalogo = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
+    assert con_catalogo.status_code == 200
+    assert "COFEPRIS activo" in con_catalogo.text
+    assert "Equivalencias de identidad disponibles" in con_catalogo.text
+    assert "1 registros vigentes" in con_catalogo.text
+    assert "1 registros totales" in con_catalogo.text
+    assert "Actualizar COFEPRIS" in con_catalogo.text
 
 
 def test_trayenta_no_exacta_sigue_descartada_aunque_cofepris_resuelva(cliente):
