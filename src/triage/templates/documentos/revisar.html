@@ -45,7 +45,8 @@
 
 {% if documento.estado == estado_error %}
   <div class="aviso" role="status">
-    <strong>El lector no pudo completar la lectura.</strong>
+    <strong>No se pudo leer el archivo.</strong>
+    <p>El lector no pudo completar la lectura automáticamente.</p>
     <p>{{ documento.error_lector or "El lector no pudo interpretar este documento." }}</p>
     <p>Puedes capturar manualmente los datos y partidas comparándolos con el original. Nada se aprobará hasta que pulses Guardar revisión.</p>
   </div>
