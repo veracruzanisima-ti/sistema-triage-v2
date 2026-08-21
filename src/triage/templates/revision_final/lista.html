@@ -11,9 +11,48 @@
   <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}">Volver</a>
 </div>
 
+{% set referencias_pendientes = total_incluidas - sin_preparar - no_se_cotiza - con_referencia %}
 <section class="tarjeta">
-  <h2>Estado antes de continuar</h2>
-  <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ fiscales_validadas }} fiscales validadas · {{ fiscales_pendientes }} fiscales pendientes · {{ precios_finales_validados }} precios finales validados · {{ precios_finales_pendientes }} precios finales pendientes · {{ con_alertas }} con alertas.</p>
+  <div class="barra">
+    <div>
+      <h2>Estado antes de continuar</h2>
+      <p class="ayuda">{{ total_incluidas }} partidas incluidas{% if no_se_cotiza %} · {{ no_se_cotiza }} NO SE COTIZA{% endif %}.</p>
+    </div>
+    {% if lista_para_emitir %}
+      <span class="estado estado-revisado">Lista para DIF</span>
+    {% else %}
+      <span class="estado estado-pendiente-revision">Pendiente</span>
+    {% endif %}
+  </div>
+
+  <div class="resumen-flujo" aria-label="Resumen de avance de la cotización">
+    <div class="resumen-flujo-item">
+      <span class="estado {% if sin_preparar %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Preparación</span>
+      <strong>{% if sin_preparar %}{{ sin_preparar }} pendiente{% if sin_preparar != 1 %}s{% endif %}{% else %}Lista{% endif %}</strong>
+    </div>
+    <div class="resumen-flujo-item">
+      <span class="estado {% if referencias_pendientes > 0 %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Referencias</span>
+      <strong>{% if referencias_pendientes > 0 %}{{ referencias_pendientes }} pendiente{% if referencias_pendientes != 1 %}s{% endif %}{% else %}Listas{% endif %}</strong>
+    </div>
+    <div class="resumen-flujo-item">
+      <span class="estado {% if fiscales_pendientes %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Fiscal</span>
+      <strong>{% if fiscales_pendientes %}{{ fiscales_pendientes }} pendiente{% if fiscales_pendientes != 1 %}s{% endif %}{% else %}Validado{% endif %}</strong>
+    </div>
+    <div class="resumen-flujo-item">
+      <span class="estado {% if precios_finales_pendientes %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Precio final</span>
+      <strong>{% if precios_finales_pendientes %}{{ precios_finales_pendientes }} pendiente{% if precios_finales_pendientes != 1 %}s{% endif %}{% else %}Validado{% endif %}</strong>
+    </div>
+    <div class="resumen-flujo-item">
+      <span class="estado {% if con_alertas %}estado-pendiente-revision{% else %}estado-recibido{% endif %}">Alertas</span>
+      <strong>{% if con_alertas %}{{ con_alertas }} por revisar{% else %}Sin alertas{% endif %}</strong>
+    </div>
+  </div>
+
+  <details>
+    <summary>Ver conteos detallados</summary>
+    <p class="ayuda">{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ fiscales_validadas }} fiscales validadas · {{ fiscales_pendientes }} fiscales pendientes · {{ precios_finales_validados }} precios finales validados · {{ precios_finales_pendientes }} precios finales pendientes · {{ con_alertas }} con alertas.</p>
+  </details>
+
   {% if lista_para_emitir %}
     <p class="exito"><strong>Lista para generar el DIF con precios finales y tratamiento fiscal validados.</strong></p>
     <p><a class="boton" href="/cotizaciones/{{ cotizacion.id }}/exportaciones/dif.xlsx">Descargar Excel DIF</a></p>
@@ -238,6 +277,24 @@
 {% endfor %}
 
 <style>
+  .resumen-flujo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 10px;
+    margin: 4px 0 14px;
+  }
+  .resumen-flujo-item {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #e2e7ef;
+    border-radius: 10px;
+    background: #fbfcfe;
+  }
+  .resumen-flujo-item strong {
+    display: block;
+    margin-top: 8px;
+    font-size: .96rem;
+  }
   .tarjeta-enfocada {
     border-color: #9db8d8;
     box-shadow: 0 0 0 3px rgba(49, 91, 147, .10), 0 6px 18px rgba(23, 32, 51, .035);
