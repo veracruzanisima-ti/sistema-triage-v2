@@ -9,6 +9,9 @@ from triage.normalizacion.servicio import (
     guardar_normalizaciones,
     listar_partidas_normalizables,
 )
+from triage.proveedores.correcciones_concentracion_web import (
+    sugerir_correccion_concentracion_web,
+)
 from triage.proveedores.correcciones_web import sugerir_correccion_producto_web
 from triage.proveedores.servicio import listar_trazabilidad_web
 from triage.usuarios.seguridad import (
@@ -30,32 +33,44 @@ def _limpiar_formulario(valor) -> str | None:
     return texto or None
 
 
-def _correccion_vigente_para_partida(
+def _correcciones_vigentes_para_partida(
     sesion: Sesion,
     *,
     cotizacion_id: str,
     partida_objetivo: str,
     entradas,
 ):
-    """Reconstruye la sugerencia desde evidencia persistida; nunca confía en texto de la URL."""
+    """Reconstruye sugerencias desde evidencia persistida; nunca confía en texto de la URL."""
 
     if not partida_objetivo:
-        return None
+        return None, None
     entrada = next(
         (entrada for entrada in entradas if entrada.partida.id == partida_objetivo),
         None,
     )
     if entrada is None or entrada.normalizacion is None:
-        return None
+        return None, None
 
     trazabilidad = listar_trazabilidad_web(sesion, cotizacion_id).get(partida_objetivo)
     if trazabilidad is None:
-        return None
-    return sugerir_correccion_producto_web(
-        entrada.normalizacion.producto,
-        trazabilidad.consulta.criterios_busqueda.get("producto"),
+        return None, None
+    normalizacion = entrada.normalizacion
+    criterios = trazabilidad.consulta.criterios_busqueda
+    correccion_producto = sugerir_correccion_producto_web(
+        normalizacion.producto,
+        criterios.get("producto"),
         trazabilidad.descartados,
     )
+    correccion_concentracion = sugerir_correccion_concentracion_web(
+        producto_actual=normalizacion.producto,
+        marca_actual=normalizacion.marca,
+        concentracion_actual=normalizacion.concentracion,
+        forma_actual=normalizacion.forma_dispositivo,
+        presentacion_actual=normalizacion.presentacion,
+        criterios_busqueda=criterios,
+        descartados=trazabilidad.descartados,
+    )
+    return correccion_producto, correccion_concentracion
 
 
 @router.get(
@@ -80,7 +95,7 @@ def ver_normalizacion(
     entradas = listar_partidas_normalizables(sesion, cotizacion.id)
     ids_partidas = {entrada.partida.id for entrada in entradas}
     objetivo = partida_objetivo if partida_objetivo in ids_partidas else ""
-    correccion_producto = _correccion_vigente_para_partida(
+    correccion_producto, correccion_concentracion = _correcciones_vigentes_para_partida(
         sesion,
         cotizacion_id=cotizacion.id,
         partida_objetivo=objetivo,
@@ -98,6 +113,7 @@ def ver_normalizacion(
             "guardado": bool(guardado),
             "partida_objetivo": objetivo or None,
             "correccion_producto": correccion_producto,
+            "correccion_concentracion": correccion_concentracion,
         },
     )
 
