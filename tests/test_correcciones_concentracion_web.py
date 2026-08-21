@@ -1,4 +1,4 @@
-from triage.proveedores import correcciones_concentracion_web as correcciones
+import triage.proveedores.correcciones_concentracion_web as correcciones
 
 
 CRITERIOS = {
