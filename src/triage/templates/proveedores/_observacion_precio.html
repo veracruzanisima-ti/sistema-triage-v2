@@ -14,28 +14,28 @@
     <div>
       <strong>{{ observacion.proveedor }}</strong>
       {% if seleccionada %}
-        <span class="estado estado-revisado">Usado para cotizar</span>
+        <span class="estado estado-disponible">Usado para cotizar</span>
       {% elif cotizada_hoy and cotizada_hoy.id == observacion.id %}
-        <span class="estado estado-revisado">Cotizado hoy</span>
+        <span class="estado estado-disponible">Cotizado hoy</span>
       {% elif observacion.entrega_viable is sameas true %}
-        <span class="estado estado-revisado">Disponible</span>
+        <span class="estado estado-disponible">Disponible</span>
       {% elif observacion.entrega_viable is sameas false %}
-        <span class="estado estado-pendiente-revision">Sin disponibilidad</span>
+        <span class="estado estado-no-disponible">Sin disponibilidad</span>
       {% else %}
-        <span class="estado estado-pendiente-revision">Por confirmar</span>
+        <span class="estado estado-pendiente">Por confirmar</span>
       {% endif %}
 
       {% if identidad_cofepris and distintiva_norm and generica_norm and distintiva_norm != generica_norm %}
-        <span class="estado estado-analizado">Marca comercial</span>
+        <span class="estado estado-identidad">Marca comercial</span>
       {% elif identidad_cofepris and distintiva_norm and distintiva_norm == generica_norm %}
-        <span class="estado estado-analizado">Nombre genérico registrado</span>
+        <span class="estado estado-identidad">Nombre genérico registrado</span>
       {% elif marca_propia_declarada %}
-        <span class="estado estado-analizado">Marca propia declarada</span>
+        <span class="estado estado-identidad">Marca propia declarada</span>
       {% elif generico_visible %}
-        <span class="estado estado-analizado">Nombre genérico visible</span>
+        <span class="estado estado-identidad">Nombre genérico visible</span>
       {% endif %}
 
-      {% if observacion.es_promocion %}<span class="estado estado-analizado">Oferta / promoción</span>{% endif %}
+      {% if observacion.es_promocion %}<span class="estado estado-promocion">Oferta / promoción</span>{% endif %}
       <p class="ayuda">{% if observacion.origen == "WEB" %}Fuente web · {% endif %}Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
     </div>
     <div>
