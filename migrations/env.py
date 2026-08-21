@@ -10,6 +10,7 @@ from triage.comercial.modelos import DecisionComercialPartida
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, PartidaDocumento
+from triage.fiscal.modelos import ValidacionFiscalPartida
 from triage.historico.decisiones_modelos import DecisionPrecio
 from triage.historico.modelos import ObservacionPrecio
 from triage.normalizacion.modelos import NormalizacionPartida
@@ -34,6 +35,7 @@ _MODELOS_REGISTRADOS = (
     Usuario,
     Documento,
     PartidaDocumento,
+    ValidacionFiscalPartida,
     NormalizacionPartida,
     ObservacionPrecio,
     ConsultaProveedor,

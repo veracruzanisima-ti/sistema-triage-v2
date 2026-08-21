@@ -13,8 +13,12 @@
 
 <section class="tarjeta">
   <h2>Estado antes de continuar</h2>
-  <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ con_alertas }} con alertas.</p>
-  <p class="ayuda">Esta pantalla sólo consolida información; no aprueba ni rechaza automáticamente.</p>
+  <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ fiscales_validadas }} fiscales validadas · {{ fiscales_pendientes }} fiscales pendientes · {{ con_alertas }} con alertas.</p>
+  {% if fiscalmente_lista %}
+    <p class="exito"><strong>Fiscalmente lista para el siguiente paso.</strong></p>
+  {% else %}
+    <p class="ayuda">El cálculo es un borrador operativo. No se considera emitible mientras existan partidas fiscales pendientes.</p>
+  {% endif %}
 </section>
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
@@ -53,6 +57,7 @@
           {% if item.decision_comercial.creada_en %} · {{ item.decision_comercial.creada_en }}{% endif %}.
           No se buscarán ni capturarán precios mientras este estado siga vigente.
         </p>
+        <p><strong>Borrador fiscal:</strong> precio unitario s/IVA — · subtotal — · IVA — · total —.</p>
         <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/estado-comercial">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="estado" value="COTIZABLE">
@@ -73,6 +78,86 @@
 
       {% if item.oportunidad %}
         <p><strong>Oportunidad:</strong> {{ item.oportunidad.proveedor }}{% if item.oportunidad.es_promocion %} · Promoción: revalidar condiciones{% endif %}</p>
+      {% endif %}
+
+      <div>
+        <h3>Propuesta fiscal por capas</h3>
+        {% if item.sugerencia_fiscal.principal %}
+          <p>
+            <strong>{{ item.sugerencia_fiscal.principal.etiqueta }}</strong>
+            · Confianza {{ item.sugerencia_fiscal.nivel_confianza }}
+            · {{ item.sugerencia_fiscal.principal.puntos }}/100
+          </p>
+          {% if item.sugerencia_fiscal.hay_conflicto %}
+            <p class="aviso"><strong>Hay señales contradictorias.</strong> Revisa las alternativas antes de validar.</p>
+            {% for alternativa in item.sugerencia_fiscal.alternativas %}
+              <p>{{ alternativa.etiqueta }} · {{ alternativa.puntos }}/100</p>
+            {% endfor %}
+          {% endif %}
+          <ul>
+            {% for capa in item.sugerencia_fiscal.principal.capas %}
+              <li>
+                <strong>+{{ capa.puntos }} · {{ capa.capa|replace("_", " ") }}</strong>:
+                {{ capa.descripcion }}
+                {% if capa.fuente %}<span class="ayuda">Fuente: {{ capa.fuente }}</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="aviso">Sin evidencia suficiente para proponer una tasa. Captura una corrección humana explicada.</p>
+        {% endif %}
+        <p class="ayuda">La propuesta no es una determinación fiscal y no se guarda como validación automática.</p>
+
+        {% if item.validacion_fiscal %}
+          <div class="exito">
+            <strong>Tratamiento validado: {{ item.validacion_fiscal.etiqueta }}</strong>
+            <p class="ayuda">
+              {% if item.validacion_fiscal.validada_por_nombre %}Por {{ item.validacion_fiscal.validada_por_nombre }} · {% endif %}
+              {{ item.validacion_fiscal.creada_en }} · {{ item.validacion_fiscal.fuente_decision }}.
+              {% if item.validacion_fiscal.observacion %} {{ item.validacion_fiscal.observacion }}{% endif %}
+            </p>
+            <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/fiscal/retirar">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="boton boton-secundario" type="submit">Retirar validación fiscal</button>
+            </form>
+          </div>
+        {% else %}
+          <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/fiscal">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="campo">
+              <label for="tratamiento-{{ item.producto.partida.id }}">Tratamiento</label>
+              <select id="tratamiento-{{ item.producto.partida.id }}" name="tratamiento_iva">
+                <option value="TASA"{% if not item.sugerencia_fiscal.principal or item.sugerencia_fiscal.principal.tratamiento_iva == tratamientos_iva.TASA %} selected{% endif %}>Tasa de IVA</option>
+                <option value="EXENTO"{% if item.sugerencia_fiscal.principal and item.sugerencia_fiscal.principal.tratamiento_iva == tratamientos_iva.EXENTO %} selected{% endif %}>Exento</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="tasa-{{ item.producto.partida.id }}">Porcentaje de IVA (si es tasa)</label>
+              <input id="tasa-{{ item.producto.partida.id }}" name="iva_porcentaje" type="number" min="0" max="100" step="0.01"{% if item.sugerencia_fiscal.principal and item.sugerencia_fiscal.principal.iva_porcentaje is not none %} value="{{ item.sugerencia_fiscal.principal.iva_porcentaje }}"{% endif %}>
+            </div>
+            <div class="campo">
+              <label for="fiscal-observacion-{{ item.producto.partida.id }}">Observación</label>
+              <input id="fiscal-observacion-{{ item.producto.partida.id }}" name="observacion" maxlength="500" placeholder="Obligatoria si corriges la propuesta">
+            </div>
+            <button class="boton" type="submit">Confirmar o corregir tratamiento fiscal</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {% if item.calculo_fiscal %}
+        <div>
+          <h3>Rubros de cotización · borrador</h3>
+          <p>
+            <strong>Precio unitario s/IVA:</strong> ${{ "%.2f"|format(item.calculo_fiscal.precio_unitario_sin_iva) }} ·
+            <strong>Subtotal:</strong> ${{ "%.2f"|format(item.calculo_fiscal.subtotal) }} ·
+            <strong>IVA:</strong> ${{ "%.2f"|format(item.calculo_fiscal.iva) }} ·
+            <strong>Total:</strong> ${{ "%.2f"|format(item.calculo_fiscal.total) }}
+          </p>
+          <p class="ayuda">
+            {{ item.calculo_fiscal.origen_precio }}.
+            {% if item.calculo_fiscal.validado %}Cálculo fiscal validado.{% else %}Cálculo pendiente basado en la propuesta; no emitible.{% endif %}
+          </p>
+        </div>
       {% endif %}
 
       <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/estado-comercial">
