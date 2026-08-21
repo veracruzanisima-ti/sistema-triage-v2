@@ -63,10 +63,14 @@ def _render_historico(
     error: str = "",
     guardado: bool = False,
     volver: str = "",
+    partida_objetivo: str = "",
     status_code: int = status.HTTP_200_OK,
 ):
     volver = _origen_permitido(volver)
     texto_volver, url_volver = _datos_regreso(cotizacion.id, volver)
+    productos = listar_productos_historico(sesion, cotizacion.id)
+    ids_partida = {producto.partida.id for producto in productos}
+    objetivo = partida_objetivo if partida_objetivo in ids_partida else ""
     return _plantillas(request).TemplateResponse(
         request=request,
         name="historico/lista.html",
@@ -74,7 +78,7 @@ def _render_historico(
             "usuario": usuario,
             "csrf_token": obtener_token_csrf(request),
             "cotizacion": cotizacion,
-            "productos": listar_productos_historico(sesion, cotizacion.id),
+            "productos": productos,
             "decisiones_comerciales": listar_decisiones_comerciales_actuales(
                 sesion, cotizacion.id
             ),
@@ -84,6 +88,7 @@ def _render_historico(
             "volver": volver,
             "texto_volver": texto_volver,
             "url_volver": url_volver,
+            "partida_objetivo": objetivo or None,
         },
         status_code=status_code,
     )
@@ -97,6 +102,7 @@ def ver_historico(
     usuario: UsuarioActual,
     guardado: int = 0,
     volver: str = "",
+    partida_objetivo: str = "",
 ):
     """Muestra observaciones exactas para productos previamente preparados."""
 
@@ -110,6 +116,7 @@ def ver_historico(
         cotizacion,
         guardado=bool(guardado),
         volver=volver,
+        partida_objetivo=partida_objetivo,
     )
 
 
@@ -165,11 +172,23 @@ def agregar_observacion(
             cotizacion,
             error=str(error),
             volver=volver,
+            partida_objetivo=partida_documento_id,
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
-    query_volver = "&volver=proveedores" if volver == "proveedores" else ""
+    if volver == "proveedores":
+        return RedirectResponse(
+            url=(
+                f"/cotizaciones/{cotizacion.id}/proveedores"
+                f"#estado-busqueda-{partida_documento_id}"
+            ),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
     return RedirectResponse(
-        url=f"/cotizaciones/{cotizacion.id}/historico?guardado=1{query_volver}",
+        url=(
+            f"/cotizaciones/{cotizacion.id}/historico?guardado=1"
+            f"#partida-{partida_documento_id}"
+        ),
         status_code=status.HTTP_303_SEE_OTHER,
     )
