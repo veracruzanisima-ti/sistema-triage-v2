@@ -9,6 +9,7 @@
 {% set producto_norm = (producto.normalizacion.producto or "")|lower %}
 {% set marca_propia_declarada = "marca propia" in observado_norm %}
 {% set generico_visible = producto_norm and producto_norm in observado_norm %}
+{% set disponibilidad_operativa = observacion.disponibilidad_operativa %}
 <div class="partida">
   <div class="barra">
     <div>
@@ -17,9 +18,9 @@
         <span class="estado estado-disponible">Usado para cotizar</span>
       {% elif cotizada_hoy and cotizada_hoy.id == observacion.id %}
         <span class="estado estado-disponible">Cotizado hoy</span>
-      {% elif observacion.entrega_viable is sameas true %}
+      {% elif disponibilidad_operativa is sameas true %}
         <span class="estado estado-disponible">Disponible</span>
-      {% elif observacion.entrega_viable is sameas false %}
+      {% elif disponibilidad_operativa is sameas false %}
         <span class="estado estado-no-disponible">Sin disponibilidad</span>
       {% else %}
         <span class="estado estado-pendiente">Por confirmar</span>
@@ -70,13 +71,13 @@
     <p class="ayuda"><strong>Fuente:</strong> {{ observacion.fuente }}</p>
   {% endif %}
 
-  {% if observacion.entrega_viable is sameas false %}
+  {% if disponibilidad_operativa is sameas false %}
     <div class="aviso" role="status">
       <strong>No se usa para cotizar: sin disponibilidad o entrega viable confirmada.</strong>
       <p class="ayuda">La opción sigue guardada como evidencia. Si el proveedor confirma existencia y entrega, registra esa confirmación con su fuente.</p>
       <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores&partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Confirmar con proveedor</a>
     </div>
-  {% elif observacion.entrega_viable is none %}
+  {% elif disponibilidad_operativa is none %}
     <div class="aviso" role="status">
       <strong>Disponibilidad por confirmar.</strong>
       <p class="ayuda">El precio se conserva como evidencia. Triage no lo toma como referencia estable mientras la disponibilidad/entrega siga sin confirmación suficiente.</p>
@@ -95,7 +96,7 @@
     <p class="ayuda">Este es el precio que actualmente alimentará la revisión de la cotización.</p>
   {% elif observacion.es_promocion %}
     <p class="ayuda">La fuente la marca como oferta. Se conserva como evidencia, pero no se usa automáticamente como referencia estable.</p>
-  {% elif observacion.entrega_viable is not sameas true %}
+  {% elif disponibilidad_operativa is not sameas true %}
     <p class="ayuda">No elegible como referencia hasta confirmar disponibilidad y entrega.</p>
   {% else %}
     <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
