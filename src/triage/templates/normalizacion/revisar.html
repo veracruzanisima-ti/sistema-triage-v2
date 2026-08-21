@@ -44,7 +44,9 @@
         </div>
 
         {% if partida_objetivo == entrada.partida.id %}
-          {% if correccion_producto and correccion_producto.valor %}
+          {% set hay_correccion_producto = correccion_producto and correccion_producto.valor %}
+          {% set hay_correccion_concentracion = correccion_concentracion and correccion_concentracion.valor %}
+          {% if hay_correccion_producto %}
             <div class="aviso" role="status">
               <strong>Sugerencia de corrección: {{ correccion_producto.valor }}</strong>
               <p>Producto preparado actualmente: <strong>{{ valores.producto or "Sin nombre" }}</strong>.</p>
@@ -63,7 +65,41 @@
                 data-sugerencia="{{ correccion_producto.valor }}"
               >Usar {{ correccion_producto.valor }}</button>
             </div>
-          {% else %}
+          {% endif %}
+
+          {% if hay_correccion_concentracion %}
+            <div class="aviso" role="status">
+              <strong>Posible corrección de concentración: {{ correccion_concentracion.valor }}</strong>
+              <p>Concentración preparada actualmente: <strong>{{ valores.concentracion or "Sin concentración" }}</strong>.</p>
+              <p class="ayuda">
+                {{ correccion_concentracion.fuentes|length }} fuentes independientes de la última búsqueda convergen en {{ correccion_concentracion.valor }}:
+                {{ correccion_concentracion.fuentes|join("; ") }}.
+              </p>
+              <p class="ayuda"><strong>No confirma que la solicitud original esté equivocada.</strong> Contrasta el documento antes de cambiar la copia operativa.</p>
+              <div class="grupo-botones">
+                <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ entrada.documento.id }}">Revisar documento</a>
+                {% if entrada.documento.contenido_original %}
+                  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ entrada.documento.id }}/original" target="_blank" rel="noopener noreferrer">Abrir original</a>
+                {% endif %}
+                <button
+                  class="boton boton-secundario"
+                  type="button"
+                  data-aplicar-sugerencia-concentracion
+                  data-input-id="partida_{{ i }}_concentracion"
+                  data-sugerencia="{{ correccion_concentracion.valor }}"
+                >Usar {{ correccion_concentracion.valor }}</button>
+              </div>
+              <p class="ayuda">El botón sólo rellena el campo. Nada cambia hasta que pulses Guardar preparación.</p>
+            </div>
+          {% elif correccion_concentracion and correccion_concentracion.ambigua %}
+            <div class="aviso" role="status">
+              <strong>La web encontró concentraciones distintas entre sí.</strong>
+              <p class="ayuda">Triage no eligió ninguna. Revisa el documento original antes de modificar la preparación.</p>
+              <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ entrada.documento.id }}">Revisar documento</a>
+            </div>
+          {% endif %}
+
+          {% if not hay_correccion_producto and not hay_correccion_concentracion and not (correccion_concentracion and correccion_concentracion.ambigua) %}
             <div class="aviso" role="status">
               <strong>Revisa esta partida.</strong>
               <p class="ayuda">La sugerencia web que te trajo aquí ya no está vigente o dejó de ser inequívoca. Triage no aplicó ningún cambio automáticamente.</p>
@@ -126,19 +162,24 @@
 
 <script>
   (() => {
-    document.querySelectorAll("[data-aplicar-sugerencia-producto]").forEach((boton) => {
-      boton.addEventListener("click", () => {
-        const input = document.getElementById(boton.dataset.inputId || "");
-        const sugerencia = boton.dataset.sugerencia || "";
-        if (!input || !sugerencia) return;
+    const conectarSugerencia = (selector) => {
+      document.querySelectorAll(selector).forEach((boton) => {
+        boton.addEventListener("click", () => {
+          const input = document.getElementById(boton.dataset.inputId || "");
+          const sugerencia = boton.dataset.sugerencia || "";
+          if (!input || !sugerencia) return;
 
-        input.value = sugerencia;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.focus();
-        boton.disabled = true;
-        boton.textContent = "Sugerencia aplicada";
+          input.value = sugerencia;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.focus();
+          boton.disabled = true;
+          boton.textContent = "Sugerencia aplicada";
+        });
       });
-    });
+    };
+
+    conectarSugerencia("[data-aplicar-sugerencia-producto]");
+    conectarSugerencia("[data-aplicar-sugerencia-concentracion]");
   })();
 </script>
 {% endblock %}
