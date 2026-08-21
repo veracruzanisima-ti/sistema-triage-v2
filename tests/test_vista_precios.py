@@ -20,6 +20,7 @@ def _observacion(
         precio_antes_iva=Decimal(antes_iva) if antes_iva is not None else None,
         codigo_postal=codigo_postal,
         entrega_viable=entrega_viable,
+        disponibilidad_operativa=entrega_viable,
     )
 
 
