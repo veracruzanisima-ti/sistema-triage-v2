@@ -14,6 +14,7 @@ from triage.base_datos import crear_fabrica_sesiones, crear_motor
 from triage.config import Configuracion, obtener_configuracion
 from triage.cotizaciones.rutas import router as router_cotizaciones
 from triage.documentos.rutas import router as router_documentos
+from triage.exportadores.rutas import router as router_exportadores
 from triage.historico.decisiones_rutas import router as router_decisiones_precio
 from triage.historico.rutas import router as router_historico
 from triage.lectores.base import LectorDocumento
@@ -197,6 +198,7 @@ def crear_app(
     aplicacion.include_router(router_cofepris)
     aplicacion.include_router(router_proveedores)
     aplicacion.include_router(router_revision_final)
+    aplicacion.include_router(router_exportadores)
 
     @aplicacion.exception_handler(AccesoRequerido)
     async def manejar_acceso_requerido(
