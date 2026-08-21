@@ -76,7 +76,7 @@ def test_una_sola_fuente_no_basta_aunque_aparezca_en_dos_intentos():
     assert sugerencia is None
 
 
-def test_concentraciones_alternativas_en_conflicto_no_eligen_una():
+def test_20_mg_por_ml_es_equivalente_a_40_mg_en_2_ml_y_no_es_alternativa():
     sugerencia = _sugerir(
         [
             _descartado(
@@ -86,6 +86,31 @@ def test_concentraciones_alternativas_en_conflicto_no_eligen_una():
             _descartado(
                 "Curitek",
                 "Acetato de Metilprednisolona Suspensión Inyectable 20 mg/mL Vial 2 mL",
+            ),
+        ]
+    )
+
+    assert sugerencia is None
+
+
+def test_dos_alternativas_respaldadas_se_marcan_ambiguas():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmacia 40 Uno",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Farmacia 40 Dos",
+                "Acetato de Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Farmacia 30 Uno",
+                "Metilprednisolona Suspensión Inyectable 30 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Farmacia 30 Dos",
+                "Acetato de Metilprednisolona Suspensión Inyectable 30 mg/mL Vial 2 mL",
             ),
         ]
     )
