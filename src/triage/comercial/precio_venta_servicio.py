@@ -7,12 +7,16 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from triage.comercial.modelos import EstadoComercial
 from triage.comercial.precio_venta_modelos import (
     EstadoPrecioVenta,
     FuentePrecioVenta,
     PrecioVentaPartida,
 )
-from triage.comercial.servicio import asegurar_partida_cotizable
+from triage.comercial.servicio import (
+    asegurar_partida_cotizable,
+    listar_decisiones_comerciales_actuales,
+)
 from triage.historico.decisiones_servicio import listar_selecciones_actuales
 from triage.historico.servicio import ProductoHistorico, listar_productos_historico
 from triage.usuarios.modelos import Usuario
@@ -52,7 +56,7 @@ def listar_precios_venta_actuales(
     cotizacion_id: str,
     productos: list[ProductoHistorico],
 ) -> dict[str, PrecioVentaActual]:
-    """Sólo mantiene vigencia si identidad y referencia estable siguen siendo las mismas."""
+    """Mantiene vigencia sólo si no cambiaron identidad, referencia ni decisión comercial."""
 
     por_partida = {
         partida_id: evento
@@ -60,16 +64,30 @@ def listar_precios_venta_actuales(
         if evento_cotizacion == cotizacion_id
     }
     selecciones = listar_selecciones_actuales(sesion, cotizacion_id)
+    decisiones = listar_decisiones_comerciales_actuales(sesion, cotizacion_id)
+
+    def vigente(producto: ProductoHistorico, evento: PrecioVentaPartida) -> bool:
+        seleccion = selecciones.get(producto.partida.id)
+        decision = decisiones.get(producto.partida.id)
+        if evento.clave_producto != producto.clave_producto:
+            return False
+        if evento.estado != EstadoPrecioVenta.VALIDADO.value:
+            return False
+        if evento.precio_unitario_sin_iva is None:
+            return False
+        if seleccion is None or evento.referencia_estable_id != seleccion.referencia_estable_id:
+            return False
+        if decision is None:
+            return True
+        if decision.estado != EstadoComercial.COTIZABLE:
+            return False
+        return decision.creada_en is None or decision.creada_en <= evento.creada_en
+
     vigentes = {
         producto.partida.id: por_partida[producto.partida.id]
         for producto in productos
         if producto.partida.id in por_partida
-        and por_partida[producto.partida.id].clave_producto == producto.clave_producto
-        and por_partida[producto.partida.id].estado == EstadoPrecioVenta.VALIDADO.value
-        and por_partida[producto.partida.id].precio_unitario_sin_iva is not None
-        and producto.partida.id in selecciones
-        and por_partida[producto.partida.id].referencia_estable_id
-        == selecciones[producto.partida.id].referencia_estable_id
+        and vigente(producto, por_partida[producto.partida.id])
     }
     usuarios_ids = {evento.validado_por_usuario_id for evento in vigentes.values()}
     nombres = (
