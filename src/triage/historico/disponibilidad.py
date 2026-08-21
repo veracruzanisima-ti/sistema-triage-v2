@@ -1,7 +1,6 @@
 """Deriva disponibilidad operativa sin reescribir la evidencia original."""
 
-import unicodedata
-
+_TRANSLITERACION = str.maketrans("áéíóúüñ", "aeiouun")
 
 _SENALES_NEGATIVAS = (
     "agotado",
@@ -48,11 +47,7 @@ _SENALES_POSITIVAS = (
 def _normalizar_texto(valor: str | None) -> str:
     if not valor:
         return ""
-    normalizado = unicodedata.normalize("NFKD", valor)
-    sin_acentos = "".join(
-        caracter for caracter in normalizado if not unicodedata.combining(caracter)
-    )
-    return " ".join(sin_acentos.casefold().split())
+    return " ".join(valor.casefold().translate(_TRANSLITERACION).split())
 
 
 def resolver_disponibilidad_operativa(
