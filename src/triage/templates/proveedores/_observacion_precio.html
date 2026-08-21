@@ -52,14 +52,14 @@
   {% if identidad_cofepris %}
     <p class="ayuda">
       <strong>COFEPRIS verificado:</strong>
+      {% if numeros_cofepris|length > 1 %}
+        Identidad verificada con COFEPRIS · {{ numeros_cofepris|length }} registros vigentes convergentes ·
+      {% elif observacion.evidencia_identidad.get("numero_registro") %}
+        Identidad verificada con COFEPRIS · Registro {{ observacion.evidencia_identidad.get("numero_registro") }} ·
+      {% endif %}
       {{ distintiva or "Denominación distintiva sin registrar" }}
       → {{ generica or "Denominación genérica sin registrar" }}
-      · {{ observacion.evidencia_identidad.get("estado") or "estado sin registrar" }}
-      {% if numeros_cofepris|length > 1 %}
-        · {{ numeros_cofepris|length }} registros vigentes convergentes
-      {% elif observacion.evidencia_identidad.get("numero_registro") %}
-        · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}
-      {% endif %}.
+      · {{ observacion.evidencia_identidad.get("estado") or "estado sin registrar" }}.
       Evidencia de identidad sanitaria; no decide sustitución clínica, comercial ni fiscal.
     </p>
   {% endif %}
