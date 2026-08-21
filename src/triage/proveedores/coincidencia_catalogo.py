@@ -129,6 +129,36 @@ def extraer_medidas(texto: str | None) -> frozenset[tuple[str, Decimal]]:
     return frozenset(medidas)
 
 
+def extraer_relaciones_concentracion(
+    texto: str | None,
+) -> frozenset[tuple[str, Decimal, str]]:
+    """Normaliza razones explícitas como 40 mg/2 mL o 100 UI/mL sin perder el denominador."""
+
+    normalizado = normalizar_texto(texto).replace(",", ".")
+    patron = (
+        r"(?<![A-Z0-9])([0-9]+(?:\.[0-9]+)?)\s*(KG|MG|G|UI|U)\s*"
+        r"(?:/|POR)\s*(?:([0-9]+(?:\.[0-9]+)?)\s*)?(ML|L)\b"
+    )
+    relaciones: set[tuple[str, Decimal, str]] = set()
+    for numerador, unidad_numerador, denominador, unidad_denominador in re.findall(
+        patron, normalizado
+    ):
+        unidad_base_numerador, factor_numerador = _FACTORES[unidad_numerador]
+        unidad_base_denominador, factor_denominador = _FACTORES[unidad_denominador]
+        cantidad_denominador = Decimal(denominador or "1") * factor_denominador
+        if cantidad_denominador <= 0 or unidad_base_denominador != "ML":
+            continue
+        cantidad_numerador = Decimal(numerador) * factor_numerador
+        relaciones.add(
+            (
+                unidad_base_numerador,
+                (cantidad_numerador / cantidad_denominador).normalize(),
+                unidad_base_denominador,
+            )
+        )
+    return frozenset(relaciones)
+
+
 def extraer_conteos_presentacion(texto: str | None) -> frozenset[tuple[str, int]]:
     """Extrae cantidades sólo cuando están unidas a una forma de envase conocida."""
 
@@ -237,6 +267,26 @@ def _motivo_medidas(
     return "faltan datos suficientes para comprobar coincidencia"
 
 
+def _motivo_relaciones_concentracion(
+    esperadas: frozenset[tuple[str, Decimal, str]],
+    observadas: frozenset[tuple[str, Decimal, str]],
+) -> str | None:
+    if not esperadas:
+        return None
+    faltantes = esperadas - observadas
+    if not faltantes:
+        return None
+    if not observadas:
+        return "faltan datos suficientes para comprobar coincidencia"
+    familias_observadas = {(numerador, denominador) for numerador, _, denominador in observadas}
+    if any(
+        (numerador, denominador) in familias_observadas
+        for numerador, _, denominador in faltantes
+    ):
+        return "concentración distinta"
+    return "faltan datos suficientes para comprobar coincidencia"
+
+
 def _conteos_requeridos_presentacion(texto: str | None) -> frozenset[tuple[str, int]]:
     """Evita exigir el contenedor exterior si ya existe un conteo interno inequívoco."""
 
@@ -308,11 +358,18 @@ def evaluar_candidato(
 
     medidas_candidato = extraer_medidas(candidato.descripcion)
     medidas_concentracion = extraer_medidas(solicitud.concentracion)
-    motivo_concentracion = _motivo_medidas(
-        medidas_concentracion,
-        medidas_candidato,
-        distinto="concentración distinta",
-    )
+    relaciones_concentracion = extraer_relaciones_concentracion(solicitud.concentracion)
+    if relaciones_concentracion:
+        motivo_concentracion = _motivo_relaciones_concentracion(
+            relaciones_concentracion,
+            extraer_relaciones_concentracion(candidato.descripcion),
+        )
+    else:
+        motivo_concentracion = _motivo_medidas(
+            medidas_concentracion,
+            medidas_candidato,
+            distinto="concentración distinta",
+        )
     if motivo_concentracion:
         _agregar_motivo(motivos, motivo_concentracion)
 
