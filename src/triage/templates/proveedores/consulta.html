@@ -231,20 +231,20 @@
 
       {% if correccion_concentracion and correccion_concentracion.valor %}
         <div class="aviso" role="status">
-          <strong>Posible corrección de concentración: {{ correccion_concentracion.valor }}</strong>
-          <p>Preparación actual: <strong>{{ producto.normalizacion.concentracion or "Sin concentración" }}</strong>.</p>
+          <strong>Posible inconsistencia en la solicitud</strong>
+          <p>La solicitud preparada conserva: <strong>{{ producto.normalizacion.concentracion or "Sin concentración" }}</strong>.</p>
           <p class="ayuda">
-            {{ correccion_concentracion.fuentes|length }} fuentes independientes convergen en {{ correccion_concentracion.valor }}:
+            {{ correccion_concentracion.fuentes|length }} fuentes independientes muestran otra concentración: <strong>{{ correccion_concentracion.valor }}</strong> ·
             {{ correccion_concentracion.fuentes|join("; ") }}.
           </p>
-          <p class="ayuda">Esto no demuestra que la solicitud original esté equivocada y no recupera ninguno de los precios descartados. Contrasta el documento antes de cambiar la preparación.</p>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar concentración contra original</a>
+          <p class="ayuda">La convergencia de fuentes no autoriza sustituir lo solicitado ni recuperar estos precios. Si el documento original confirma la concentración actual, aclárala con quien emitió o autoriza la solicitud antes de modificar la preparación.</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar solicitud y original</a>
         </div>
       {% elif correccion_concentracion and correccion_concentracion.ambigua %}
         <div class="aviso" role="status">
-          <strong>La web encontró varias concentraciones distintas.</strong>
-          <p class="ayuda">Triage no eligió ninguna. Revisa el documento original antes de modificar la preparación.</p>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar concentración</a>
+          <strong>La web muestra varias concentraciones diferentes a la solicitud.</strong>
+          <p class="ayuda">Triage no eligió ninguna. Conserva el dato solicitado y revisa/aclara el documento antes de modificar la preparación.</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar solicitud</a>
         </div>
       {% endif %}
 
