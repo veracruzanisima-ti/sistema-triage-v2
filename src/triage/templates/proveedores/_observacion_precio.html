@@ -7,6 +7,13 @@
       {% if cotizada_hoy and cotizada_hoy.id == observacion.id %}<span class="estado estado-revisado">Cotizado hoy</span>{% endif %}
       {% if observacion.origen == "WEB" %}<span class="estado estado-analizado">Web</span>{% endif %}
       {% if identidad_cofepris %}<span class="estado estado-revisado">COFEPRIS verificado</span>{% endif %}
+      {% if observacion.entrega_viable is sameas true %}
+        <span class="estado estado-revisado">Disponible confirmado</span>
+      {% elif observacion.entrega_viable is sameas false %}
+        <span class="estado estado-pendiente-revision">Sin disponibilidad</span>
+      {% else %}
+        <span class="estado estado-pendiente-revision">Disponibilidad por confirmar</span>
+      {% endif %}
       {% if observacion.es_promocion %}<span class="estado estado-analizado">Oferta / promoción</span>{% endif %}
       {% if seleccion and seleccion.referencia_estable_id == observacion.id %}<span class="estado estado-revisado">Usado para cotizar</span>{% endif %}
       <p class="ayuda">Observado: {{ observacion.observado_en }} · CP: {{ observacion.codigo_postal or "sin registrar" }}</p>
@@ -39,7 +46,7 @@
       <p class="ayuda">Esta evidencia sólo confirma identidad sanitaria; no decide sustituciones clínicas, comerciales ni fiscales.</p>
     </div>
   {% endif %}
-  {% if observacion.disponibilidad %}<p><strong>Disponibilidad:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
+  {% if observacion.disponibilidad %}<p><strong>Disponibilidad reportada:</strong> {{ observacion.disponibilidad }}</p>{% endif %}
   {% if observacion.fuente.startswith("http://") or observacion.fuente.startswith("https://") %}
     <p><a href="{{ observacion.fuente }}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>
   {% else %}
@@ -47,7 +54,17 @@
   {% endif %}
 
   {% if observacion.entrega_viable is sameas false %}
-    <p class="aviso"><strong>Entrega marcada como no viable.</strong></p>
+    <div class="aviso" role="status">
+      <strong>No se usa para cotizar: sin disponibilidad o entrega viable confirmada.</strong>
+      <p class="ayuda">La opción sigue guardada como evidencia. Si el proveedor confirma existencia y entrega, registra esa confirmación con su fuente.</p>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores&partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Confirmar con proveedor</a>
+    </div>
+  {% elif observacion.entrega_viable is none %}
+    <div class="aviso" role="status">
+      <strong>Disponibilidad por confirmar.</strong>
+      <p class="ayuda">El precio es evidencia, pero todavía no puede ser referencia estable. Confirma existencia/entrega con la fuente antes de cotizar.</p>
+      <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores&partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Confirmar con proveedor</a>
+    </div>
   {% endif %}
 
   {% if oportunidad %}
@@ -62,6 +79,8 @@
     <p class="ayuda">Este es el precio que actualmente alimentará la revisión de la cotización.</p>
   {% elif observacion.es_promocion %}
     <p class="ayuda">La fuente la marca como oferta. Se conserva como evidencia, pero no se usa automáticamente como referencia estable.</p>
+  {% elif observacion.entrega_viable is not sameas true %}
+    <p class="ayuda">No elegible como referencia hasta confirmar disponibilidad y entrega.</p>
   {% else %}
     <form method="post" action="/cotizaciones/{{ cotizacion.id }}/decisiones-precio/{{ producto.partida.id }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

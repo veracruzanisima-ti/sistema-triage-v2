@@ -94,7 +94,7 @@ def _agregar_precio(cliente: TestClient, cotizacion_id: str, partida_id: str) ->
             "precio_total": "",
             "condiciones_promocion": "",
             "disponibilidad": "Disponible para prueba",
-            "entrega_viable": "",
+            "entrega_viable": "si",
         },
         follow_redirects=False,
     )

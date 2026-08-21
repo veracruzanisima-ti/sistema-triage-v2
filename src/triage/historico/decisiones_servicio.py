@@ -55,6 +55,16 @@ def _fecha_operativa(valor: datetime) -> date:
     return _momento_utc(valor).astimezone(_ZONA_OPERATIVA).date()
 
 
+def observacion_apta_como_referencia(observacion: ObservacionPrecio | None) -> bool:
+    """Una referencia requiere precio no promocional y disponibilidad/entrega confirmada."""
+
+    return bool(
+        observacion is not None
+        and not observacion.es_promocion
+        and observacion.entrega_viable is True
+    )
+
+
 def registrar_decision_precio(
     sesion: Session,
     *,
@@ -82,8 +92,13 @@ def registrar_decision_precio(
             raise ValueError("la observación seleccionada ya no existe")
         if observacion.clave_producto != clave:
             raise ValueError("la observación pertenece a otra identidad de producto")
-        if rol == RolDecisionPrecio.REFERENCIA_ESTABLE and observacion.es_promocion:
-            raise ValueError("una promoción no puede usarse como referencia estable")
+        if rol == RolDecisionPrecio.REFERENCIA_ESTABLE:
+            if observacion.es_promocion:
+                raise ValueError("una promoción no puede usarse como referencia estable")
+            if observacion.entrega_viable is not True:
+                raise ValueError(
+                    "la disponibilidad y entrega deben estar confirmadas antes de cotizar"
+                )
 
     decision = DecisionPrecio(
         cotizacion_id=cotizacion_id,
@@ -139,7 +154,7 @@ def referencias_estables_cotizadas_hoy(
             continue
         if observacion.clave_producto != decision.clave_producto:
             continue
-        if observacion.es_promocion or observacion.entrega_viable is False:
+        if not observacion_apta_como_referencia(observacion):
             continue
         if observacion.codigo_postal != codigo_postal:
             continue
@@ -195,7 +210,7 @@ def listar_selecciones_actuales(
         observacion_id = decision.observacion_precio_id
         if observacion_id and rol == RolDecisionPrecio.REFERENCIA_ESTABLE:
             observacion = sesion.get(ObservacionPrecio, observacion_id)
-            if observacion is None or observacion.es_promocion:
+            if not observacion_apta_como_referencia(observacion):
                 return None
         return observacion_id
 

@@ -236,9 +236,10 @@ def test_historico_regresa_a_buscar_precios_si_ese_fue_el_origen(cliente: TestCl
         follow_redirects=False,
     )
     assert respuesta.status_code == 303
-    assert respuesta.headers["location"].endswith(
-        f"/cotizaciones/{cotizacion_id}/historico?guardado=1&volver=proveedores"
+    assert respuesta.headers["location"] == (
+        f"/cotizaciones/{cotizacion_id}/proveedores#estado-busqueda-{partida_id}"
     )
 
     guardado = cliente.get(respuesta.headers["location"])
-    assert "Volver a buscar precios" in guardado.text
+    assert guardado.status_code == 200
+    assert "Proveedor Manual" in guardado.text

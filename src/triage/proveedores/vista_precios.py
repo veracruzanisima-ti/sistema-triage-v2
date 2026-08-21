@@ -77,7 +77,7 @@ def preparar_vista_precios(
     oportunidades: dict[str, OportunidadCompraVista] = {}
     if referencia is not None:
         for observacion in alternativas:
-            if observacion.entrega_viable is False:
+            if observacion.entrega_viable is not True:
                 continue
             if codigo_postal and (
                 observacion.codigo_postal != codigo_postal
