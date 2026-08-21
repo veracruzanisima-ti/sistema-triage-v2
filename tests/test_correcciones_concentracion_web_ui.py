@@ -121,9 +121,9 @@ def test_metilprednisolona_alerta_inconsistencia_sin_autocorregir(
 
     proveedores = cliente.get(f"/cotizaciones/{cotizacion_id}/proveedores")
     assert proveedores.status_code == 200
-    assert "Posible corrección de concentración: 40 mg/mL" in proveedores.text
-    assert "2 fuentes independientes convergen en 40 mg/mL" in proveedores.text
-    assert "Revisar concentración contra original" in proveedores.text
+    assert "Posible inconsistencia en la solicitud" in proveedores.text
+    assert "otra concentración: <strong>40 mg/mL</strong>" in proveedores.text
+    assert "Revisar solicitud y original" in proveedores.text
 
     preparacion = cliente.get(
         f"/cotizaciones/{cotizacion_id}/normalizacion?partida_objetivo={partida_id}"
