@@ -5,6 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from triage.comercial.modelos import EstadoComercial
+from triage.comercial.servicio import listar_decisiones_comerciales_actuales
 from triage.cotizaciones.servicio import obtener_cotizacion
 from triage.historico.decisiones_modelos import RolDecisionPrecio
 from triage.historico.decisiones_servicio import (
@@ -40,6 +42,48 @@ def _render(request: Request, sesion: Sesion, usuario, cotizacion, *, error: str
             "error": error,
         },
     )
+
+
+def _siguiente_partida_pendiente(
+    sesion: Sesion,
+    *,
+    cotizacion_id: str,
+    partida_actual_id: str,
+) -> str | None:
+    """Conserva el avance visual sin alterar decisiones comerciales o de precio."""
+
+    productos = listar_productos_historico(sesion, cotizacion_id)
+    selecciones = listar_selecciones_actuales(sesion, cotizacion_id)
+    decisiones = listar_decisiones_comerciales_actuales(sesion, cotizacion_id)
+
+    orden = [producto.partida.id for producto in productos]
+    pendientes = {
+        producto.partida.id
+        for producto in productos
+        if (
+            decisiones.get(producto.partida.id) is None
+            or decisiones[producto.partida.id].estado == EstadoComercial.COTIZABLE
+        )
+        and not (
+            selecciones.get(producto.partida.id)
+            and selecciones[producto.partida.id].referencia_estable_id
+        )
+    }
+    if not pendientes:
+        return None
+
+    try:
+        indice_actual = orden.index(partida_actual_id)
+    except ValueError:
+        indice_actual = -1
+
+    for candidata_id in orden[indice_actual + 1 :]:
+        if candidata_id in pendientes:
+            return candidata_id
+    for candidata_id in orden:
+        if candidata_id in pendientes:
+            return candidata_id
+    return None
 
 
 @router.get("/{cotizacion_id}/decisiones-precio", response_class=HTMLResponse)
@@ -87,6 +131,14 @@ def guardar_decision(
     destino = f"/cotizaciones/{cotizacion_id}/decisiones-precio"
     if volver == "proveedores":
         destino = f"/cotizaciones/{cotizacion_id}/proveedores"
+        if rol_validado == RolDecisionPrecio.REFERENCIA_ESTABLE:
+            siguiente_id = _siguiente_partida_pendiente(
+                sesion,
+                cotizacion_id=cotizacion_id,
+                partida_actual_id=partida_id,
+            )
+            if siguiente_id:
+                destino += f"#estado-busqueda-{siguiente_id}"
     return RedirectResponse(
         url=destino,
         status_code=status.HTTP_303_SEE_OTHER,
