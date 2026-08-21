@@ -228,6 +228,24 @@ def _motivo_medidas(
     return "faltan datos suficientes para comprobar coincidencia"
 
 
+def _conteos_requeridos_presentacion(texto: str | None) -> frozenset[tuple[str, int]]:
+    """Evita exigir el contenedor exterior si ya existe un conteo interno inequívoco."""
+
+    conteos = extraer_conteos_presentacion(texto)
+    conteos_especificos = {
+        (unidad, cantidad) for unidad, cantidad in conteos if unidad != "CAJA"
+    }
+    if not conteos_especificos:
+        return conteos
+
+    cantidades_especificas = {cantidad for _, cantidad in conteos_especificos}
+    return frozenset(
+        (unidad, cantidad)
+        for unidad, cantidad in conteos
+        if unidad != "CAJA" or cantidad not in cantidades_especificas
+    )
+
+
 def evaluar_candidato(
     solicitud: SolicitudProveedor,
     candidato: CandidatoCatalogo,
@@ -275,7 +293,7 @@ def evaluar_candidato(
     if motivo_presentacion:
         _agregar_motivo(motivos, motivo_presentacion)
 
-    conteos_esperados = extraer_conteos_presentacion(solicitud.presentacion)
+    conteos_esperados = _conteos_requeridos_presentacion(solicitud.presentacion)
     conteos_observados = extraer_conteos_presentacion(candidato.descripcion)
     conteos_faltantes = conteos_esperados - conteos_observados
     if conteos_faltantes:
