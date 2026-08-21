@@ -62,9 +62,10 @@ class EvidenciaIdentidadCofepris:
     estado: str
     importacion_id: str
     sha256_importacion: str
+    numeros_registro: tuple[str, ...] = ()
 
-    def como_json(self) -> dict[str, str]:
-        return {
+    def como_json(self) -> dict[str, object]:
+        evidencia: dict[str, object] = {
             "fuente": self.fuente,
             "numero_registro": self.numero_registro,
             "denominacion_distintiva": self.denominacion_distintiva,
@@ -73,6 +74,10 @@ class EvidenciaIdentidadCofepris:
             "importacion_id": self.importacion_id,
             "sha256_importacion": self.sha256_importacion,
         }
+        if len(self.numeros_registro) > 1:
+            evidencia["numeros_registro"] = list(self.numeros_registro)
+            evidencia["registros_coincidentes"] = len(self.numeros_registro)
+        return evidencia
 
 
 @dataclass(frozen=True)
@@ -256,13 +261,23 @@ def total_registros_cofepris(sesion: Session) -> int:
     return int(sesion.scalar(select(func.count()).select_from(RegistroCofepris)) or 0)
 
 
+def _perfil_registro(registro: RegistroCofepris) -> tuple[str, str, str]:
+    """Distingue registros/presentaciones reales de duplicados equivalentes del snapshot."""
+
+    return (
+        normalizar_texto(registro.forma_farmaceutica),
+        normalizar_texto(registro.presentacion),
+        normalizar_texto(registro.cantidad),
+    )
+
+
 def resolver_identidad_cofepris(
     sesion: Session,
     *,
     producto_solicitado: str,
     producto_observado: str,
 ) -> EvidenciaIdentidadCofepris | None:
-    """Resuelve una marca inicial exacta sólo si una fila VIGENTE es inequívoca."""
+    """Resuelve marca inicial exacta si uno o varios registros VIGENTES convergen."""
 
     observado = normalizar_texto(producto_observado)
     solicitado = normalizar_texto(producto_solicitado)
@@ -288,15 +303,27 @@ def resolver_identidad_cofepris(
         for registro in registros
         if len(registro.denominacion_distintiva_normalizada.split()) == longitud_maxima
     ]
-    if len(coincidencias) != 1:
+
+    if any(
+        len(registro.componentes_genericos_normalizados) != 1
+        or registro.componentes_genericos_normalizados[0] != solicitado
+        for registro in coincidencias
+    ):
         return None
-    registro = coincidencias[0]
-    componentes = registro.componentes_genericos_normalizados
-    if len(componentes) != 1 or componentes[0] != solicitado:
+
+    numeros = [registro.numero_registro for registro in coincidencias]
+    if len({numero.casefold() for numero in numeros}) != len(numeros):
         return None
+    if len(coincidencias) > 1 and len({_perfil_registro(registro) for registro in coincidencias}) == 1:
+        return None
+
+    registro = sorted(coincidencias, key=lambda item: item.numero_registro.casefold())[0]
     importacion = sesion.get(ImportacionCofepris, registro.importacion_id)
-    if importacion is None:
+    if importacion is None or any(
+        coincidencia.importacion_id != importacion.id for coincidencia in coincidencias
+    ):
         return None
+    numeros_ordenados = tuple(sorted(numeros, key=str.casefold))
     return EvidenciaIdentidadCofepris(
         fuente="COFEPRIS",
         numero_registro=registro.numero_registro,
@@ -305,4 +332,5 @@ def resolver_identidad_cofepris(
         estado=registro.estado,
         importacion_id=importacion.id,
         sha256_importacion=importacion.sha256,
+        numeros_registro=numeros_ordenados,
     )
