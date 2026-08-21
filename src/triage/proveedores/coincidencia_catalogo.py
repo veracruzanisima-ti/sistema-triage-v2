@@ -29,14 +29,23 @@ _RUIDO = {
     "PARA",
     "POR",
 }
-_FORMAS_CONOCIDAS = {
-    "AMPOLLA",
+_FORMAS_FARMACEUTICAS_CONOCIDAS = {
     "CAPSULA",
+    "CREMA",
+    "GEL",
+    "JARABE",
+    "POLVO",
+    "SOLUCION",
+    "SUSPENSION",
+    "TABLETA",
+    "UNGUENTO",
+}
+_DISPOSITIVOS_CONOCIDOS = {
+    "AMPOLLA",
     "CARTUCHO",
     "JERINGA",
     "PLUMA",
     "PRELLENADA",
-    "TABLETA",
     "VIAL",
 }
 _UNIDADES_PRESENTACION = (
@@ -246,6 +255,30 @@ def _conteos_requeridos_presentacion(texto: str | None) -> frozenset[tuple[str, 
     )
 
 
+def _hay_conflicto_forma_dispositivo(
+    tokens_requeridos: frozenset[str],
+    tokens_observados: frozenset[str],
+) -> bool:
+    """Distingue una contradicción explícita de la simple falta de evidencia textual."""
+
+    formas_requeridas = tokens_requeridos & _FORMAS_FARMACEUTICAS_CONOCIDAS
+    formas_observadas = tokens_observados & _FORMAS_FARMACEUTICAS_CONOCIDAS
+    dispositivos_requeridos = tokens_requeridos & _DISPOSITIVOS_CONOCIDOS
+    dispositivos_observados = tokens_observados & _DISPOSITIVOS_CONOCIDOS
+
+    conflicto_forma = bool(
+        formas_requeridas
+        and formas_observadas
+        and formas_requeridas.isdisjoint(formas_observadas)
+    )
+    conflicto_dispositivo = bool(
+        dispositivos_requeridos
+        and dispositivos_observados
+        and dispositivos_requeridos.isdisjoint(dispositivos_observados)
+    )
+    return conflicto_forma or conflicto_dispositivo
+
+
 def evaluar_candidato(
     solicitud: SolicitudProveedor,
     candidato: CandidatoCatalogo,
@@ -266,10 +299,9 @@ def evaluar_candidato(
         _agregar_motivo(motivos, "producto distinto")
 
     if tokens_forma and not tokens_forma.issubset(tokens_candidato):
-        formas_observadas = tokens_candidato & _FORMAS_CONOCIDAS
         motivo_forma = (
             "forma o dispositivo distinto"
-            if formas_observadas
+            if _hay_conflicto_forma_dispositivo(tokens_forma, tokens_candidato)
             else "faltan datos suficientes para comprobar coincidencia"
         )
         _agregar_motivo(motivos, motivo_forma)
