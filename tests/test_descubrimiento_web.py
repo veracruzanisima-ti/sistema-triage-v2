@@ -276,7 +276,8 @@ def test_descubrimiento_web_aparece_como_accion_secundaria(cliente):
     assert "La fuente mostró:" in resultado.text
     assert "Ver fuente" in resultado.text
     assert "Ver resultados descartados (2)" in resultado.text
-    assert "No pasó porque:" in resultado.text
+    assert "Motivo registrado en esa búsqueda:" in resultado.text
+    assert "Evaluar con reglas actuales" in resultado.text
     assert "forma o dispositivo distinto" in resultado.text
 
 
