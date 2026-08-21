@@ -1,6 +1,5 @@
 import triage.proveedores.correcciones_concentracion_web as correcciones
 
-
 CRITERIOS = {
     "producto": "ACETATO DE METILPREDNISOLONA",
     "marca": None,
