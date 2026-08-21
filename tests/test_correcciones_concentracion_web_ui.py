@@ -1,4 +1,4 @@
-"""Integración visual de la sugerencia conservadora de concentración."""
+"""Integración visual de la alerta conservadora de concentración."""
 
 from decimal import Decimal
 
@@ -17,7 +17,7 @@ from triage.proveedores.modelos import (
 from triage.usuarios.modelos import Usuario
 
 
-def test_metilprednisolona_sugiere_revisar_40_mg_por_ml_sin_autocorregir(
+def test_metilprednisolona_alerta_inconsistencia_sin_autocorregir(
     cliente: TestClient,
 ):
     with cliente.app.state.fabrica_sesiones() as sesion:
@@ -130,12 +130,11 @@ def test_metilprednisolona_sugiere_revisar_40_mg_por_ml_sin_autocorregir(
         f"#partida-{partida_id}"
     )
     assert preparacion.status_code == 200
-    assert "Posible corrección de concentración: 40 mg/mL" in preparacion.text
-    assert "Concentración preparada actualmente: <strong>40 mg / 2 mL</strong>" in (
-        preparacion.text
-    )
-    assert 'data-sugerencia="40 mg/mL"' in preparacion.text
-    assert "Usar 40 mg/mL" in preparacion.text
+    assert "Posible inconsistencia en la solicitud" in preparacion.text
+    assert "La solicitud revisada conserva: <strong>40 mg / 2 mL</strong>" in preparacion.text
+    assert "otra concentración: <strong>40 mg/mL</strong>" in preparacion.text
+    assert "Usar 40 mg/mL" not in preparacion.text
+    assert 'data-sugerencia="40 mg/mL"' not in preparacion.text
     assert "Abrir original" in preparacion.text
     assert f"/documentos/{documento_id}/original" in preparacion.text
 
