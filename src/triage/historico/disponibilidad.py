@@ -1,32 +1,47 @@
 """Deriva disponibilidad operativa sin reescribir la evidencia original."""
 
-import re
 import unicodedata
 
 
-_PATRONES_NEGATIVOS = (
-    r"\bagotad[oa]s?\b",
-    r"\bsin existencias?\b",
-    r"\bsin stock\b",
-    r"\bfuera de stock\b",
-    r"\bno disponible\b",
+_SENALES_NEGATIVAS = (
+    "agotado",
+    "agotada",
+    "agotados",
+    "agotadas",
+    "sin existencia",
+    "sin existencias",
+    "sin stock",
+    "fuera de stock",
+    "no disponible",
 )
 
-_PATRONES_AMBIGUOS = (
-    r"\b(?:consulta|consultar|confirma|confirmar|ver|revisar|pregunta|preguntar)\s+(?:la\s+)?disponibilidad\b",
-    r"\bsujeto a disponibilidad\b",
-    r"\bdisponibilidad por confirmar\b",
-    r"\bcodigo postal\b.*\b(?:ver|consultar)\b.*\bdisponibilidad\b",
-    r"\b(?:ingresa|ingresar|captura|capturar)\b.*\bcodigo postal\b",
+_SENALES_AMBIGUAS = (
+    "consulta disponibilidad",
+    "consultar disponibilidad",
+    "confirma disponibilidad",
+    "confirmar disponibilidad",
+    "ver disponibilidad",
+    "revisar disponibilidad",
+    "pregunta disponibilidad",
+    "preguntar disponibilidad",
+    "sujeto a disponibilidad",
+    "disponibilidad por confirmar",
+    "codigo postal para ver disponibilidad",
+    "codigo postal para consultar disponibilidad",
+    "ingresa un codigo postal",
+    "ingresar un codigo postal",
+    "captura un codigo postal",
+    "capturar un codigo postal",
 )
 
-_PATRONES_POSITIVOS = (
-    r"\b\d+\s+(?:unidades?\s+|piezas?\s+|cajas?\s+)?disponibles?\b",
-    r"\ben existencia\b",
-    r"\bhay existencias?\b",
-    r"\bstock disponible\b",
-    r"\b(?:agregar|anadir)\s+al carrito\b",
-    r"\bdisponible\b",
+_SENALES_POSITIVAS = (
+    "disponible",
+    "en existencia",
+    "hay existencia",
+    "hay existencias",
+    "stock disponible",
+    "agregar al carrito",
+    "anadir al carrito",
 )
 
 
@@ -48,7 +63,7 @@ def resolver_disponibilidad_operativa(
     """Combina el booleano externo con señales textuales inequívocas y conservadoras."""
 
     texto = _normalizar_texto(disponibilidad)
-    if texto and any(re.search(patron, texto) for patron in _PATRONES_NEGATIVOS):
+    if texto and any(senal in texto for senal in _SENALES_NEGATIVAS):
         return False
 
     if entrega_viable is not None:
@@ -57,10 +72,10 @@ def resolver_disponibilidad_operativa(
     if not texto:
         return None
 
-    if any(re.search(patron, texto) for patron in _PATRONES_AMBIGUOS):
+    if any(senal in texto for senal in _SENALES_AMBIGUAS):
         return None
 
-    if any(re.search(patron, texto) for patron in _PATRONES_POSITIVOS):
+    if any(senal in texto for senal in _SENALES_POSITIVAS):
         return True
 
     return None
