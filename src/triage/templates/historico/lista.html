@@ -55,13 +55,14 @@
       {% if partida_objetivo == producto.partida.id %}
         <div class="aviso" role="status">
           <strong>Confirma esta partida con la evidencia real del proveedor.</strong>
-          <p class="ayuda">Si la web no confirmó existencia, conserva ese resultado como evidencia y registra una nueva observación sólo después de obtener confirmación. Indica la fuente —por ejemplo cotización, mensaje o portal— y marca “Sí, viable” únicamente cuando existencia/entrega estén realmente confirmadas.</p>
+          <p class="ayuda">Si la web reportó explícitamente existencia, Triage puede habilitarla sin modificar la evidencia original. Si reportó falta de existencia, registra una nueva observación sólo después de obtener confirmación del proveedor. Indica siempre la fuente.</p>
         </div>
       {% endif %}
 
       {% if producto.observaciones %}
         <h3>Observaciones recientes</h3>
         {% for observacion in producto.observaciones[:5] %}
+          {% set disponibilidad_operativa = observacion.disponibilidad_operativa %}
           <div class="partida">
             <div class="barra">
               <div>
@@ -69,9 +70,9 @@
                 <div class="ayuda">{{ observacion.observado_en.strftime("%d/%m/%Y %H:%M") }}</div>
               </div>
               <div>
-                {% if observacion.entrega_viable is sameas true %}<span class="estado estado-disponible">Disponible confirmado</span>{% endif %}
-                {% if observacion.entrega_viable is sameas false %}<span class="estado estado-no-disponible">No viable</span>{% endif %}
-                {% if observacion.entrega_viable is none %}<span class="estado estado-pendiente">Por confirmar</span>{% endif %}
+                {% if disponibilidad_operativa is sameas true %}<span class="estado estado-disponible">Disponible confirmado</span>{% endif %}
+                {% if disponibilidad_operativa is sameas false %}<span class="estado estado-no-disponible">No viable</span>{% endif %}
+                {% if disponibilidad_operativa is none %}<span class="estado estado-pendiente">Por confirmar</span>{% endif %}
                 {% if observacion.es_promocion %}<span class="estado estado-promocion">Promoción</span>{% endif %}
               </div>
             </div>
@@ -90,11 +91,15 @@
               <p class="ayuda">Disponibilidad: {{ observacion.disponibilidad }}</p>
             {% endif %}
             {% if observacion.entrega_viable is sameas true %}
-              <p class="ayuda">Entrega al destino: confirmada como viable.</p>
+              <p class="ayuda">Disponibilidad / entrega: confirmada explícitamente por la fuente.</p>
             {% elif observacion.entrega_viable is sameas false %}
-              <p class="ayuda">Entrega al destino: no viable.</p>
+              <p class="ayuda">Disponibilidad / entrega: no viable.</p>
+            {% elif disponibilidad_operativa is sameas true %}
+              <p class="ayuda">Disponibilidad web: evidencia textual explícita; habilitada operativamente para cotizar.</p>
+            {% elif disponibilidad_operativa is sameas false %}
+              <p class="ayuda">Disponibilidad web: la evidencia indica falta de existencia.</p>
             {% else %}
-              <p class="ayuda">Entrega al destino: sin confirmar.</p>
+              <p class="ayuda">Disponibilidad / entrega: sin confirmar.</p>
             {% endif %}
             {% if observacion.condiciones_promocion %}
               <p class="ayuda">Condiciones de promoción: {{ observacion.condiciones_promocion }}</p>

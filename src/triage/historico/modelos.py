@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from triage.base_datos import Base
 from triage.cotizaciones.modelos import ahora_utc
+from triage.historico.disponibilidad import resolver_disponibilidad_operativa
 
 LIMITE_PROVEEDOR_OBSERVACION = 240
 LIMITE_PRODUCTO_OBSERVADO = 700
@@ -83,3 +84,14 @@ class ObservacionPrecio(Base):
         nullable=False,
         default=ahora_utc,
     )
+
+    @property
+    def disponibilidad_operativa(self) -> bool | None:
+        """Deriva disponibilidad sólo para evidencia WEB; conserva manual/adaptador explícitos."""
+
+        if self.origen != OrigenObservacionPrecio.WEB.value:
+            return self.entrega_viable
+        return resolver_disponibilidad_operativa(
+            entrega_viable=self.entrega_viable,
+            disponibilidad=self.disponibilidad,
+        )
