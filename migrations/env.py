@@ -7,6 +7,7 @@ from sqlalchemy import engine_from_config, pool
 
 from triage.base_datos import Base, normalizar_database_url
 from triage.comercial.modelos import DecisionComercialPartida
+from triage.comercial.precio_venta_modelos import PrecioVentaPartida
 from triage.config import obtener_configuracion
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, PartidaDocumento
@@ -32,6 +33,7 @@ config.set_main_option("sqlalchemy.url", url_base_datos.replace("%", "%%"))
 _MODELOS_REGISTRADOS = (
     Cotizacion,
     DecisionComercialPartida,
+    PrecioVentaPartida,
     Usuario,
     Documento,
     PartidaDocumento,
