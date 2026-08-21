@@ -100,6 +100,63 @@ def test_catalogo_acepta_amantadina_con_unidad_y_abreviatura_exactas():
     assert "100 mg | 0.1 g" in terminos
 
 
+def test_catalogo_acepta_dapagliflozina_28_tabs_sin_palabra_caja():
+    solicitud_dapagliflozina = SolicitudProveedor(
+        partida_documento_id="dapagliflozina-1",
+        producto="DAPAGLIFLOZINA",
+        marca=None,
+        concentracion="10 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 28 tabletas de 10 mg",
+    )
+
+    resultado = evaluar_candidato(
+        solicitud_dapagliflozina,
+        candidato("Dapagliflozina 10 mg 28 Tabs Marca del Ahorro"),
+    )
+
+    assert resultado.coincide is True
+    assert resultado.motivos == ()
+
+
+def test_catalogo_rechaza_dapagliflozina_con_numero_de_tabletas_distinto():
+    solicitud_dapagliflozina = SolicitudProveedor(
+        partida_documento_id="dapagliflozina-1",
+        producto="DAPAGLIFLOZINA",
+        marca=None,
+        concentracion="10 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 28 tabletas de 10 mg",
+    )
+
+    resultado = evaluar_candidato(
+        solicitud_dapagliflozina,
+        candidato("Dapagliflozina 10 mg 30 Tabs Marca del Ahorro"),
+    )
+
+    assert resultado.coincide is False
+    assert "presentación distinta" in resultado.motivos
+
+
+def test_catalogo_rechaza_dapagliflozina_con_concentracion_distinta():
+    solicitud_dapagliflozina = SolicitudProveedor(
+        partida_documento_id="dapagliflozina-1",
+        producto="DAPAGLIFLOZINA",
+        marca=None,
+        concentracion="10 mg",
+        forma_dispositivo="tabletas",
+        presentacion="Caja con 28 tabletas de 10 mg",
+    )
+
+    resultado = evaluar_candidato(
+        solicitud_dapagliflozina,
+        candidato("Dapagliflozina 5 mg 28 Tabs Marca del Ahorro"),
+    )
+
+    assert resultado.coincide is False
+    assert "concentración distinta" in resultado.motivos
+
+
 def test_catalogo_rechaza_presentacion_de_amantadina_distinta():
     solicitud_amantadina = SolicitudProveedor(
         partida_documento_id="amantadina-1",
