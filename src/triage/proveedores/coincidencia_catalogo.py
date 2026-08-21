@@ -50,7 +50,7 @@ _UNIDADES_PRESENTACION = (
     "CARTUCHO",
 )
 _ALIASES_BUSQUEDA = {
-    "TABLETA": ("tableta", "tabletas", "tab"),
+    "TABLETA": ("tableta", "tabletas", "tab", "tabs"),
     "VIAL": ("frasco ámpula", "frasco ampula", "F.A.", "vial"),
     "AMPOLLA": ("ampolla", "amp"),
     "JERINGA PRELLENADA": ("jeringa prellenada", "jga pre"),
@@ -94,7 +94,7 @@ def normalizar_texto(texto: str | None) -> str:
         (r"\bJERINGAS?\s+PRELLENADAS?\b", "JERINGA PRELLENADA"),
         (r"\bJGA\s+PRE\b", "JERINGA PRELLENADA"),
         (r"\bJGA\b", "JERINGA"),
-        (r"\bTABLETAS?\b|\bTAB\b", "TABLETA"),
+        (r"\bTABLETAS?\b|\bTABS?\b", "TABLETA"),
         (r"\bCAPSULAS?\b|\bCAP\b", "CAPSULA"),
         (r"\bAMPOLLAS?\b|\bAMP\b", "AMPOLLA"),
         # Conserva la equivalencia histórica de catálogos mexicanos para "ámpula".
