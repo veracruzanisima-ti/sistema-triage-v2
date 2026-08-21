@@ -44,7 +44,9 @@
         </div>
 
         {% if partida_objetivo == entrada.partida.id %}
-          {% if correccion_producto and correccion_producto.valor %}
+          {% set hay_correccion_producto = correccion_producto and correccion_producto.valor %}
+          {% set hay_correccion_concentracion = correccion_concentracion and correccion_concentracion.valor %}
+          {% if hay_correccion_producto %}
             <div class="aviso" role="status">
               <strong>Sugerencia de corrección: {{ correccion_producto.valor }}</strong>
               <p>Producto preparado actualmente: <strong>{{ valores.producto or "Sin nombre" }}</strong>.</p>
@@ -63,7 +65,34 @@
                 data-sugerencia="{{ correccion_producto.valor }}"
               >Usar {{ correccion_producto.valor }}</button>
             </div>
-          {% else %}
+          {% endif %}
+
+          {% if hay_correccion_concentracion %}
+            <div class="aviso" role="status">
+              <strong>Posible inconsistencia en la solicitud</strong>
+              <p>La solicitud revisada conserva: <strong>{{ valores.concentracion or "Sin concentración" }}</strong>.</p>
+              <p class="ayuda">
+                {{ correccion_concentracion.fuentes|length }} fuentes independientes de la última búsqueda muestran otra concentración: <strong>{{ correccion_concentracion.valor }}</strong> ·
+                {{ correccion_concentracion.fuentes|join("; ") }}.
+              </p>
+              <p class="ayuda"><strong>Esto no demuestra que la solicitud esté equivocada.</strong> Si el original realmente contiene {{ valores.concentracion or "esa concentración" }}, no cambies la copia operativa hasta aclararlo con quien emitió o autoriza la solicitud.</p>
+              <div class="grupo-botones">
+                <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ entrada.documento.id }}">Revisar documento</a>
+                {% if entrada.documento.contenido_original %}
+                  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ entrada.documento.id }}/original" target="_blank" rel="noopener noreferrer">Abrir original</a>
+                {% endif %}
+              </div>
+              <p class="ayuda">Triage no aplica la concentración alternativa ni recupera los precios descartados. La partida queda para aclaración humana.</p>
+            </div>
+          {% elif correccion_concentracion and correccion_concentracion.ambigua %}
+            <div class="aviso" role="status">
+              <strong>La web muestra varias concentraciones diferentes a la solicitud.</strong>
+              <p class="ayuda">Triage no eligió ninguna. Conserva el dato solicitado y revisa/aclara el documento antes de modificar la preparación.</p>
+              <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ entrada.documento.id }}">Revisar documento</a>
+            </div>
+          {% endif %}
+
+          {% if not hay_correccion_producto and not hay_correccion_concentracion and not (correccion_concentracion and correccion_concentracion.ambigua) %}
             <div class="aviso" role="status">
               <strong>Revisa esta partida.</strong>
               <p class="ayuda">La sugerencia web que te trajo aquí ya no está vigente o dejó de ser inequívoca. Triage no aplicó ningún cambio automáticamente.</p>

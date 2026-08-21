@@ -113,6 +113,7 @@
     {% set consultas = consultas_por_partida.get(producto.partida.id, ()) %}
     {% set trazabilidad_web = trazabilidad_web_por_partida.get(producto.partida.id) %}
     {% set correccion_producto = sugerir_correccion_producto_web(producto.normalizacion.producto, trazabilidad_web.consulta.criterios_busqueda.get("producto"), trazabilidad_web.descartados) if trazabilidad_web else none %}
+    {% set correccion_concentracion = sugerir_correccion_concentracion_web(producto_actual=producto.normalizacion.producto, marca_actual=producto.normalizacion.marca, concentracion_actual=producto.normalizacion.concentracion, forma_actual=producto.normalizacion.forma_dispositivo, presentacion_actual=producto.normalizacion.presentacion, criterios_busqueda=trazabilidad_web.consulta.criterios_busqueda, descartados=trazabilidad_web.descartados) if trazabilidad_web else none %}
     {% set cotizada_hoy = referencias_cotizadas_hoy.get(producto.clave_producto) %}
     {% set estado_busqueda_id = "estado-busqueda-" ~ producto.partida.id %}
     <section class="tarjeta" id="partida-proveedor-{{ producto.partida.id }}" data-partida-proveedor="{{ producto.partida.id }}">
@@ -225,6 +226,25 @@
           <strong>La web encontró varias posibles correcciones del nombre.</strong>
           <p class="ayuda">Triage no eligió ninguna automáticamente. Revisa la preparación antes de volver a buscar.</p>
           <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar preparación</a>
+        </div>
+      {% endif %}
+
+      {% if correccion_concentracion and correccion_concentracion.valor %}
+        <div class="aviso" role="status">
+          <strong>Posible inconsistencia en la solicitud</strong>
+          <p>La solicitud preparada conserva: <strong>{{ producto.normalizacion.concentracion or "Sin concentración" }}</strong>.</p>
+          <p class="ayuda">
+            {{ correccion_concentracion.fuentes|length }} fuentes independientes muestran otra concentración: <strong>{{ correccion_concentracion.valor }}</strong> ·
+            {{ correccion_concentracion.fuentes|join("; ") }}.
+          </p>
+          <p class="ayuda">La convergencia de fuentes no autoriza sustituir lo solicitado ni recuperar estos precios. Si el documento original confirma la concentración actual, aclárala con quien emitió o autoriza la solicitud antes de modificar la preparación.</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar solicitud y original</a>
+        </div>
+      {% elif correccion_concentracion and correccion_concentracion.ambigua %}
+        <div class="aviso" role="status">
+          <strong>La web muestra varias concentraciones diferentes a la solicitud.</strong>
+          <p class="ayuda">Triage no eligió ninguna. Conserva el dato solicitado y revisa/aclara el documento antes de modificar la preparación.</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Revisar solicitud</a>
         </div>
       {% endif %}
 

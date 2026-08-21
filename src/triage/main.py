@@ -24,6 +24,9 @@ from triage.modelos_ia_rutas import router as router_modelos_ia
 from triage.normalizacion.rutas import router as router_normalizacion
 from triage.proveedores.base import ProveedorProducto
 from triage.proveedores.cofepris_rutas import router as router_cofepris
+from triage.proveedores.correcciones_concentracion_web import (
+    sugerir_correccion_concentracion_web,
+)
 from triage.proveedores.correcciones_web import sugerir_correccion_producto_web
 from triage.proveedores.descubrimiento_web import (
     DescubridorWeb,
@@ -191,6 +194,9 @@ def crear_app(
     plantillas = Jinja2Templates(directory=str(BASE_DIR / "templates"))
     plantillas.env.globals["sugerir_correccion_producto_web"] = (
         sugerir_correccion_producto_web
+    )
+    plantillas.env.globals["sugerir_correccion_concentracion_web"] = (
+        sugerir_correccion_concentracion_web
     )
     aplicacion.state.plantillas = plantillas
     aplicacion.include_router(router_usuarios)

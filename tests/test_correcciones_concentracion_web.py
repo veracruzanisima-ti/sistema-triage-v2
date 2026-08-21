@@ -1,0 +1,183 @@
+import triage.proveedores.correcciones_concentracion_web as correcciones
+
+CRITERIOS = {
+    "producto": "ACETATO DE METILPREDNISOLONA",
+    "marca": None,
+    "concentracion": "40 mg / 2 mL",
+    "forma_dispositivo": "Suspensión inyectable",
+    "presentacion": "Frasco ámpula 2 mL",
+}
+
+
+class DescartadoFalso:
+    def __init__(self, proveedor: str, producto: str, intento: int) -> None:
+        self.proveedor = proveedor
+        self.producto_observado = producto
+        self.url = f"https://{proveedor.casefold().replace(' ', '-')}.example/producto"
+        self.precio_observado = 100
+        self.motivos = ["producto distinto"]
+        self.intento_busqueda = intento
+
+
+def _descartado(proveedor: str, producto: str, *, intento: int = 1):
+    return DescartadoFalso(proveedor, producto, intento)
+
+
+def _sugerir(descartados, **cambios):
+    argumentos = {
+        "producto_actual": "ACETATO DE METILPREDNISOLONA",
+        "marca_actual": None,
+        "concentracion_actual": "40 mg / 2 mL",
+        "forma_actual": "Suspensión inyectable",
+        "presentacion_actual": "Frasco ámpula 2 mL",
+        "criterios_busqueda": CRITERIOS,
+        "descartados": descartados,
+    }
+    argumentos.update(cambios)
+    return correcciones.sugerir_correccion_concentracion_web(**argumentos)
+
+
+def test_dos_fuentes_independientes_sugieren_40_mg_por_ml():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmatodo",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Frasco Ámpula 2 mL",
+            ),
+            _descartado(
+                "Curitek",
+                "ACETATO DE METILPREDNISOLONA 40 MG/ML INYECTABLE VIAL 2 ML",
+            ),
+        ]
+    )
+
+    assert sugerencia is not None
+    assert sugerencia.valor == "40 mg/mL"
+    assert sugerencia.fuentes == ("Farmatodo", "Curitek")
+    assert sugerencia.ambigua is False
+
+
+def test_una_sola_fuente_no_basta_aunque_aparezca_en_dos_intentos():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmatodo",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+                intento=1,
+            ),
+            _descartado(
+                "Farmatodo",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+                intento=2,
+            ),
+        ]
+    )
+
+    assert sugerencia is None
+
+
+def test_20_mg_por_ml_es_equivalente_a_40_mg_en_2_ml_y_no_es_alternativa():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmatodo",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Curitek",
+                "Acetato de Metilprednisolona Suspensión Inyectable 20 mg/mL Vial 2 mL",
+            ),
+        ]
+    )
+
+    assert sugerencia is None
+
+
+def test_dos_alternativas_respaldadas_se_marcan_ambiguas():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmacia 40 Uno",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Farmacia 40 Dos",
+                "Acetato de Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Farmacia 30 Uno",
+                "Metilprednisolona Suspensión Inyectable 30 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Farmacia 30 Dos",
+                "Acetato de Metilprednisolona Suspensión Inyectable 30 mg/mL Vial 2 mL",
+            ),
+        ]
+    )
+
+    assert sugerencia is not None
+    assert sugerencia.valor is None
+    assert sugerencia.ambigua is True
+
+
+def test_conflicto_de_forma_no_apoya_sugerencia():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmacia Tabletas Uno",
+                "Metilprednisolona 40 mg/mL TABLETAS caja con 30",
+            ),
+            _descartado(
+                "Farmacia Tabletas Dos",
+                "Acetato de Metilprednisolona 40 mg/mL TABLETAS caja con 30",
+            ),
+        ]
+    )
+
+    assert sugerencia is None
+
+
+def test_volumen_de_presentacion_distinto_no_apoya_sugerencia():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmacia Vial 5 Uno",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 5 mL",
+            ),
+            _descartado(
+                "Farmacia Vial 5 Dos",
+                "Acetato de Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 5 mL",
+            ),
+        ]
+    )
+
+    assert sugerencia is None
+
+
+def test_marca_sin_nombre_generico_no_sugiere_concentracion_por_si_sola():
+    sugerencia = _sugerir(
+        [
+            _descartado("Farmacia Uno", "Depo-Medrol 40 mg/mL Suspensión Vial 2 mL"),
+            _descartado("Farmacia Dos", "Depo-Medrol 40 mg/mL Suspensión Vial 2 mL"),
+        ]
+    )
+
+    assert sugerencia is None
+
+
+def test_sugerencia_se_invalida_si_la_preparacion_cambio_despues_de_buscar():
+    sugerencia = _sugerir(
+        [
+            _descartado(
+                "Farmatodo",
+                "Metilprednisolona Suspensión Inyectable 40 mg/mL Vial 2 mL",
+            ),
+            _descartado(
+                "Curitek",
+                "Acetato de Metilprednisolona 40 mg/mL Suspensión Inyectable Vial 2 mL",
+            ),
+        ],
+        concentracion_actual="40 mg/mL",
+    )
+
+    assert sugerencia is None
