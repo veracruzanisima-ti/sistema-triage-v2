@@ -1,4 +1,4 @@
-"""Regresiones del Exportador DIF v1 y su condición de seguridad."""
+"""Regresiones del Exportador DIF v1 y su condición de emitibilidad."""
 
 from decimal import Decimal
 from io import BytesIO
@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 from sqlalchemy import select
 
 from triage.comercial.modelos import EstadoComercial
+from triage.comercial.precio_venta_servicio import registrar_precio_venta
 from triage.comercial.servicio import registrar_decision_comercial
 from triage.cotizaciones.modelos import Cotizacion
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
@@ -70,7 +71,7 @@ def _crear_producto(sesion, *, referencia: str = "DIF-001"):
     return cotizacion, partida, usuario
 
 
-def _hacer_emitible_para_borrador(sesion, *, cotizacion, partida, usuario):
+def _seleccionar_referencia(sesion, *, cotizacion, partida, usuario):
     referencia = crear_observacion_precio(
         sesion,
         cotizacion_id=cotizacion.id,
@@ -94,6 +95,10 @@ def _hacer_emitible_para_borrador(sesion, *, cotizacion, partida, usuario):
         rol=RolDecisionPrecio.REFERENCIA_ESTABLE,
         observacion_id=referencia.id,
     )
+    return referencia
+
+
+def _validar_fiscal(sesion, *, cotizacion, partida, usuario):
     registrar_validacion_fiscal(
         sesion,
         cotizacion_id=cotizacion.id,
@@ -105,18 +110,75 @@ def _hacer_emitible_para_borrador(sesion, *, cotizacion, partida, usuario):
     )
 
 
-def test_dif_bloquea_borrador_si_hay_validacion_fiscal_pendiente(cliente: TestClient):
-    with cliente.app.state.fabrica_sesiones() as sesion:
-        cotizacion, _, _ = _crear_producto(sesion, referencia="DIF-PENDIENTE")
+def _hacer_emitible(sesion, *, cotizacion, partida, usuario):
+    _seleccionar_referencia(
+        sesion,
+        cotizacion=cotizacion,
+        partida=partida,
+        usuario=usuario,
+    )
+    registrar_precio_venta(
+        sesion,
+        cotizacion_id=cotizacion.id,
+        partida_id=partida.id,
+        usuario_id=usuario.id,
+        precio_unitario_sin_iva=Decimal("150"),
+        observacion="Precio autorizado para la prueba",
+    )
+    _validar_fiscal(
+        sesion,
+        cotizacion=cotizacion,
+        partida=partida,
+        usuario=usuario,
+    )
 
-        with pytest.raises(ErrorExportacionDif, match="Pendiente"):
+
+def test_dif_bloquea_si_falta_validacion_fiscal(cliente: TestClient):
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-FISCAL-PENDIENTE")
+        _seleccionar_referencia(
+            sesion,
+            cotizacion=cotizacion,
+            partida=partida,
+            usuario=usuario,
+        )
+        registrar_precio_venta(
+            sesion,
+            cotizacion_id=cotizacion.id,
+            partida_id=partida.id,
+            usuario_id=usuario.id,
+            precio_unitario_sin_iva=Decimal("150"),
+            observacion=None,
+        )
+
+        with pytest.raises(ErrorExportacionDif, match="validación fiscal"):
             generar_exportacion_dif(sesion, cotizacion.id)
 
 
-def test_dif_exporta_importes_validados_pero_declara_borrador(cliente: TestClient):
+def test_dif_bloquea_si_falta_precio_final(cliente: TestClient):
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-PRECIO-PENDIENTE")
+        _seleccionar_referencia(
+            sesion,
+            cotizacion=cotizacion,
+            partida=partida,
+            usuario=usuario,
+        )
+        _validar_fiscal(
+            sesion,
+            cotizacion=cotizacion,
+            partida=partida,
+            usuario=usuario,
+        )
+
+        with pytest.raises(ErrorExportacionDif, match="precio unitario final sin IVA"):
+            generar_exportacion_dif(sesion, cotizacion.id)
+
+
+def test_dif_exporta_precio_final_confirmado_y_no_costo_proveedor(cliente: TestClient):
     with cliente.app.state.fabrica_sesiones() as sesion:
         cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-VALIDADA")
-        _hacer_emitible_para_borrador(
+        _hacer_emitible(
             sesion,
             cotizacion=cotizacion,
             partida=partida,
@@ -128,18 +190,18 @@ def test_dif_exporta_importes_validados_pero_declara_borrador(cliente: TestClien
     libro = load_workbook(BytesIO(exportacion.contenido), data_only=True)
     hoja = libro["Cotización DIF"]
     try:
-        assert exportacion.nombre_archivo == "Borrador_Cotizacion_DIF_DIF-VALIDADA.xlsx"
-        assert hoja["A1"].value == "BORRADOR DIF · NO EMITIBLE"
-        assert "precio final de venta/utilidad" in hoja["B3"].value
+        assert exportacion.nombre_archivo == "Cotizacion_DIF_DIF-VALIDADA.xlsx"
+        assert hoja["A1"].value == "COTIZACIÓN DIF · VERACRUZANÍSIMA"
+        assert "precio unitario final sin IVA confirmado" in hoja["B3"].value
         assert hoja["E6"].value == "PARACETAMOL"
         assert hoja["J6"].value == "COTIZABLE"
-        assert hoja["L6"].value == 100
-        assert hoja["M6"].value == 200
-        assert hoja["N6"].value == 32
-        assert hoja["O6"].value == 232
+        assert hoja["L6"].value == 150
+        assert hoja["M6"].value == 300
+        assert hoja["N6"].value == 48
+        assert hoja["O6"].value == 348
         assert hoja["P6"].value == "IVA 16.00%"
         assert hoja["Q6"].value == "Proveedor estable"
-        assert "Referencia estable provisional" in hoja["S6"].value
+        assert hoja["S6"].value == "Precio unitario final confirmado manualmente"
     finally:
         libro.close()
 
@@ -195,12 +257,24 @@ def test_dif_neutraliza_texto_que_excel_podria_ejecutar_como_formula(cliente: Te
         libro.close()
 
 
-def test_ruta_dif_responde_conflicto_mientras_falte_validacion(cliente: TestClient):
+def test_ruta_dif_responde_conflicto_mientras_falte_precio_final(cliente: TestClient):
     with cliente.app.state.fabrica_sesiones() as sesion:
-        cotizacion, _, _ = _crear_producto(sesion, referencia="DIF-RUTA-PENDIENTE")
+        cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-RUTA-PENDIENTE")
+        _seleccionar_referencia(
+            sesion,
+            cotizacion=cotizacion,
+            partida=partida,
+            usuario=usuario,
+        )
+        _validar_fiscal(
+            sesion,
+            cotizacion=cotizacion,
+            partida=partida,
+            usuario=usuario,
+        )
         cotizacion_id = cotizacion.id
 
     respuesta = cliente.get(f"/cotizaciones/{cotizacion_id}/exportaciones/dif.xlsx")
 
     assert respuesta.status_code == 409
-    assert "Pendiente" in respuesta.json()["detail"]
+    assert "precio unitario final sin IVA" in respuesta.json()["detail"]
