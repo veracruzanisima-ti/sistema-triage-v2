@@ -10,6 +10,7 @@ from triage.proveedores.base import SolicitudProveedor
 from triage.proveedores.coincidencia_catalogo import (
     CandidatoCatalogo,
     evaluar_candidato,
+    extraer_medidas,
     extraer_relaciones_concentracion,
     normalizar_texto,
 )
@@ -95,6 +96,25 @@ def _criterios_siguen_vigentes(
     )
 
 
+def _presentacion_sin_conflicto_explicito(
+    presentacion_actual: str | None,
+    observado: str,
+) -> bool:
+    """Rechaza sólo contradicciones de medida visibles; la falta de dato sigue siendo revisable."""
+
+    esperadas = extraer_medidas(presentacion_actual)
+    observadas = extraer_medidas(observado)
+    for unidad, valor in esperadas:
+        valores_observados = {
+            valor_observado
+            for unidad_observada, valor_observado in observadas
+            if unidad_observada == unidad
+        }
+        if valores_observados and valor not in valores_observados:
+            return False
+    return True
+
+
 def sugerir_correccion_concentracion_web(
     *,
     producto_actual: str | None,
@@ -140,6 +160,8 @@ def sugerir_correccion_concentracion_web(
         if observado is None:
             continue
         if tokens_producto.isdisjoint(_tokens_producto_significativos(observado)):
+            continue
+        if not _presentacion_sin_conflicto_explicito(presentacion_actual, observado):
             continue
 
         relaciones = extraer_relaciones_concentracion(observado)
