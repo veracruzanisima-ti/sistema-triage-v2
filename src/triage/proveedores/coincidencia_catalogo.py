@@ -159,6 +159,18 @@ def extraer_relaciones_concentracion(
     return frozenset(relaciones)
 
 
+def _relacion_exige_denominador_visible(texto: str | None) -> bool:
+    """Distingue `40 mg/2 mL` de razones por unidad cuyo catálogo puede abreviar el `/mL`."""
+
+    normalizado = normalizar_texto(texto).replace(",", ".")
+    return bool(
+        re.search(
+            r"(?:/|POR)\s*[0-9]+(?:\.[0-9]+)?\s*(?:ML|L)\b",
+            normalizado,
+        )
+    )
+
+
 def extraer_conteos_presentacion(texto: str | None) -> frozenset[tuple[str, int]]:
     """Extrae cantidades sólo cuando están unidas a una forma de envase conocida."""
 
@@ -271,13 +283,9 @@ def _motivo_relaciones_concentracion(
     esperadas: frozenset[tuple[str, Decimal, str]],
     observadas: frozenset[tuple[str, Decimal, str]],
 ) -> str | None:
-    if not esperadas:
-        return None
     faltantes = esperadas - observadas
     if not faltantes:
         return None
-    if not observadas:
-        return "faltan datos suficientes para comprobar coincidencia"
     familias_observadas = {(numerador, denominador) for numerador, _, denominador in observadas}
     if any(
         (numerador, denominador) in familias_observadas
@@ -359,11 +367,16 @@ def evaluar_candidato(
     medidas_candidato = extraer_medidas(candidato.descripcion)
     medidas_concentracion = extraer_medidas(solicitud.concentracion)
     relaciones_concentracion = extraer_relaciones_concentracion(solicitud.concentracion)
-    if relaciones_concentracion:
+    relaciones_candidato = extraer_relaciones_concentracion(candidato.descripcion)
+    if relaciones_concentracion and relaciones_candidato:
         motivo_concentracion = _motivo_relaciones_concentracion(
             relaciones_concentracion,
-            extraer_relaciones_concentracion(candidato.descripcion),
+            relaciones_candidato,
         )
+    elif relaciones_concentracion and _relacion_exige_denominador_visible(
+        solicitud.concentracion
+    ):
+        motivo_concentracion = "faltan datos suficientes para comprobar coincidencia"
     else:
         motivo_concentracion = _motivo_medidas(
             medidas_concentracion,
