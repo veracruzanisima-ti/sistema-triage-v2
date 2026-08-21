@@ -56,12 +56,12 @@ def _fecha_operativa(valor: datetime) -> date:
 
 
 def observacion_apta_como_referencia(observacion: ObservacionPrecio | None) -> bool:
-    """Una referencia requiere precio no promocional y disponibilidad/entrega confirmada."""
+    """Una referencia requiere precio no promocional y disponibilidad operativa confirmada."""
 
     return bool(
         observacion is not None
         and not observacion.es_promocion
-        and observacion.entrega_viable is True
+        and observacion.disponibilidad_operativa is True
     )
 
 
@@ -95,7 +95,7 @@ def registrar_decision_precio(
         if rol == RolDecisionPrecio.REFERENCIA_ESTABLE:
             if observacion.es_promocion:
                 raise ValueError("una promoción no puede usarse como referencia estable")
-            if observacion.entrega_viable is not True:
+            if observacion.disponibilidad_operativa is not True:
                 raise ValueError(
                     "la disponibilidad y entrega deben estar confirmadas antes de cotizar"
                 )
