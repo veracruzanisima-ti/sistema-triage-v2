@@ -10,7 +10,17 @@
 
 ## Último hito completado
 
-PR #42, **“feat: integra identidad de medicamentos con COFEPRIS”**, fusionado en `main`.
+PR #45, **“feat: conserva partidas NO SE COTIZA con trazabilidad”**, fusionado en `main`.
+
+- Commit de fusión: `aa40106808abb38e12d318b1bc17659424763471`.
+- El estado comercial es independiente de la inclusión documental: una partida `NO_SE_COTIZA` permanece visible.
+- Cada cambio es append-only y conserva motivo, fuente humana, responsable y fecha.
+- Las búsquedas de proveedor/web, capturas manuales y selecciones nuevas de precio se bloquean mientras el estado siga vigente.
+- La revisión humana puede rehabilitar la partida mediante un nuevo evento `COTIZABLE`.
+- COFEPRIS y las alertas sanitarias no cambian el estado automáticamente.
+- GitHub Actions #127 validó estilo, migraciones de ida/vuelta y 162 pruebas.
+
+Hito previo: PR #42, **“feat: integra identidad de medicamentos con COFEPRIS”**.
 
 - Commit de fusión: `7c3cfce61f8f99cd5fc37470fea2c34976e3cd7e`.
 - El catálogo oficial se importa como snapshot local con bitácora, hash y reemplazo transaccional.
@@ -23,6 +33,8 @@ PR #42, **“feat: integra identidad de medicamentos con COFEPRIS”**, fusionad
 ## Siguiente objetivo
 
 Issue #43, **“Cotización DIF: partidas NO SE COTIZA y desglose de importes”**.
+
+La primera unidad (`COTIZABLE` / `NO_SE_COTIZA`) está terminada. El siguiente bloque es el motor fiscal mínimo, condicionado a una matriz de tasas y tratamientos validada por Contabilidad. Hasta recibirla, no se deben fijar tasas productivas ni considerar emitible una cotización fiscalmente pendiente.
 
 Orden de implementación acordado:
 
