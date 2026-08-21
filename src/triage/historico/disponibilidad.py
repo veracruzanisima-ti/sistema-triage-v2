@@ -25,6 +25,8 @@ _SENALES_AMBIGUAS = (
     "preguntar disponibilidad",
     "sujeto a disponibilidad",
     "disponibilidad por confirmar",
+    "falta confirmar",
+    "pendiente de confirmar",
     "codigo postal para ver disponibilidad",
     "codigo postal para consultar disponibilidad",
     "ingresa un codigo postal",
