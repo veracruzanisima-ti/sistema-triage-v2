@@ -66,6 +66,12 @@ def _guardar(
     promocion: bool = False,
 ):
     with cliente.app.state.fabrica_sesiones() as sesion:
+        disponibilidad = "Disponible"
+        if entrega_viable is False:
+            disponibilidad = "Agotado"
+        elif entrega_viable is None:
+            disponibilidad = "Disponible reportado; falta confirmar"
+
         crear_observacion_precio(
             sesion,
             cotizacion_id=cotizacion_id,
@@ -78,11 +84,7 @@ def _guardar(
             precio_total=Decimal("800.00"),
             es_promocion=promocion,
             condiciones_promocion="Precio temporal" if promocion else None,
-            disponibilidad=(
-                "Disponible"
-                if entrega_viable is True
-                else "Agotado" if entrega_viable is False else "Disponible reportado; falta confirmar"
-            ),
+            disponibilidad=disponibilidad,
             entrega_viable=entrega_viable,
             codigo_postal="91000",
             producto_observado="Dapagliflozina 10 mg 28 tabletas",
