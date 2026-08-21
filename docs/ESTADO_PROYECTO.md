@@ -10,7 +10,7 @@
 
 ## Estado operativo actual
 
-El piloto end-to-end de #55 continúa activo. Durante la prueba con productos reales aparecieron problemas reproducibles de identidad, forma/dispositivo, disponibilidad, navegación y verificabilidad documental por terceros. Se corrigieron como cambios separados, con pruebas y reversión, sin reutilizar reglas del V1.
+El piloto end-to-end de #55 continúa activo. Durante la prueba con productos reales aparecieron problemas reproducibles de identidad, forma/dispositivo, disponibilidad, navegación, verificabilidad documental por terceros y lectura de trazabilidad histórica. Se corrigieron como cambios separados, con pruebas y reversión, sin reutilizar reglas del V1.
 
 ### PR #69 · convergencia segura marca → genérico con COFEPRIS
 
@@ -114,9 +114,46 @@ La misma semántica se reutiliza en Proveedores, Histórico y Revisión final; e
 Ajuste de CTA confirmado durante el piloto:
 
 - disponibilidad operativa `False`: se muestra `Confirmar con proveedor`, porque la fuente indicó falta de existencia/no viabilidad y una confirmación humana posterior puede cambiar el estado mediante una nueva observación trazable;
-- disponibilidad operativa `None`: se muestra `Por confirmar`, pero **sin** el botón repetitivo de contactar proveedor;
+- disponibilidad operativa `None`: se muestra `Por confirmar`, pero sin el CTA de contacto repetitivo;
 - disponibilidad operativa `True`: se muestra `Disponible` y tampoco necesita ese CTA;
 - la disponibilidad operativa puede provenir del booleano explícito o, sólo para origen WEB, de evidencia textual inequívoca conforme a #85.
+
+### PR #88 · confirmación humana de una fuente web pendiente
+
+Fusionado en `main` con commit `a8fdf3b6b8ac477316b66d7d31c8be80bcf28a02`. CI #196 verde.
+
+- Una observación WEB `Por confirmar`, no promocional, puede mostrar `Verifiqué fuente · usar para cotizar`.
+- El clic representa una afirmación humana explícita de que la persona abrió la fuente y comprobó que el precio sigue visible y que existe disponibilidad/entrega para comprar.
+- La observación WEB original permanece intacta; se crea una nueva observación MANUAL append-only con usuario, fecha y vínculo de evidencia a la observación revisada.
+- La confirmación manual se usa como `REFERENCIA_ESTABLE` y conserva el avance a la siguiente partida pendiente.
+- El envío es idempotente para evitar duplicados por doble clic.
+- No aplica a promociones ni a resultados explícitamente `Sin disponibilidad`; estos últimos mantienen el flujo de confirmación con proveedor.
+
+### PR #90 · excepción comercial de surtimiento NADRO
+
+Fusionado en `main` con commit `807d8cf1ad0f77465b46ea36eb720b5f849f81af`. CI #200 verde. Issue #89 cerrado.
+
+Regla comercial confirmada por Veracruzanísima durante el piloto:
+
+- Si el catálogo EdiNadro contiene la identidad exacta y un precio estable válido, la falta de existencia inmediata **no bloquea la cotización**, porque NADRO puede surtir el producto bajo pedido.
+- Esta excepción aplica sólo al adaptador estable `NADRO`; no se hereda a WEB, FESA ni otros proveedores.
+- `entrega_viable=True` en ese adaptador representa **viabilidad de surtimiento**, no existencia física inmediata.
+- La UI distingue el caso con `Surtible por NADRO` y explica que EdiNadro no informa stock en tiempo real.
+- El precio estable NADRO puede mostrar `Usar para cotizar` si cumple las demás validaciones.
+- `NADRO oferta` conserva la información de surtimiento, pero sigue bloqueada como referencia estable por ser promoción.
+- El código postal pertenece al contrato común de consulta, pero el adaptador EdiNadro actual no lo usa para elegir artículo ni precio.
+
+### PR #92 · motivos históricos vs. evaluación actual de descartes web
+
+Fusionado en `main` con commit `a03db83221596573b4cf95dd2d18e806b5ef2b27`. CI #203 verde. Issue #91 cerrado.
+
+- Los motivos de un `CandidatoWebDescartado` siguen siendo evidencia inmutable de la búsqueda original.
+- La lista ahora los etiqueta como `Motivo registrado en esa búsqueda` en vez de presentarlos como una conclusión necesariamente vigente.
+- Cada descarte puede abrir `Evaluar con reglas actuales`, una vista autenticada de sólo lectura.
+- La reevaluación usa la preparación vigente, el matcher local actual y el snapshot COFEPRIS actual cuando corresponde.
+- Si una marca antes rechazada hoy puede resolverse al genérico, el motivo actual puede diferir del histórico sin reescribir la evidencia anterior.
+- Caso cubierto: `Forxiga 10 mg | Dapagliflozina | Tableta` deja de ser `producto distinto` con reglas actuales si la identidad es comprobable, pero sigue incompleto si no demuestra el conteo solicitado de 28 tabletas.
+- Un resultado que hoy aparece `Compatible hoy` **no recupera automáticamente el precio**: debe volver a buscarse/revalidarse porque precio y disponibilidad pueden haber cambiado.
 
 ## Hitos base del flujo DIF
 
@@ -147,19 +184,22 @@ Issue #55, **“Piloto end-to-end: validar una cotización DIF real en Triage V2
 
 Continuar con la misma solicitud real después de desplegar el `main` actual:
 
-`cargar/reabrir -> revisar original/lectura -> normalizar -> consultar precios -> validar identidad/evidencia -> validar disponibilidad operativa -> elegir referencia estable -> decidir COTIZABLE/NO SE COTIZA -> validar tratamiento fiscal -> capturar precio final autorizado -> revisar rubros -> exportar DIF`
+`cargar/reabrir -> revisar original/lectura -> normalizar -> consultar precios -> validar identidad/evidencia -> validar disponibilidad o surtimiento -> elegir referencia estable -> decidir COTIZABLE/NO SE COTIZA -> validar tratamiento fiscal -> capturar precio final autorizado -> revisar rubros -> exportar DIF`
 
 Objetivos restantes del piloto:
 
-1. Repetir los casos que antes fallaron por marca/genérico y comprobarlos contra el snapshot COFEPRIS realmente cargado en producción.
-2. Reabrir el caso real de Linagliptina/Farmatodo y confirmar que `100 disponibles (texto en página)` cambia a `Disponible` y ofrece `Usar para cotizar` sin repetir la búsqueda.
-3. Confirmar que frases ambiguas siguen como `Por confirmar`, las faltas de existencia siguen como `Sin disponibilidad` y `Confirmar con proveedor` aparece sólo en este último caso.
-4. Comprobar que disponibilidad, identidad y promoción se distinguen por color suave y texto sin saturar la pantalla.
-5. Cargar un documento nuevo y verificar que un segundo usuario pueda abrir el original, contrastar la lectura y completar manualmente un caso de lector incompleto/error.
-6. Verificar el recorrido completo sin volver manualmente al inicio de listas largas.
-7. Comparar el Excel generado con el formato operativo esperado por DIF.
-8. Registrar cualquier nueva diferencia reproducible como issue separado antes de modificar código.
-9. Medir de forma aproximada el tiempo desde carga hasta exportación.
+1. Reabrir Dapagliflozina y usar `Evaluar con reglas actuales` sobre FORXIGA/DAPOSAR antiguos; si hoy son compatibles, repetir/revalidar la fuente antes de cotizar.
+2. Confirmar en una partida NADRO que una identidad exacta con precio estable aparece como `Surtible por NADRO`, permite `Usar para cotizar` y no se presenta como stock físico inmediato.
+3. Reabrir el caso real de Linagliptina/Farmatodo y confirmar que `100 disponibles (texto en página)` aparece `Disponible` y ofrece `Usar para cotizar` sin repetir la búsqueda.
+4. Probar una fuente WEB `Por confirmar`: abrir la fuente, usar `Verifiqué fuente · usar para cotizar` y comprobar que la evidencia automática anterior permanece intacta.
+5. Confirmar que el CP mostrado por Triage coincide con el contexto del sitio web cuando se comparen precio y disponibilidad; si difiere, tratarlo como contexto distinto y no como contradicción del mismo dato.
+6. Confirmar que frases ambiguas siguen como `Por confirmar`, las faltas de existencia siguen como `Sin disponibilidad` y `Confirmar con proveedor` aparece sólo en este último caso.
+7. Comprobar que disponibilidad, identidad y promoción se distinguen por color suave y texto sin saturar la pantalla.
+8. Cargar un documento nuevo y verificar que un segundo usuario pueda abrir el original, contrastar la lectura y completar manualmente un caso de lector incompleto/error.
+9. Verificar el recorrido completo sin volver manualmente al inicio de listas largas.
+10. Comparar el Excel generado con el formato operativo esperado por DIF.
+11. Registrar cualquier nueva diferencia reproducible como issue separado antes de modificar código.
+12. Medir de forma aproximada el tiempo desde carga hasta exportación.
 
 Issue #43 permanece abierto hasta completar esta validación operativa del flujo DIF.
 
@@ -167,11 +207,15 @@ Issue #43 permanece abierto hasta completar esta validación operativa del flujo
 
 - Una partida que Veracruzanísima no pueda comercializar permanece en la cotización y en el Excel con el resultado `NO SE COTIZA`.
 - La falta de existencia web o una disponibilidad realmente ambigua es un estado operativo temporal y **no** equivale a `NO_SE_COTIZA`.
-- Una referencia estable requiere disponibilidad operativa positiva además de las validaciones de identidad y precio aplicables.
+- Una referencia estable requiere disponibilidad operativa positiva además de las validaciones de identidad y precio aplicables, excepto la regla comercial explícita de surtimiento NADRO descrita abajo.
 - En origen WEB, una señal textual inequívoca de existencia puede satisfacer la disponibilidad operativa aunque el booleano externo haya llegado nulo; la evidencia cruda no se modifica.
+- En una fuente WEB pendiente, una persona puede confirmar explícitamente precio visible + disponibilidad/entrega después de abrir la fuente; Triage registra una nueva observación manual append-only y conserva intacta la automática.
 - En origen MANUAL/ADAPTADOR no se infiere disponibilidad desde texto libre cuando el booleano está nulo.
+- **Excepción NADRO confirmada por Veracruzanísima:** identidad exacta + precio estable del catálogo EdiNadro puede cotizarse como `Surtible por NADRO` aunque no exista stock en tiempo real; esto expresa capacidad de suministro bajo pedido, no inventario físico.
 - El CTA `Confirmar con proveedor` se reserva para una observación marcada sin disponibilidad/no viable; no se muestra de forma general para toda observación pendiente o disponible.
 - Una promoción no puede usarse como referencia estable aunque tenga disponibilidad; se conserva como evidencia/oportunidad.
+- Los motivos de descartes web son evidencia histórica y no se reescriben cuando cambian las reglas. Una evaluación actual favorable no reutiliza automáticamente el precio antiguo.
+- El código postal puede cambiar el contexto de precio/disponibilidad de una fuente WEB y queda persistido con la observación; el adaptador EdiNadro actual no usa el CP para decidir artículo/precio.
 - En la salida DIF, una partida no cotizable muestra `—` en precio unitario sin IVA, subtotal, IVA y total.
 - COFEPRIS aporta evidencia de identidad sanitaria; no decide sustituciones clínicas, comerciales ni fiscales.
 - La IA no inventa tasas, tratamientos fiscales, márgenes, restricciones sanitarias ni reglas comerciales.
