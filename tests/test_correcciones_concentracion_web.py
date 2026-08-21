@@ -1,9 +1,7 @@
 import types
 from decimal import Decimal
 
-from triage.proveedores.correcciones_concentracion_web import (
-    sugerir_correccion_concentracion_web,
-)
+from triage.proveedores import correcciones_concentracion_web
 
 
 CRITERIOS = {
@@ -37,7 +35,9 @@ def _sugerir(descartados, **cambios):
         "descartados": descartados,
     }
     argumentos.update(cambios)
-    return sugerir_correccion_concentracion_web(**argumentos)
+    return correcciones_concentracion_web.sugerir_correccion_concentracion_web(
+        **argumentos
+    )
 
 
 def test_dos_fuentes_independientes_sugieren_40_mg_por_ml():
