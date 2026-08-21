@@ -19,31 +19,31 @@
       <p class="ayuda">{{ total_incluidas }} partidas incluidas{% if no_se_cotiza %} · {{ no_se_cotiza }} NO SE COTIZA{% endif %}.</p>
     </div>
     {% if lista_para_emitir %}
-      <span class="estado estado-revisado">Lista para DIF</span>
+      <span class="estado estado-disponible">Lista para DIF</span>
     {% else %}
-      <span class="estado estado-pendiente-revision">Pendiente</span>
+      <span class="estado estado-pendiente">Pendiente</span>
     {% endif %}
   </div>
 
   <div class="resumen-flujo" aria-label="Resumen de avance de la cotización">
     <div class="resumen-flujo-item">
-      <span class="estado {% if sin_preparar %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Preparación</span>
+      <span class="estado {% if sin_preparar %}estado-pendiente{% else %}estado-disponible{% endif %}">Preparación</span>
       <strong>{% if sin_preparar %}{{ sin_preparar }} pendiente{% if sin_preparar != 1 %}s{% endif %}{% else %}Lista{% endif %}</strong>
     </div>
     <div class="resumen-flujo-item">
-      <span class="estado {% if referencias_pendientes > 0 %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Referencias</span>
+      <span class="estado {% if referencias_pendientes > 0 %}estado-pendiente{% else %}estado-disponible{% endif %}">Referencias</span>
       <strong>{% if referencias_pendientes > 0 %}{{ referencias_pendientes }} pendiente{% if referencias_pendientes != 1 %}s{% endif %}{% else %}Listas{% endif %}</strong>
     </div>
     <div class="resumen-flujo-item">
-      <span class="estado {% if fiscales_pendientes %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Fiscal</span>
+      <span class="estado {% if fiscales_pendientes %}estado-pendiente{% else %}estado-disponible{% endif %}">Fiscal</span>
       <strong>{% if fiscales_pendientes %}{{ fiscales_pendientes }} pendiente{% if fiscales_pendientes != 1 %}s{% endif %}{% else %}Validado{% endif %}</strong>
     </div>
     <div class="resumen-flujo-item">
-      <span class="estado {% if precios_finales_pendientes %}estado-pendiente-revision{% else %}estado-revisado{% endif %}">Precio final</span>
+      <span class="estado {% if precios_finales_pendientes %}estado-pendiente{% else %}estado-disponible{% endif %}">Precio final</span>
       <strong>{% if precios_finales_pendientes %}{{ precios_finales_pendientes }} pendiente{% if precios_finales_pendientes != 1 %}s{% endif %}{% else %}Validado{% endif %}</strong>
     </div>
     <div class="resumen-flujo-item">
-      <span class="estado {% if con_alertas %}estado-pendiente-revision{% else %}estado-recibido{% endif %}">Alertas</span>
+      <span class="estado {% if con_alertas %}estado-atencion{% else %}estado-neutral{% endif %}">Alertas</span>
       <strong>{% if con_alertas %}{{ con_alertas }} por revisar{% else %}Sin alertas{% endif %}</strong>
     </div>
   </div>
@@ -77,13 +77,13 @@
       <div>
         <h2>{{ item.producto.normalizacion.producto or item.producto.partida.producto_solicitado or "Producto sin nombre" }}</h2>
         {% if item.decision_comercial.estado == estados_comerciales.NO_SE_COTIZA %}
-          <span class="estado estado-pendiente-revision">NO SE COTIZA</span>
+          <span class="estado estado-no-disponible">NO SE COTIZA</span>
         {% elif item.pendientes %}
-          <span class="estado estado-pendiente-revision">Incompleta</span>
+          <span class="estado estado-pendiente">Incompleta</span>
         {% elif item.alertas %}
-          <span class="estado estado-pendiente-revision">Requiere atención</span>
+          <span class="estado estado-atencion">Requiere atención</span>
         {% else %}
-          <span class="estado estado-revisado">Preparada</span>
+          <span class="estado estado-disponible">Preparada</span>
         {% endif %}
       </div>
       <a class="boton boton-texto" href="/cotizaciones/{{ cotizacion.id }}/documentos/{{ item.producto.documento.id }}">Documento</a>

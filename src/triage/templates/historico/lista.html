@@ -44,9 +44,9 @@
           {% endif %}
         </div>
         {% if decision_comercial and decision_comercial.estado == estados_comerciales.NO_SE_COTIZA %}
-          <span class="estado estado-pendiente-revision">NO SE COTIZA</span>
+          <span class="estado estado-no-disponible">NO SE COTIZA</span>
         {% else %}
-          <span class="estado {% if producto.observaciones %}estado-revisado{% else %}estado-pendiente-revision{% endif %}">
+          <span class="estado {% if producto.observaciones %}estado-neutral{% else %}estado-pendiente{% endif %}">
             {{ producto.observaciones|length }} observación{% if producto.observaciones|length != 1 %}es{% endif %}
           </span>
         {% endif %}
@@ -69,10 +69,10 @@
                 <div class="ayuda">{{ observacion.observado_en.strftime("%d/%m/%Y %H:%M") }}</div>
               </div>
               <div>
-                {% if observacion.entrega_viable is sameas true %}<span class="estado estado-revisado">Disponible confirmado</span>{% endif %}
-                {% if observacion.entrega_viable is sameas false %}<span class="estado estado-pendiente-revision">No viable</span>{% endif %}
-                {% if observacion.entrega_viable is none %}<span class="estado estado-pendiente-revision">Por confirmar</span>{% endif %}
-                {% if observacion.es_promocion %}<span class="estado estado-pendiente-revision">Promoción</span>{% endif %}
+                {% if observacion.entrega_viable is sameas true %}<span class="estado estado-disponible">Disponible confirmado</span>{% endif %}
+                {% if observacion.entrega_viable is sameas false %}<span class="estado estado-no-disponible">No viable</span>{% endif %}
+                {% if observacion.entrega_viable is none %}<span class="estado estado-pendiente">Por confirmar</span>{% endif %}
+                {% if observacion.es_promocion %}<span class="estado estado-promocion">Promoción</span>{% endif %}
               </div>
             </div>
             <p>
