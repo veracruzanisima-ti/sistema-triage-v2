@@ -15,9 +15,10 @@
   <h2>Estado antes de continuar</h2>
   <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ fiscales_validadas }} fiscales validadas · {{ fiscales_pendientes }} fiscales pendientes · {{ con_alertas }} con alertas.</p>
   {% if fiscalmente_lista %}
-    <p class="exito"><strong>Fiscalmente lista para el siguiente paso.</strong></p>
-    <p><a class="boton" href="/cotizaciones/{{ cotizacion.id }}/exportaciones/dif.xlsx">Descargar Excel DIF</a></p>
-    <p class="ayuda">El exportador sólo renderiza los importes ya calculados y validados; no aplica tasas ni decisiones fiscales propias.</p>
+    <p class="exito"><strong>Base fiscal validada para generar el borrador DIF.</strong></p>
+    <p><a class="boton" href="/cotizaciones/{{ cotizacion.id }}/exportaciones/dif.xlsx">Descargar borrador Excel DIF</a></p>
+    <p class="aviso"><strong>Borrador no emitible.</strong> Los importes todavía parten de la referencia estable provisional; V2 no tiene una regla validada de precio final de venta/utilidad.</p>
+    <p class="ayuda">El exportador sólo renderiza el modelo interno y no aplica tasas, márgenes ni decisiones comerciales propias.</p>
   {% else %}
     <p class="ayuda">El cálculo es un borrador operativo. No se considera emitible mientras existan partidas fiscales pendientes.</p>
   {% endif %}
