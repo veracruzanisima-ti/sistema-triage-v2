@@ -1,4 +1,4 @@
-"""Exportador DIF v1: renderiza el precierre sin incorporar reglas fiscales propias."""
+"""Exportador DIF v1: renderiza el modelo interno sin incorporar reglas propias."""
 
 import re
 from dataclasses import dataclass
@@ -22,7 +22,7 @@ _PREFIJOS_FORMULA = ("=", "+", "-", "@")
 
 
 class ErrorExportacionDif(ValueError):
-    """El modelo interno todavía no permite generar un borrador DIF consistente."""
+    """El modelo interno todavía no cumple las condiciones para emitir DIF."""
 
 
 @dataclass(frozen=True)
@@ -48,7 +48,7 @@ def _texto_excel(valor: object | None) -> str:
 def _nombre_archivo(cotizacion: Cotizacion) -> str:
     base = _texto(cotizacion.referencia) or cotizacion.id[:8]
     seguro = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._-") or cotizacion.id[:8]
-    return f"Borrador_Cotizacion_DIF_{seguro[:80]}.xlsx"
+    return f"Cotizacion_DIF_{seguro[:80]}.xlsx"
 
 
 def _validar_exportable(
@@ -76,14 +76,16 @@ def _validar_exportable(
             continue
         if item.referencia is None:
             pendientes.append("referencia estable")
+        if item.precio_venta is None:
+            pendientes.append("precio unitario final sin IVA")
         if item.validacion_fiscal is None:
             pendientes.append("validación fiscal")
-        if item.calculo_fiscal is None or not item.calculo_fiscal.validado:
-            pendientes.append("cálculo fiscal validado")
+        if item.calculo_venta is None:
+            pendientes.append("cálculo final")
     if pendientes:
         tipos = ", ".join(dict.fromkeys(pendientes))
         raise ErrorExportacionDif(
-            "No puede generarse el borrador DIF todavía. Pendiente: " + tipos + "."
+            "La cotización no es emitible todavía. Pendiente: " + tipos + "."
         )
 
 
@@ -117,10 +119,11 @@ def _fila_dif(numero: int, item: ProductoPreCierre) -> list[object]:
             _GUION,
         ]
 
-    calculo = item.calculo_fiscal
+    calculo = item.calculo_venta
     validacion = item.validacion_fiscal
     referencia = item.referencia
-    if calculo is None or validacion is None or referencia is None:
+    precio_venta = item.precio_venta
+    if calculo is None or validacion is None or referencia is None or precio_venta is None:
         raise ErrorExportacionDif(
             "Una partida cotizable perdió su consolidación antes de exportar."
         )
@@ -152,14 +155,13 @@ def _crear_libro(cotizacion: Cotizacion, productos: list[ProductoPreCierre]) -> 
     libro = Workbook()
     hoja = libro.active
     hoja.title = "Cotización DIF"
-    hoja.append(["BORRADOR DIF · NO EMITIBLE"])
+    hoja.append(["COTIZACIÓN DIF · VERACRUZANÍSIMA"])
     hoja.append(["Referencia", _texto_excel(cotizacion.referencia or "Sin referencia")])
     hoja.append(
         [
-            "Aviso",
-            "Los importes usan el precio provisional disponible en el modelo interno. "
-            "Triage V2 aún no tiene una regla validada de precio final de venta/utilidad. "
-            "Este archivo sirve para revisión del formato y no debe emitirse al cliente.",
+            "Trazabilidad",
+            "Los importes parten del precio unitario final sin IVA confirmado por una persona "
+            "y del tratamiento fiscal validado. El exportador no calcula margen ni tasa.",
         ]
     )
     hoja.append([])
@@ -237,7 +239,7 @@ def _crear_libro(cotizacion: Cotizacion, productos: list[ProductoPreCierre]) -> 
 
 
 def generar_exportacion_dif(sesion: Session, cotizacion_id: str) -> ExportacionDif:
-    """Genera un borrador DIF con tratamiento fiscal validado, no una cotización final."""
+    """Genera DIF sólo cuando precio final y tratamiento fiscal ya fueron confirmados."""
 
     cotizacion = obtener_cotizacion(sesion, cotizacion_id)
     if cotizacion is None:
