@@ -33,7 +33,7 @@
 {% endif %}
 
 {% for item in productos %}
-  <section class="tarjeta">
+  <section class="tarjeta" id="partida-revision-{{ item.producto.partida.id }}" data-partida-revision="{{ item.producto.partida.id }}">
     <div class="barra">
       <div>
         <h2>{{ item.producto.normalizacion.producto or item.producto.partida.producto_solicitado or "Producto sin nombre" }}</h2>
@@ -236,4 +236,42 @@
     <a class="boton" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Preparar productos</a>
   </section>
 {% endfor %}
+
+<style>
+  .tarjeta-enfocada {
+    border-color: #9db8d8;
+    box-shadow: 0 0 0 3px rgba(49, 91, 147, .10), 0 6px 18px rgba(23, 32, 51, .035);
+    scroll-margin-top: 18px;
+  }
+</style>
+<script>
+  (() => {
+    const clave = "triage-foco-revision-final";
+    const tarjetas = Array.from(document.querySelectorAll("[data-partida-revision]"));
+    const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    tarjetas.forEach((tarjeta) => {
+      tarjeta.querySelectorAll("form").forEach((formulario) => {
+        formulario.addEventListener("submit", () => {
+          sessionStorage.setItem(clave, tarjeta.dataset.partidaRevision || "");
+        });
+      });
+    });
+
+    const parametros = new URLSearchParams(window.location.search);
+    const partida = parametros.get("partida_objetivo") || sessionStorage.getItem(clave);
+    sessionStorage.removeItem(clave);
+    if (!partida) return;
+
+    const tarjeta = document.getElementById(`partida-revision-${partida}`);
+    if (!tarjeta) return;
+    tarjeta.classList.add("tarjeta-enfocada");
+    window.setTimeout(() => {
+      tarjeta.scrollIntoView({
+        behavior: reducirMovimiento.matches ? "auto" : "smooth",
+        block: "center",
+      });
+    }, 0);
+  })();
+</script>
 {% endblock %}
