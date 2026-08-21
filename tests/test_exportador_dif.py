@@ -1,4 +1,4 @@
-"""Regresiones del Exportador DIF v1 y su condición de emitibilidad."""
+"""Regresiones del Exportador DIF v1 y su condición de seguridad."""
 
 from decimal import Decimal
 from io import BytesIO
@@ -70,7 +70,7 @@ def _crear_producto(sesion, *, referencia: str = "DIF-001"):
     return cotizacion, partida, usuario
 
 
-def _hacer_emitible(sesion, *, cotizacion, partida, usuario):
+def _hacer_emitible_para_borrador(sesion, *, cotizacion, partida, usuario):
     referencia = crear_observacion_precio(
         sesion,
         cotizacion_id=cotizacion.id,
@@ -105,18 +105,18 @@ def _hacer_emitible(sesion, *, cotizacion, partida, usuario):
     )
 
 
-def test_dif_bloquea_exportacion_si_hay_validacion_fiscal_pendiente(cliente: TestClient):
+def test_dif_bloquea_borrador_si_hay_validacion_fiscal_pendiente(cliente: TestClient):
     with cliente.app.state.fabrica_sesiones() as sesion:
         cotizacion, _, _ = _crear_producto(sesion, referencia="DIF-PENDIENTE")
 
-        with pytest.raises(ErrorExportacionDif, match="no es emitible"):
+        with pytest.raises(ErrorExportacionDif, match="Pendiente"):
             generar_exportacion_dif(sesion, cotizacion.id)
 
 
-def test_dif_exporta_importes_validados_del_modelo_interno(cliente: TestClient):
+def test_dif_exporta_importes_validados_pero_declara_borrador(cliente: TestClient):
     with cliente.app.state.fabrica_sesiones() as sesion:
         cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-VALIDADA")
-        _hacer_emitible(
+        _hacer_emitible_para_borrador(
             sesion,
             cotizacion=cotizacion,
             partida=partida,
@@ -128,15 +128,18 @@ def test_dif_exporta_importes_validados_del_modelo_interno(cliente: TestClient):
     libro = load_workbook(BytesIO(exportacion.contenido), data_only=True)
     hoja = libro["Cotización DIF"]
     try:
-        assert exportacion.nombre_archivo == "Cotizacion_DIF_DIF-VALIDADA.xlsx"
-        assert hoja["E5"].value == "PARACETAMOL"
-        assert hoja["J5"].value == "COTIZABLE"
-        assert hoja["L5"].value == 100
-        assert hoja["M5"].value == 200
-        assert hoja["N5"].value == 32
-        assert hoja["O5"].value == 232
-        assert hoja["P5"].value == "IVA 16.00%"
-        assert hoja["Q5"].value == "Proveedor estable"
+        assert exportacion.nombre_archivo == "Borrador_Cotizacion_DIF_DIF-VALIDADA.xlsx"
+        assert hoja["A1"].value == "BORRADOR DIF · NO EMITIBLE"
+        assert "precio final de venta/utilidad" in hoja["B3"].value
+        assert hoja["E6"].value == "PARACETAMOL"
+        assert hoja["J6"].value == "COTIZABLE"
+        assert hoja["L6"].value == 100
+        assert hoja["M6"].value == 200
+        assert hoja["N6"].value == 32
+        assert hoja["O6"].value == 232
+        assert hoja["P6"].value == "IVA 16.00%"
+        assert hoja["Q6"].value == "Proveedor estable"
+        assert "Referencia estable provisional" in hoja["S6"].value
     finally:
         libro.close()
 
@@ -158,9 +161,9 @@ def test_dif_conserva_no_se_cotiza_y_deja_importes_en_guion(cliente: TestClient)
     libro = load_workbook(BytesIO(exportacion.contenido), data_only=True)
     hoja = libro["Cotización DIF"]
     try:
-        assert hoja["J5"].value == "NO SE COTIZA"
-        assert hoja["K5"].value == "Restricción comercial validada para la prueba"
-        assert [hoja.cell(row=5, column=columna).value for columna in range(12, 16)] == [
+        assert hoja["J6"].value == "NO SE COTIZA"
+        assert hoja["K6"].value == "Restricción comercial validada para la prueba"
+        assert [hoja.cell(row=6, column=columna).value for columna in range(12, 16)] == [
             "—",
             "—",
             "—",
@@ -170,7 +173,29 @@ def test_dif_conserva_no_se_cotiza_y_deja_importes_en_guion(cliente: TestClient)
         libro.close()
 
 
-def test_ruta_dif_responde_conflicto_mientras_no_sea_emitible(cliente: TestClient):
+def test_dif_neutraliza_texto_que_excel_podria_ejecutar_como_formula(cliente: TestClient):
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        cotizacion, partida, usuario = _crear_producto(sesion, referencia="DIF-SEGURIDAD")
+        registrar_decision_comercial(
+            sesion,
+            cotizacion_id=cotizacion.id,
+            partida_id=partida.id,
+            usuario_id=usuario.id,
+            estado=EstadoComercial.NO_SE_COTIZA,
+            motivo="=HYPERLINK(\"https://example.invalid\",\"abrir\")",
+        )
+        exportacion = generar_exportacion_dif(sesion, cotizacion.id)
+
+    libro = load_workbook(BytesIO(exportacion.contenido), data_only=False)
+    hoja = libro["Cotización DIF"]
+    try:
+        assert hoja["K6"].data_type == "s"
+        assert hoja["K6"].value.startswith("'=")
+    finally:
+        libro.close()
+
+
+def test_ruta_dif_responde_conflicto_mientras_falte_validacion(cliente: TestClient):
     with cliente.app.state.fabrica_sesiones() as sesion:
         cotizacion, _, _ = _crear_producto(sesion, referencia="DIF-RUTA-PENDIENTE")
         cotizacion_id = cotizacion.id
@@ -178,4 +203,4 @@ def test_ruta_dif_responde_conflicto_mientras_no_sea_emitible(cliente: TestClien
     respuesta = cliente.get(f"/cotizaciones/{cotizacion_id}/exportaciones/dif.xlsx")
 
     assert respuesta.status_code == 409
-    assert "no es emitible" in respuesta.json()["detail"]
+    assert "Pendiente" in respuesta.json()["detail"]
