@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block titulo %}Evaluación actual · Sistema Triage{% endblock %}
+
+{% block contenido %}
+<div class="barra">
+  <div>
+    <h1>Evaluación actual del descarte</h1>
+    <p class="ayuda">Compara la decisión registrada en aquella búsqueda con las reglas que Triage usa hoy. Esta pantalla es de sólo lectura.</p>
+  </div>
+  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion_id }}/proveedores#partida-proveedor-{{ partida.id }}">Volver a la partida</a>
+</div>
+
+<section class="tarjeta">
+  <div class="barra">
+    <div>
+      <strong>{{ descartado.proveedor or "Fuente no identificada" }}</strong>
+      <p>{{ descartado.producto_observado or "Producto no identificado" }}</p>
+      <p class="ayuda">Búsqueda {{ descartado.intento_busqueda }} · CP: {{ consulta.criterios_busqueda.get("codigo_postal") or "sin registrar" }}</p>
+    </div>
+    {% if descartado.precio_observado is not none %}
+      <strong>Precio observado entonces: ${{ '%.2f'|format(descartado.precio_observado) }}</strong>
+    {% endif %}
+  </div>
+  <p><a href="{{ descartado.url }}" target="_blank" rel="noopener noreferrer">Ver fuente original</a></p>
+</section>
+
+<section class="tarjeta">
+  <h2>Lo que quedó registrado</h2>
+  <span class="estado estado-neutral">Histórico</span>
+  <p><strong>Motivo registrado en aquella búsqueda:</strong> {{ descartado.motivos|join("; ") }}.</p>
+  <p class="ayuda">Este texto no se modifica aunque después cambien el matcher, COFEPRIS o la preparación. Es evidencia de lo que Triage decidió en ese momento.</p>
+</section>
+
+<section class="tarjeta">
+  <h2>Evaluación con las reglas actuales</h2>
+  <p class="ayuda">
+    Preparación vigente:
+    {{ normalizacion.producto or "sin producto" }} ·
+    {{ normalizacion.concentracion or "sin concentración" }} ·
+    {{ normalizacion.forma_dispositivo or "sin forma/dispositivo" }} ·
+    {{ normalizacion.presentacion or "sin presentación" }}.
+  </p>
+  {% if evaluacion_actual.compatible %}
+    <div class="exito" role="status">
+      <p><span class="estado estado-disponible">Compatible hoy</span> <strong>Las reglas locales actuales no encuentran un conflicto con los datos persistidos.</strong></p>
+      {% if evaluacion_actual.evidencia_identidad %}
+        <p class="ayuda">La identidad marca → genérico pudo resolverse con COFEPRIS vigente.</p>
+      {% endif %}
+    </div>
+    <p class="aviso"><strong>Esto no recupera automáticamente el precio.</strong> El resultado fue descartado en su búsqueda original y puede haber cambiado. Vuelve a buscar/revalidar la fuente antes de usarlo para cotizar.</p>
+  {% else %}
+    <div class="aviso" role="status">
+      <span class="estado estado-pendiente">Aún no utilizable</span>
+      <p><strong>La evaluación actual indica:</strong> {{ evaluacion_actual.motivos|join("; ") }}.</p>
+    </div>
+    <p class="ayuda">Si el motivo actual es distinto del histórico, ambos se conservan para que puedas distinguir una regla antigua de un problema que sigue vigente.</p>
+  {% endif %}
+</section>
+
+<div class="grupo-botones">
+  <a class="boton" href="/cotizaciones/{{ cotizacion_id }}/proveedores#partida-proveedor-{{ partida.id }}">Volver a proveedores</a>
+  <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion_id }}/normalizacion?partida_objetivo={{ partida.id }}#partida-{{ partida.id }}">Revisar preparación</a>
+</div>
+{% endblock %}
