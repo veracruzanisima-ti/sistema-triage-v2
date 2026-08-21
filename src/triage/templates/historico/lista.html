@@ -29,6 +29,7 @@
 
 {% if productos %}
   {% for producto in productos %}
+    {% set decision_comercial = decisiones_comerciales.get(producto.partida.id) %}
     <section class="tarjeta">
       <div class="barra">
         <div>
@@ -42,9 +43,13 @@
             <p class="ayuda">{{ producto.normalizacion.presentacion }}</p>
           {% endif %}
         </div>
-        <span class="estado {% if producto.observaciones %}estado-revisado{% else %}estado-pendiente-revision{% endif %}">
-          {{ producto.observaciones|length }} observación{% if producto.observaciones|length != 1 %}es{% endif %}
-        </span>
+        {% if decision_comercial and decision_comercial.estado == estados_comerciales.NO_SE_COTIZA %}
+          <span class="estado estado-pendiente-revision">NO SE COTIZA</span>
+        {% else %}
+          <span class="estado {% if producto.observaciones %}estado-revisado{% else %}estado-pendiente-revision{% endif %}">
+            {{ producto.observaciones|length }} observación{% if producto.observaciones|length != 1 %}es{% endif %}
+          </span>
+        {% endif %}
       </div>
 
       {% if producto.observaciones %}
@@ -92,6 +97,13 @@
         <p class="ayuda">Todavía no hay precios guardados para esta identidad exacta de producto.</p>
       {% endif %}
 
+      {% if decision_comercial and decision_comercial.estado == estados_comerciales.NO_SE_COTIZA %}
+        <div class="aviso">
+          <strong>No se admiten precios nuevos mientras la partida sea NO SE COTIZA.</strong>
+          <p>{{ decision_comercial.motivo }}</p>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisar decisión comercial</a>
+        </div>
+      {% else %}
       <details>
         <summary>Agregar observación de precio</summary>
         <form method="post" action="/cotizaciones/{{ cotizacion.id }}/historico/{{ producto.partida.id }}">
@@ -145,6 +157,7 @@
           <button class="boton" type="submit">Agregar al histórico</button>
         </form>
       </details>
+      {% endif %}
     </section>
   {% endfor %}
 {% else %}

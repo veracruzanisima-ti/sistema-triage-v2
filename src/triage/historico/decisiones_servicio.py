@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from triage.comercial.servicio import asegurar_partida_cotizable
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
 from triage.historico.decisiones_modelos import DecisionPrecio, RolDecisionPrecio
 from triage.historico.modelos import ObservacionPrecio
@@ -68,6 +69,11 @@ def registrar_decision_precio(
     normalizacion = _normalizacion_actual(sesion, cotizacion_id, partida_id)
     if normalizacion is None:
         raise ValueError("la partida ya no está preparada o dejó de ser elegible")
+    asegurar_partida_cotizable(
+        sesion,
+        cotizacion_id=cotizacion_id,
+        partida_id=partida_id,
+    )
     clave = clave_producto(normalizacion)
 
     if observacion_id:

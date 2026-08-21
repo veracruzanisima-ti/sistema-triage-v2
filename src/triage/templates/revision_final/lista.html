@@ -13,9 +13,11 @@
 
 <section class="tarjeta">
   <h2>Estado antes de continuar</h2>
-  <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ con_alertas }} con alertas.</p>
+  <p>{{ total_incluidas }} incluidas · {{ sin_preparar }} sin preparar · {{ con_referencia }} con referencia estable · {{ no_se_cotiza }} no se cotizan · {{ con_alertas }} con alertas.</p>
   <p class="ayuda">Esta pantalla sólo consolida información; no aprueba ni rechaza automáticamente.</p>
 </section>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 {% if sin_preparar %}
   <p class="aviso">Faltan {{ sin_preparar }} partidas por preparar.</p>
@@ -26,7 +28,9 @@
     <div class="barra">
       <div>
         <h2>{{ item.producto.normalizacion.producto or item.producto.partida.producto_solicitado or "Producto sin nombre" }}</h2>
-        {% if item.pendientes %}
+        {% if item.decision_comercial.estado == estados_comerciales.NO_SE_COTIZA %}
+          <span class="estado estado-pendiente-revision">NO SE COTIZA</span>
+        {% elif item.pendientes %}
           <span class="estado estado-pendiente-revision">Incompleta</span>
         {% elif item.alertas %}
           <span class="estado estado-pendiente-revision">Requiere atención</span>
@@ -40,18 +44,46 @@
     <p><strong>Solicitud:</strong> {{ item.producto.partida.producto_solicitado or "Sin nombre" }} · {{ item.producto.partida.presentacion_solicitada or "Sin presentación" }} · Cantidad {{ item.producto.partida.cantidad or "sin confirmar" }}</p>
     <p><strong>Preparado:</strong> {{ item.producto.normalizacion.producto or "Sin nombre" }}{% if item.producto.normalizacion.marca %} · {{ item.producto.normalizacion.marca }}{% endif %}{% if item.producto.normalizacion.presentacion %} · {{ item.producto.normalizacion.presentacion }}{% endif %}</p>
 
-    {% if item.referencia %}
-      <div class="exito">
-        <strong>Referencia estable: {{ item.referencia.proveedor }}</strong>
-        {% if item.referencia.precio_antes_iva is not none %} · ${{ "%.2f"|format(item.referencia.precio_antes_iva) }} antes de IVA{% endif %}
-        <div class="ayuda">{{ item.referencia.fuente }}</div>
+    {% if item.decision_comercial.estado == estados_comerciales.NO_SE_COTIZA %}
+      <div class="aviso">
+        <strong>Resultado comercial: NO SE COTIZA</strong>
+        <p>{{ item.decision_comercial.motivo }}</p>
+        <p class="ayuda">
+          Validación humana{% if item.decision_comercial.decidida_por_nombre %} por {{ item.decision_comercial.decidida_por_nombre }}{% endif %}
+          {% if item.decision_comercial.creada_en %} · {{ item.decision_comercial.creada_en }}{% endif %}.
+          No se buscarán ni capturarán precios mientras este estado siga vigente.
+        </p>
+        <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/estado-comercial">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="estado" value="COTIZABLE">
+          <input type="hidden" name="motivo" value="Rehabilitada mediante revisión humana">
+          <button class="boton boton-secundario" type="submit">Volver a cotizable</button>
+        </form>
       </div>
     {% else %}
-      <p class="aviso">Falta referencia estable.</p>
-    {% endif %}
+      {% if item.referencia %}
+        <div class="exito">
+          <strong>Referencia estable: {{ item.referencia.proveedor }}</strong>
+          {% if item.referencia.precio_antes_iva is not none %} · ${{ "%.2f"|format(item.referencia.precio_antes_iva) }} antes de IVA{% endif %}
+          <div class="ayuda">{{ item.referencia.fuente }}</div>
+        </div>
+      {% else %}
+        <p class="aviso">Falta referencia estable.</p>
+      {% endif %}
 
-    {% if item.oportunidad %}
-      <p><strong>Oportunidad:</strong> {{ item.oportunidad.proveedor }}{% if item.oportunidad.es_promocion %} · Promoción: revalidar condiciones{% endif %}</p>
+      {% if item.oportunidad %}
+        <p><strong>Oportunidad:</strong> {{ item.oportunidad.proveedor }}{% if item.oportunidad.es_promocion %} · Promoción: revalidar condiciones{% endif %}</p>
+      {% endif %}
+
+      <form method="post" action="/cotizaciones/{{ cotizacion.id }}/revision-final/{{ item.producto.partida.id }}/estado-comercial">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="estado" value="NO_SE_COTIZA">
+        <div class="campo">
+          <label for="motivo-{{ item.producto.partida.id }}">Motivo para no cotizar</label>
+          <input id="motivo-{{ item.producto.partida.id }}" name="motivo" maxlength="500" placeholder="Registra la decisión comercial validada" required>
+        </div>
+        <button class="boton boton-secundario" type="submit">Marcar NO SE COTIZA</button>
+      </form>
     {% endif %}
 
     {% if item.alertas %}

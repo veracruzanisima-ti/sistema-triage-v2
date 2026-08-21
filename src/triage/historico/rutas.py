@@ -6,6 +6,8 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from triage.comercial.modelos import EstadoComercial
+from triage.comercial.servicio import listar_decisiones_comerciales_actuales
 from triage.cotizaciones.servicio import obtener_cotizacion
 from triage.historico.servicio import crear_observacion_precio, listar_productos_historico
 from triage.usuarios.seguridad import Sesion, UsuarioActual, obtener_token_csrf, validar_token_csrf
@@ -73,6 +75,10 @@ def _render_historico(
             "csrf_token": obtener_token_csrf(request),
             "cotizacion": cotizacion,
             "productos": listar_productos_historico(sesion, cotizacion.id),
+            "decisiones_comerciales": listar_decisiones_comerciales_actuales(
+                sesion, cotizacion.id
+            ),
+            "estados_comerciales": EstadoComercial,
             "error": error,
             "guardado": guardado,
             "volver": volver,

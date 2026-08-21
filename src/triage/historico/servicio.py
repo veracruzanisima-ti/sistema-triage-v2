@@ -8,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from triage.comercial.servicio import asegurar_partida_cotizable
 from triage.cotizaciones.servicio import limpiar_codigo_postal
 from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
 from triage.historico.modelos import ObservacionPrecio, OrigenObservacionPrecio
@@ -148,6 +149,11 @@ def crear_observacion_precio(
     )
     if normalizacion is None:
         raise ValueError("el producto ya no está preparado o dejó de ser elegible")
+    asegurar_partida_cotizable(
+        sesion,
+        cotizacion_id=cotizacion_id,
+        partida_id=partida_documento_id,
+    )
 
     proveedor_limpio = _limpiar(proveedor)
     fuente_limpia = _limpiar(fuente)
