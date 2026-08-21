@@ -1,4 +1,5 @@
 {% set identidad_cofepris = observacion.evidencia_identidad and observacion.evidencia_identidad.get("fuente") == "COFEPRIS" %}
+{% set numeros_cofepris = observacion.evidencia_identidad.get("numeros_registro", []) if identidad_cofepris else [] %}
 <div class="partida">
   <div class="barra">
     <div>
@@ -23,7 +24,12 @@
   {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
   {% if identidad_cofepris %}
     <div class="exito" role="note">
-      <strong>Identidad verificada con COFEPRIS · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}</strong>
+      {% if numeros_cofepris|length > 1 %}
+        <strong>Identidad verificada con COFEPRIS · {{ numeros_cofepris|length }} registros vigentes convergentes</strong>
+        <p class="ayuda">Registros: {{ numeros_cofepris|join("; ") }}.</p>
+      {% else %}
+        <strong>Identidad verificada con COFEPRIS · Registro {{ observacion.evidencia_identidad.get("numero_registro") }}</strong>
+      {% endif %}
       <p class="ayuda">
         {{ observacion.evidencia_identidad.get("denominacion_distintiva") or "Denominación distintiva sin registrar" }}
         →
