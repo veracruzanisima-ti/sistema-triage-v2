@@ -206,7 +206,7 @@
             <strong>IVA:</strong> ${{ "%.2f"|format(item.calculo_fiscal.iva) }} ·
             <strong>Total:</strong> ${{ "%.2f"|format(item.calculo_fiscal.total) }}
           </p>
-          <p class="ayuda">{{ item.calculo_fiscal.origen_precio }}. Sirve sólo como apoyo hasta validar el precio final comercial.</p>
+          <p class="ayuda">{{ item.calculo_fiscal.origen_precio }}. Cálculo pendiente basado en la propuesta; no emitible. Sirve sólo como apoyo hasta validar el precio final comercial.</p>
         </div>
       {% endif %}
 
