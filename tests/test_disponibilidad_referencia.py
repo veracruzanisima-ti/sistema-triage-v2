@@ -211,7 +211,7 @@ def test_ui_solo_ofrece_cotizar_disponibilidad_confirmada(cliente: TestClient):
     assert "Disponibilidad por confirmar" in pagina.text
     assert "Sin disponibilidad" in pagina.text
     assert "Disponible confirmado" in pagina.text
-    assert pagina.text.count("Confirmar con proveedor") == 2
+    assert pagina.text.count("Confirmar con proveedor") == 1
     assert pagina.text.count(">Usar para cotizar</button>") == 1
     assert (
         f"/cotizaciones/{cotizacion_id}/historico?volver=proveedores"
