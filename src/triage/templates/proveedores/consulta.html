@@ -115,7 +115,7 @@
     {% set correccion_producto = sugerir_correccion_producto_web(producto.normalizacion.producto, trazabilidad_web.consulta.criterios_busqueda.get("producto"), trazabilidad_web.descartados) if trazabilidad_web else none %}
     {% set cotizada_hoy = referencias_cotizadas_hoy.get(producto.clave_producto) %}
     {% set estado_busqueda_id = "estado-busqueda-" ~ producto.partida.id %}
-    <section class="tarjeta">
+    <section class="tarjeta" id="partida-proveedor-{{ producto.partida.id }}" data-partida-proveedor="{{ producto.partida.id }}">
       <div class="barra">
         <div>
           <h2>{{ producto.normalizacion.producto or "Producto sin nombre" }}</h2>
@@ -144,7 +144,7 @@
           <strong>Resultado comercial: NO SE COTIZA</strong>
           <p>{{ decision_comercial.motivo }}</p>
           <p class="ayuda">La partida sigue en la cotización, pero las búsquedas y capturas de precio están deshabilitadas.</p>
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final">Revisar decisión comercial</a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/revision-final?partida_objetivo={{ producto.partida.id }}">Revisar decisión comercial</a>
         </div>
       {% else %}
 
@@ -246,7 +246,7 @@
           </form>
         </div>
       {% elif trazabilidad_web and trazabilidad_web.presentacion_alternativa_ambigua %}
-        <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion">Editar preparación</a>
+        <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/normalizacion?partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Editar preparación</a>
       {% endif %}
 
       {% if trazabilidad_web and (trazabilidad_web.descartados or trazabilidad_web.consulta.mensaje_error or trazabilidad_web.consulta.intentos > 1) %}
@@ -304,7 +304,7 @@
               {% endif %}
             {% endfor %}
           {% endif %}
-          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores">Registrar precio manual</a>
+          <a class="boton boton-secundario" href="/cotizaciones/{{ cotizacion.id }}/historico?volver=proveedores&partida_objetivo={{ producto.partida.id }}#partida-{{ producto.partida.id }}">Registrar precio manual</a>
         </div>
       </details>
 
@@ -341,6 +341,54 @@
   </section>
 {% endif %}
 
+<style>
+  .tarjeta-enfocada {
+    border-color: #9db8d8;
+    box-shadow: 0 0 0 3px rgba(49, 91, 147, .10), 0 6px 18px rgba(23, 32, 51, .035);
+    scroll-margin-top: 18px;
+  }
+</style>
+<script>
+  (() => {
+    const clave = "triage-foco-proveedores";
+    const tarjetas = Array.from(document.querySelectorAll("[data-partida-proveedor]"));
+    const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    tarjetas.forEach((tarjeta) => {
+      tarjeta.querySelectorAll("form").forEach((formulario) => {
+        const accion = formulario.getAttribute("action") || "";
+        if (accion.includes("/buscar-web") || accion.includes("/decisiones-precio/")) return;
+        formulario.addEventListener("submit", () => {
+          sessionStorage.setItem(clave, tarjeta.dataset.partidaProveedor || "");
+        });
+      });
+    });
+
+    if (new URLSearchParams(window.location.search).get("resultado") === "web") return;
+
+    let tarjeta = null;
+    if (window.location.hash) {
+      const objetivo = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+      tarjeta = objetivo ? objetivo.closest("[data-partida-proveedor]") : null;
+    }
+    if (!tarjeta) {
+      const partidaGuardada = sessionStorage.getItem(clave);
+      tarjeta = partidaGuardada
+        ? document.getElementById(`partida-proveedor-${partidaGuardada}`)
+        : null;
+    }
+    sessionStorage.removeItem(clave);
+    if (!tarjeta) return;
+
+    tarjeta.classList.add("tarjeta-enfocada");
+    window.setTimeout(() => {
+      tarjeta.scrollIntoView({
+        behavior: reducirMovimiento.matches ? "auto" : "smooth",
+        block: "center",
+      });
+    }, 0);
+  })();
+</script>
 <script>
   (() => {
     document.querySelectorAll("[data-form-busqueda]").forEach((formulario) => {
