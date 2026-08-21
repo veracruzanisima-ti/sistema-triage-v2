@@ -51,7 +51,7 @@
   {% if observacion.producto_observado %}<p><strong>La fuente mostró:</strong> {{ observacion.producto_observado }}</p>{% endif %}
   {% if identidad_cofepris %}
     <p class="ayuda">
-      <strong>COFEPRIS:</strong>
+      <strong>COFEPRIS verificado:</strong>
       {{ distintiva or "Denominación distintiva sin registrar" }}
       → {{ generica or "Denominación genérica sin registrar" }}
       · {{ observacion.evidencia_identidad.get("estado") or "estado sin registrar" }}
