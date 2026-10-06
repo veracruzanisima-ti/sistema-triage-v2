@@ -53,14 +53,18 @@ class LectorGemini:
         """Procesa el archivo en memoria; el nombre sólo se conserva para trazabilidad local."""
 
         del nombre_archivo
+        if not contenido:
+            raise ErrorLecturaDocumento("El archivo está vacío")
+        if mime_type not in {"application/pdf", "image/jpeg", "image/png", "image/webp"}:
+            raise ErrorLecturaDocumento("El formato del archivo no es compatible con el lector")
         try:
             respuesta = self._cliente.models.generate_content(
                 model=self.modelo,
                 contents=[
                     types.Part.from_bytes(data=contenido, mime_type=mime_type),
-                    INSTRUCCIONES_LECTURA,
                 ],
                 config=types.GenerateContentConfig(
+                    system_instruction=INSTRUCCIONES_LECTURA,
                     response_mime_type="application/json",
                     response_schema=LecturaDocumento,
                 ),
@@ -71,9 +75,21 @@ class LectorGemini:
             ) from error
 
         _registrar_uso(self.modelo, respuesta)
+        bloqueo = getattr(getattr(respuesta, "prompt_feedback", None), "block_reason", None)
+        if bloqueo and getattr(bloqueo, "value", bloqueo) != "BLOCKED_REASON_UNSPECIFIED":
+            raise ErrorLecturaDocumento("Gemini rechazó la lectura; puedes capturarla")
+        for candidato in getattr(respuesta, "candidates", None) or []:
+            motivo = getattr(candidato, "finish_reason", None)
+            if motivo and getattr(motivo, "value", motivo) != "STOP":
+                raise ErrorLecturaDocumento(
+                    "Gemini no completó la lectura; puedes capturarla manualmente"
+                )
         parsed = getattr(respuesta, "parsed", None)
-        if isinstance(parsed, LecturaDocumento):
-            return parsed
+        if parsed is not None:
+            try:
+                return LecturaDocumento.model_validate(parsed)
+            except ValidationError as error:
+                raise ErrorLecturaDocumento("Gemini devolvió una lectura no válida") from error
 
         texto = getattr(respuesta, "text", None)
         if texto:

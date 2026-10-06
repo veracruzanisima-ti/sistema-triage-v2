@@ -5,6 +5,14 @@ El lector OpenAI usa Responses API con Vision (`input_image`, detalle alto),
 El prompt versionado completo está en `src/triage/lectores/instrucciones.py`.
 Se envía como instrucciones de la petición, separado del documento.
 
+Gemini comparte el mismo esquema y prompt mediante `system_instruction` y
+`response_schema`. También valida archivos y maneja rechazos, límites de tokens y
+JSON inválido con errores controlados. Para usarlo mientras OpenAI está pausado,
+configura `GEMINI_API_KEY` de forma segura y `GEMINI_MODEL_LECTOR` con un modelo
+habilitado en tu cuenta. Si no hay clave OpenAI, Gemini se usa como lector disponible;
+si hay ambas claves, selecciónalo en la pantalla existente de modelos IA.
+No se comprueba aquí la disponibilidad real del modelo configurado.
+
 ## Evidencia y propuestas
 
 Cada partida distingue:
