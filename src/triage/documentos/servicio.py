@@ -130,6 +130,7 @@ def lectura_tiene_datos_utiles(lectura: LecturaDocumento) -> bool:
         return True
 
     campos_partida = (
+        "texto_original",
         "producto_solicitado",
         "marca_solicitada",
         "concentracion",
@@ -254,6 +255,7 @@ def procesar_documento(
     except ErrorLecturaDocumento as error:
         return _marcar_error_lectura(sesion, documento, str(error))
 
+    documento.extraccion_original = lectura.model_dump(mode="json")
     if not lectura_tiene_datos_utiles(lectura):
         return _marcar_error_lectura(
             sesion,

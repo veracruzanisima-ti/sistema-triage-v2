@@ -4,6 +4,7 @@ import base64
 import logging
 
 from openai import OpenAI
+from pydantic import ValidationError
 
 from triage.lectores.base import ErrorLecturaDocumento
 from triage.lectores.esquemas import LecturaDocumento
@@ -37,7 +38,7 @@ class LectorOpenAI:
             raise ValueError("OPENAI_MODEL no puede estar vacío")
 
         self.modelo = modelo.strip()
-        self._cliente = OpenAI(api_key=api_key)
+        self._cliente = OpenAI(api_key=api_key, timeout=80.0, max_retries=1)
 
     def leer(
         self,
@@ -47,6 +48,11 @@ class LectorOpenAI:
         nombre_archivo: str,
     ) -> LecturaDocumento:
         """Envía el archivo sin persistirlo en GitHub ni en el disco de la app."""
+
+        if not contenido:
+            raise ErrorLecturaDocumento("El archivo está vacío")
+        if mime_type not in {"application/pdf", "image/jpeg", "image/png", "image/webp"}:
+            raise ErrorLecturaDocumento("El formato del archivo no es compatible con el lector")
 
         codificado = base64.b64encode(contenido).decode("ascii")
         if mime_type == "application/pdf":
@@ -66,11 +72,15 @@ class LectorOpenAI:
             respuesta = self._cliente.responses.parse(
                 model=self.modelo,
                 store=False,
+                instructions=INSTRUCCIONES_LECTURA,
                 input=[
                     {
                         "role": "user",
                         "content": [
-                            {"type": "input_text", "text": INSTRUCCIONES_LECTURA},
+                            {
+                                "type": "input_text",
+                                "text": "Extrae los datos visibles del archivo.",
+                            },
                             entrada_archivo,
                         ],
                     }
@@ -83,11 +93,34 @@ class LectorOpenAI:
             ) from error
 
         _registrar_uso(self.modelo, respuesta)
-        for salida in respuesta.output:
+        if getattr(respuesta, "status", None) == "incomplete":
+            raise ErrorLecturaDocumento("OpenAI devolvió una lectura incompleta; puedes capturarla")
+        for salida in getattr(respuesta, "output", []) or []:
             if salida.type != "message":
                 continue
             for parte in salida.content:
-                if parte.type == "output_text" and parte.parsed is not None:
-                    return parte.parsed
+                if parte.type == "refusal":
+                    raise ErrorLecturaDocumento("OpenAI rechazó la lectura; puedes capturarla")
+
+        lectura = getattr(respuesta, "output_parsed", None)
+        if lectura is None:
+            for salida in getattr(respuesta, "output", []) or []:
+                if salida.type == "message":
+                    lectura = next(
+                        (
+                            getattr(parte, "parsed", None)
+                            for parte in salida.content
+                            if parte.type == "output_text"
+                            and getattr(parte, "parsed", None) is not None
+                        ),
+                        None,
+                    )
+                    if lectura is not None:
+                        break
+        if lectura is not None:
+            try:
+                return LecturaDocumento.model_validate(lectura)
+            except ValidationError as error:
+                raise ErrorLecturaDocumento("OpenAI devolvió una lectura no válida") from error
 
         raise ErrorLecturaDocumento("OpenAI no devolvió una lectura estructurada")

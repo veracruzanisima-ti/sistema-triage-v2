@@ -6,8 +6,8 @@ from hashlib import sha256
 from fastapi.testclient import TestClient
 
 from triage.cotizaciones.modelos import Cotizacion
-from triage.documentos.modelos import Documento, EstadoDocumento
-from triage.lectores.esquemas import LecturaDocumento
+from triage.documentos.modelos import Documento, EstadoDocumento, PartidaDocumento
+from triage.lectores.esquemas import LecturaDocumento, PartidaLeida
 
 
 class LectorVacio:
@@ -20,6 +20,25 @@ class LectorVacio:
         assert mime_type
         assert nombre_archivo
         return LecturaDocumento()
+
+
+class LectorConAvisos:
+    modelo = "lector-ficticio-avisos"
+
+    def leer(self, **kwargs):
+        return LecturaDocumento(
+            advertencias=["Imagen borrosa"],
+            partidas=[
+                PartidaLeida(
+                    texto_original="Paraceta mol ?? mg",
+                    producto_solicitado="Paraceta mol",
+                    nombre_normalizado="Paracetamol",
+                    concentracion=None,
+                    cantidad=None,
+                    advertencias=["Concentración ilegible", "<script>ficticio</script>"],
+                )
+            ],
+        )
 
 
 def _csrf(html: str) -> str:
@@ -73,9 +92,7 @@ def test_revision_muestra_y_sirve_imagen_original(cliente: TestClient):
     documento_id = revision_url.rsplit("/", 1)[-1]
 
     revision = cliente.get(revision_url)
-    original = cliente.get(
-        f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/original"
-    )
+    original = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/original")
 
     assert revision.status_code == 200
     assert "Abrir original" in revision.text
@@ -132,9 +149,7 @@ def test_error_del_lector_conserva_original_y_permite_captura_manual(cliente: Te
     assert "MEMO/MANUAL/001" in comprobacion.text
     assert "PRODUCTO CAPTURADO MANUALMENTE" in comprobacion.text
 
-    original = cliente.get(
-        f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/original"
-    )
+    original = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/original")
     assert original.content == contenido
 
 
@@ -157,9 +172,7 @@ def test_documento_anterior_sin_original_muestra_aviso_sin_romper_revision(clien
         documento_id = documento.id
 
     revision = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}")
-    original = cliente.get(
-        f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/original"
-    )
+    original = cliente.get(f"/cotizaciones/{cotizacion_id}/documentos/{documento_id}/original")
 
     assert revision.status_code == 200
     assert "Original no disponible" in revision.text
@@ -211,3 +224,51 @@ def test_original_requiere_sesion(cliente_sin_acceso: TestClient):
 
     assert respuesta.status_code == 303
     assert respuesta.headers["location"] == "/acceso"
+
+
+def test_avisos_no_bloquean_revision_y_extraccion_original_se_conserva(cliente):
+    from sqlalchemy import select
+
+    cliente.app.state.lector_documentos = LectorConAvisos()
+    cotizacion_id = _crear_cotizacion(cliente)
+    subida = _subir(
+        cliente,
+        cotizacion_id,
+        nombre="ficticio.png",
+        contenido=b"imagen ficticia",
+        mime_type="image/png",
+    )
+    url = subida.headers["location"]
+    documento_id = url.rsplit("/", 1)[-1]
+    revision = cliente.get(url)
+    assert "Imagen borrosa" in revision.text
+    assert "Partida original 1: Concentración ilegible" in revision.text
+    assert "&lt;script&gt;ficticio&lt;/script&gt;" in revision.text
+    assert "<script>ficticio</script>" not in revision.text
+    assert "Nombre normalizado propuesto: Paracetamol" in revision.text
+    guardado = cliente.post(
+        url + "/revision",
+        data={
+            "csrf_token": _csrf(revision.text),
+            "partidas_total": "1",
+            "partida_0_producto": "Nombre corregido manualmente",
+            "partida_0_concentracion": "",
+            "partida_0_cantidad": "",
+        },
+        follow_redirects=False,
+    )
+    assert guardado.status_code == 303
+    with cliente.app.state.fabrica_sesiones() as sesion:
+        documento = sesion.get(Documento, documento_id)
+        assert documento.estado == EstadoDocumento.REVISADO.value
+        original = documento.extraccion_original["partidas"][0]
+        assert original["texto_original"] == "Paraceta mol ?? mg"
+        assert original["nombre_normalizado"] == "Paracetamol"
+        assert original["concentracion"] is None
+        assert original["cantidad"] is None
+        partida = sesion.scalar(
+            select(PartidaDocumento).where(PartidaDocumento.documento_id == documento_id)
+        )
+        assert partida.producto_solicitado == "Nombre corregido manualmente"
+        assert partida.concentracion is None
+        assert partida.cantidad is None
