@@ -58,6 +58,29 @@
   <p class="error">{{ error }}</p>
 {% endif %}
 
+{% if documento.extraccion_original %}
+  <details class="tarjeta" open>
+    <summary>Ver extracción original y avisos de lectura</summary>
+    <p class="ayuda">Los avisos son informativos. Puedes seguir capturando y corregir los campos.</p>
+    {% for aviso in documento.extraccion_original.get('advertencias', []) %}
+      <p class="aviso" role="status">{{ aviso }}</p>
+    {% endfor %}
+    {% for extraida in documento.extraccion_original.get('partidas', []) %}
+      {% set numero_original = loop.index %}
+      <p>Partida original {{ loop.index }}: {{ extraida.get('texto_original') or extraida.get('producto_solicitado') or 'Texto ilegible' }}</p>
+      {% if extraida.get('nombre_normalizado') %}
+        <p class="ayuda">Nombre normalizado propuesto: {{ extraida.get('nombre_normalizado') }}</p>
+      {% endif %}
+      {% if extraida.get('sustancia_activa') %}
+        <p class="ayuda">Sustancia activa visible: {{ extraida.get('sustancia_activa') }}</p>
+      {% endif %}
+      {% for aviso in extraida.get('advertencias', []) %}
+        <p class="aviso" role="status">Partida original {{ numero_original }}: {{ aviso }}</p>
+      {% endfor %}
+    {% endfor %}
+  </details>
+{% endif %}
+
 <form id="formulario-revision" method="post" action="/cotizaciones/{{ cotizacion.id }}/documentos/{{ documento.id }}/revision">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input id="partidas-total" type="hidden" name="partidas_total" value="{{ partidas|length + 1 }}">

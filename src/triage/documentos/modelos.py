@@ -77,6 +77,7 @@ class Documento(Base):
     municipio: Mapped[str | None] = mapped_column(String(160), nullable=True)
     parece_fragmento: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     senales_fragmento: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    extraccion_original: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     modelo_lector: Mapped[str | None] = mapped_column(String(120), nullable=True)
     error_lector: Mapped[str | None] = mapped_column(Text, nullable=True)
     recibido_en: Mapped[datetime] = mapped_column(

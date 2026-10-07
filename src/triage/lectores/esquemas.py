@@ -9,11 +9,21 @@ class PartidaLeida(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     producto_solicitado: str | None = None
+    texto_original: str | None = Field(
+        default=None, description="Texto visible del medicamento; excluye datos personales."
+    )
+    nombre_normalizado: str | None = Field(
+        default=None, description="Nombre con correcciones ortográficas inequívocas, sin sustituir."
+    )
+    sustancia_activa: str | None = Field(
+        default=None, description="Sólo la sustancia activa explícitamente legible en la fuente."
+    )
+    advertencias: list[str] = Field(default_factory=list)
     marca_solicitada: str | None = None
     concentracion: str | None = None
     forma_farmaceutica_dispositivo: str | None = None
     presentacion_solicitada: str | None = None
-    cantidad: int | None = Field(default=None, ge=0)
+    cantidad: int | None = Field(default=None, ge=0, strict=True)
     unidad_medida: str | None = None
 
 
@@ -29,4 +39,5 @@ class LecturaDocumento(BaseModel):
     municipio: str | None = None
     parece_fragmento: bool = False
     senales_fragmento: list[str] = Field(default_factory=list)
+    advertencias: list[str] = Field(default_factory=list)
     partidas: list[PartidaLeida] = Field(default_factory=list)
